@@ -136,7 +136,7 @@ def create_user(*, session: Annotated[Session, Depends(get_session)], user_creat
     if existing_user:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, 
-            detail="El email ya est¨¢ registrado."
+            detail="El email ya esta registrado."
         )
 
     # 2. Hashear la contrase?a
