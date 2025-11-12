@@ -22,18 +22,19 @@ from models import (
     Routine, RoutineCreate, RoutineRead, RoutineUpdate,
     RoutineExercise, RoutineAssignment, 
     RoutineAssignmentCreate, RoutineAssignmentRead,
-    ChangePassword,
-    RoutineCreateOrUpdate # üö® Importamos el nuevo esquema de edici√≥n
+    ChangePassword, # ?? Importamos el esquema ChangePassword
+    RoutineCreateOrUpdate # Ya estaba importado, pero lo mantenemos
 )
 
 
 load_dotenv()
 
 # ----------------------------------------------------------------------
-# Configuraci√≥n de Seguridad y JWT
+# Configuraci®Æn de Seguridad y JWT
 # ----------------------------------------------------------------------
-pwd_context = CryptContext(schemes=["sha256_crypt"], deprecated="auto")
+# ?? Soluci®Æn: Aislar SECRET_KEY para evitar que entre al hashing
 SECRET_KEY = os.environ.get("SECRET_KEY", "CLAVE_SECRETA_DEFAULT_DEBES_CAMBIARLA")
+pwd_context = CryptContext(schemes=["sha256_crypt"], deprecated="auto")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 # Token de 1 d√≠a
 
