@@ -65,10 +65,10 @@ def create_access_token(data: dict, expires_delta: timedelta | None = None) -> s
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Crea todas las tablas al iniciar."""
-    print("Iniciando la aplicaci車n y creando tablas de DB...")
+    print("Iniciando la aplicacion y creando tablas de DB...")
     create_db_and_tables() 
     yield
-    print("Apagando la aplicaci車n...")
+    print("Apagando la aplicacion...")
 
 # ----------------------------------------------------------------------
 # Inicializaci車n de la Aplicaci車n
