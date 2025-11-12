@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useContext, useMemo } from 'react';
 import { 
     StyleSheet, Text, View, ScrollView, SafeAreaView, Button, 
-    ActivityIndicator, FlatList, TouchableOpacity, Alert, Modal 
+    ActivityIndicator, FlatList, TouchableOpacity, Alert, Modal,
+    TextInput // ?? ANADIDO: Importado para el campo de busqueda
 } from 'react-native';
 import axios from 'axios';
 import { AuthContext } from '../App'; 
@@ -398,6 +399,19 @@ const getMainScreenStyles = (colors) => StyleSheet.create({
         alignItems: 'center',
         backgroundColor: colors.background,
     },
+    // ?? ESTILO NUEVO: Campo de Busqueda
+    searchInput: { // <-- ANADIDO ESTE BLOQUE
+        height: 45,
+        backgroundColor: colors.card,
+        borderColor: colors.divider,
+        borderWidth: 1,
+        borderRadius: 8,
+        paddingHorizontal: 15,
+        fontSize: 16,
+        marginBottom: 20,
+        color: colors.textPrimary,
+        marginHorizontal: 20, // Ajustar para padding
+    },
     header: {
         flexDirection: 'row',
         justifyContent: 'space-between',
@@ -633,12 +647,15 @@ export default function ProfessorScreen({ navigation }) {
     const styles = getMainScreenStyles(themeColors); // Estilos dinamicos
 
     const [students, setStudents] = useState([]);
-    // ?? CAMBIO: Eliminamos el estado 'routines' ya que no se necesitan en la vista principal
+    const [routines, setRoutines] = useState([]); 
     const [isLoading, setIsLoading] = useState(true);
     const [selectedStudent, setSelectedStudent] = useState(null); // Alumno para asignar/gestionar
     const [creatingForStudent, setCreatingForStudent] = useState(false); // Modo: seleccionar alumno para crear
     const [dataError, setDataError] = useState(null); 
     const [isMenuVisible, setIsMenuVisible] = useState(false); // Estado para el modal de menu
+    
+    // ?? ANADIDO: Estado para el campo de busqueda
+    const [searchTerm, setSearchTerm] = useState('');
 
     const { signOut, getToken } = useContext(AuthContext);
 
@@ -655,9 +672,9 @@ export default function ProfessorScreen({ navigation }) {
             const studentsResponse = await axios.get(`${API_URL}/users/students`, { headers });
             setStudents(Array.isArray(studentsResponse.data) ? studentsResponse.data : []);
 
-            // ?? CAMBIO: Eliminamos la llamada a la API de rutinas maestras de la vista principal
-            // const routinesResponse = await axios.get(`${API_URL}/routines/`, { headers });
-            // setRoutines(Array.isArray(routinesResponse.data) ? routinesResponse.data : []);
+            // Mantenido el estado de rutinas ya que se usa en la seccion de gestion de rutinas maestras.
+            const routinesResponse = await axios.get(`${API_URL}/routines/`, { headers });
+            setRoutines(Array.isArray(routinesResponse.data) ? routinesResponse.data : []);
 
         } catch (e) {
             console.error("Error cargando datos del profesor:", e.response ? e.response.data : e.message);
@@ -705,6 +722,22 @@ export default function ProfessorScreen({ navigation }) {
         fetchData(); 
     };
     
+    // ----------------------------------------------------------------
+    // ?? ANADIDO: Logica de filtrado de estudiantes
+    // ----------------------------------------------------------------
+    const filteredStudents = useMemo(() => {
+        if (!searchTerm) {
+            return students;
+        }
+        const lowerCaseSearch = searchTerm.toLowerCase();
+        // Filtra por nombre O por email
+        return students.filter(student => 
+            student.nombre.toLowerCase().includes(lowerCaseSearch) ||
+            student.email.toLowerCase().includes(lowerCaseSearch)
+        );
+    }, [students, searchTerm]);
+
+
     // --- VISTAS DE ESTADO ---
     if (dataError && !isLoading && !selectedStudent && !creatingForStudent) {
         return (
@@ -800,13 +833,55 @@ export default function ProfessorScreen({ navigation }) {
                     />
                 </View>
 
-                {/* -------------------- SECCION DE GESTION DE RUTINAS MAESTRAS ELIMINADA -------------------- */}
+                {/* -------------------- SECCION DE GESTION DE RUTINAS MAESTRAS -------------------- */}
+                <View style={{width: '100%', marginBottom: 20}}>
+                    <Text style={styles.listTitle}>Gestion de Rutinas Maestras ({routines.length})</Text>
+                    <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingVertical: 10, maxHeight: 200 }}>
+                        {routines.length > 0 ? (
+                            routines.map((r) => (
+                                <View key={r.id.toString()} style={styles.routineMasterCard}>
+                                    <View style={styles.routineMasterDetails}>
+                                        <Text style={styles.routineMasterName}>{r.nombre}</Text>
+                                        <Text style={styles.routineMasterDescription}>Ejercicios: {r.exercise_links.length}</Text>
+                                    </View>
+                                    
+                                    <View style={styles.routineMasterActions}>
+                                        <TouchableOpacity 
+                                            style={[styles.actionButton, { backgroundColor: themeColors.warning }]}
+                                            onPress={() => handleEditRoutine(r)} // BOTON EDITAR
+                                        >
+                                            <Edit size={20} color={themeColors.card} />
+                                        </TouchableOpacity>
+                                        <TouchableOpacity 
+                                            style={[styles.actionButton, { backgroundColor: themeColors.danger }]}
+                                            onPress={() => handleDeleteRoutine(r.id, r.nombre)} // BOTON ELIMINAR
+                                        >
+                                            <Trash2 size={20} color={themeColors.card} />
+                                        </TouchableOpacity>
+                                    </View>
+                                </View>
+                            ))
+                        ) : (
+                            <Text style={styles.warningTextCenter}>No hay rutinas maestras creadas.</Text>
+                        )}
+                    </ScrollView>
+                </View>
+                {/* -------------------------------------------------------------------------------- */}
 
-                <Text style={styles.listTitle}>Alumnos ({students.length})</Text>
+                <Text style={styles.listTitle}>Alumnos ({filteredStudents.length})</Text>
+
+                {/* ?? ANADIDO: Input de busqueda */}
+                <TextInput
+                    style={styles.searchInput} 
+                    placeholder="Buscar alumno por nombre o email..."
+                    placeholderTextColor={themeColors.textSecondary}
+                    value={searchTerm}
+                    onChangeText={setSearchTerm}
+                />
 
                 <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 20, paddingTop: 10 }}>
-                    {students.length > 0 ? (
-                        students.map((item) => (
+                    {filteredStudents.length > 0 ? ( // ?? MODIFICADO: Usar la lista filtrada
+                        filteredStudents.map((item) => (
                             <TouchableOpacity 
                                 key={item.id.toString()}
                                 style={styles.studentCard}
@@ -821,7 +896,7 @@ export default function ProfessorScreen({ navigation }) {
                         ))
                     ) : (
                         <View style={{ padding: 20, alignItems: 'center' }}>
-                            <Text style={{ color: themeColors.textSecondary }}>No hay alumnos registrados. Puedes registrarlos en tu backend.</Text>
+                            <Text style={{ color: themeColors.textSecondary }}>No se encontraron alumnos.</Text>
                         </View>
                     )}
                 </ScrollView>
