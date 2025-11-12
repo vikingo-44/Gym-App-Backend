@@ -58,7 +58,7 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     return encoded_jwt
 
 def authenticate_user(session: Session, user_login: UserLogin) -> Optional[User]:
-    """Verifica credenciales de usuario."""
+
     user = session.exec(select(User).where(User.email == user_login.email)).first()
     if user and pwd_context.verify(user_login.password, user.hashed_password):
         return user
@@ -70,7 +70,7 @@ async def get_current_user(
     session: Annotated[Session, Depends(get_session)],
     token: Annotated[HTTPAuthorizationCredentials, Depends(oauth2_scheme)]
 ) -> User:
-    """Decodifica el token y devuelve el objeto User del usuario autenticado."""
+
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="No se pudo validar la credencial",
@@ -94,13 +94,13 @@ async def get_current_user(
         raise credentials_exception
 
 def get_current_professor(current_user: Annotated[User, Depends(get_current_user)]) -> User:
-    """Verifica que el usuario actual tenga rol de Profesor."""
+
     if current_user.role != UserRole.PROFESSOR:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Acceso denegado: Se requiere rol de Profesor.")
     return current_user
 
 def get_current_student(current_user: Annotated[User, Depends(get_current_user)]) -> User:
-    """Verifica que el usuario actual tenga rol de Alumno."""
+
     if current_user.role != UserRole.STUDENT:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Acceso denegado: Se requiere rol de Alumno.")
     return current_user
@@ -130,7 +130,7 @@ app = FastAPI(
 
 @app.post("/users/register", response_model=UserRead, tags=["Usuarios"])
 def create_user(*, session: Annotated[Session, Depends(get_session)], user_create: UserCreate):
-    """Crea un nuevo usuario (Profesor o Alumno)."""
+
     # 1. Verificar si el email ya existe
     existing_user = session.exec(select(User).where(User.email == user_create.email)).first()
     if existing_user:
@@ -157,7 +157,7 @@ def login_for_access_token(
     session: Annotated[Session, Depends(get_session)],
     user_login: UserLogin
 ):
-    """Autentica a un usuario y devuelve un token JWT."""
+
     user = authenticate_user(session, user_login)
     if not user:
         raise HTTPException(
@@ -176,10 +176,7 @@ def login_for_access_token(
 
 @app.get("/users/me", response_model=UserRead, tags=["Usuarios"])
 def read_users_me(current_user: Annotated[User, Depends(get_current_user)]):
-    """
-    (Com¨²n) Obtiene los datos del usuario logueado. 
-    ¨²til para que el frontend sepa el rol y el ID.
-    """
+
     return current_user
 
 @app.put("/users/me/password", status_code=status.HTTP_204_NO_CONTENT, tags=["Usuarios"])
@@ -188,10 +185,7 @@ def change_password(
     session: Annotated[Session, Depends(get_session)],
     current_user: Annotated[User, Depends(get_current_user)]
 ):
-    """
-    (Com¨²n) Permite a un usuario cambiar su contrase?a.
-    Requiere la contrase?a actual para validaci¨®n.
-    """
+
     # 1. Verificar la contrase?a actual
     if not pwd_context.verify(password_data.old_password, current_user.hashed_password):
         raise HTTPException(
@@ -227,10 +221,7 @@ def get_all_students(
     session: Annotated[Session, Depends(get_session)],
     current_professor: Annotated[User, Depends(get_current_professor)]
 ):
-    """
-    (Profesor) Obtiene una lista simple de todos los alumnos
-    para ser usados en la asignaci¨®n de rutinas.
-    """
+
     # ?? CR¨ªTICO: Filtrar SOLAMENTE a los alumnos
     statement = select(User).where(User.role == UserRole.STUDENT).order_by(User.nombre)
     students = session.exec(statement).all()
@@ -246,7 +237,7 @@ def create_exercise(
     exercise_create: ExerciseCreate,
     current_professor: Annotated[User, Depends(get_current_professor)]
 ):
-    """(Profesor) Crea un nuevo ejercicio."""
+
     # Validaci¨®n b¨¢sica (e.g., que el nombre no est¨¦ duplicado, aunque no es CR¨ªTICO)
     existing_exercise = session.exec(select(Exercise).where(Exercise.nombre == exercise_create.nombre)).first()
     if existing_exercise:
@@ -263,9 +254,7 @@ def create_exercise(
 
 @app.get("/exercises", response_model=List[ExerciseRead], tags=["Profesores", "Alumnos"])
 def get_all_exercises(session: Annotated[Session, Depends(get_session)]):
-    """
-    (Com¨²n) Obtiene una lista de todos los ejercicios.
-    """
+
     exercises = session.exec(select(Exercise).order_by(Exercise.nombre)).all()
     return exercises
 
@@ -276,7 +265,7 @@ def update_exercise(
     session: Annotated[Session, Depends(get_session)],
     current_professor: Annotated[User, Depends(get_current_professor)]
 ):
-    """(Profesor) Actualiza un ejercicio existente."""
+
     exercise = session.get(Exercise, exercise_id)
     if not exercise:
         raise HTTPException(status_code=404, detail="Ejercicio no encontrado.")
@@ -296,7 +285,7 @@ def delete_exercise(
     session: Annotated[Session, Depends(get_session)],
     current_professor: Annotated[User, Depends(get_current_professor)]
 ):
-    """(Profesor) Elimina un ejercicio por su ID."""
+
     exercise = session.get(Exercise, exercise_id)
     if not exercise:
         raise HTTPException(status_code=404, detail="Ejercicio no encontrado.")
@@ -315,7 +304,7 @@ def create_routine(
     routine_data: RoutineCreate,
     current_professor: Annotated[User, Depends(get_current_professor)]
 ):
-    """(Profesor) Crea una nueva rutina y sus ejercicios asociados."""
+
     
     # 1. Crear la Rutina principal
     # Usamos .copy() para evitar modificar el objeto Pydantic si es necesario.
@@ -371,9 +360,7 @@ def get_my_routines(
     session: Annotated[Session, Depends(get_session)],
     current_professor: Annotated[User, Depends(get_current_professor)]
 ):
-    """
-    (Profesor) Obtiene todas las rutinas creadas por el profesor logueado.
-    """
+
     statement = (
         select(Routine)
         .where(Routine.owner_id == current_professor.id)
@@ -390,7 +377,7 @@ def get_routine_by_id(
     session: Annotated[Session, Depends(get_session)],
     current_user: Annotated[User, Depends(get_current_user)]
 ):
-    """(Com¨²n) Obtiene una rutina por su ID (usado principalmente por el profesor para editar)."""
+
     # 1. Cargar la rutina con las relaciones
     statement = (
         select(Routine)
@@ -420,7 +407,7 @@ def update_routine(
     session: Annotated[Session, Depends(get_session)],
     current_professor: Annotated[User, Depends(get_current_professor)]
 ):
-    """(Profesor) Actualiza los datos de una rutina y *reemplaza* su lista de ejercicios."""
+
     
     # 1. Obtener y validar la rutina
     routine = session.get(Routine, routine_id)
@@ -483,7 +470,7 @@ def delete_routine(
     session: Annotated[Session, Depends(get_session)],
     current_professor: Annotated[User, Depends(get_current_professor)]
 ):
-    """(Profesor) Elimina una rutina (y sus enlaces de ejercicios)."""
+
     routine = session.get(Routine, routine_id)
     
     if not routine or routine.owner_id != current_professor.id:
@@ -503,7 +490,7 @@ def create_routine_assignment(
     assignment_data: RoutineAssignmentCreate,
     current_professor: Annotated[User, Depends(get_current_professor)]
 ):
-    """(Profesor) Asigna una rutina a un alumno."""
+
     
     # 1. Validar que la rutina exista y sea del profesor
     routine = session.get(Routine, assignment_data.routine_id)
@@ -567,9 +554,7 @@ def get_student_assignments(
     session: Annotated[Session, Depends(get_session)],
     current_professor: Annotated[User, Depends(get_current_professor)]
 ):
-    """
-    (Profesor) Obtiene todas las asignaciones (activas e inactivas) de un alumno espec¨ªfico.
-    """
+
     # 1. Validar que el alumno exista
     student = session.get(User, student_id)
     if not student or student.role != UserRole.STUDENT:
@@ -597,7 +582,7 @@ def toggle_assignment_active(
     session: Annotated[Session, Depends(get_session)],
     current_professor: Annotated[User, Depends(get_current_professor)]
 ):
-    """(Profesor) Activa o desactiva una asignaci¨®n de rutina."""
+
     assignment = session.get(RoutineAssignment, assignment_id)
     
     if not assignment:
@@ -631,7 +616,7 @@ def delete_assignment(
     session: Annotated[Session, Depends(get_session)],
     current_professor: Annotated[User, Depends(get_current_professor)]
 ):
-    """(Profesor) Elimina una asignaci¨®n de rutina por su ID."""
+
     assignment = session.get(RoutineAssignment, assignment_id)
     
     if not assignment:
@@ -649,9 +634,7 @@ def get_my_active_routine(
     session: Annotated[Session, Depends(get_session)],
     current_student: Annotated[User, Depends(get_current_student)]
 ):
-    """
-    (Alumno) Obtiene SOLAMENTE las rutinas asignadas que est¨¢n marcadas como activas (is_active=True).
-    """
+
     statement = (
         select(RoutineAssignment)
         .where(
