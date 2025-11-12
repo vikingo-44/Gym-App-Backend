@@ -32,494 +32,366 @@ load_dotenv()
 # ----------------------------------------------------------------------
 # Configuración de Seguridad y JWT
 # ----------------------------------------------------------------------
-# ?? Solución: Aislar SECRET_KEY para evitar que entre al hashing
-SECRET_KEY = os.environ.get("SECRET_KEY", "CLAVE_SECRETA_DEFAULT_DEBES_CAMBIARLA")
 pwd_context = CryptContext(schemes=["sha256_crypt"], deprecated="auto")
+SECRET_KEY = os.environ.get("SECRET_KEY", "CLAVE_SECRETA_DEFAULT_DEBES_CAMBIARLA")
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 # Token de 1 d铆a
+ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 # Token de 1 día
 
 http_bearer = HTTPBearer()
 
-def verify_password(plain_password: str, hashed_password: str) -> bool:
-    return pwd_context.verify(plain_password, hashed_password)
 
-def get_password_hash(password: str) -> str:
-    return pwd_context.hash(password)
+# ----------------------------------------------------------------------
+# Funciones de Utilidad de Seguridad
+# ----------------------------------------------------------------------
 
-def create_access_token(data: dict, expires_delta: timedelta | None = None) -> str:
+def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     to_encode = data.copy()
     if expires_delta:
         expire = datetime.now(timezone.utc) + expires_delta
     else:
+        # El expire time debe estar en UTC
         expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     
-    to_encode.update({"exp": expire, "sub": data["dni"]})
+    # ?? CORRECCIóN CLAVE: Aseguramos que el rol se incluya correctamente en el token.
+    to_encode.update({"exp": expire, "sub": str(data["id"]), "rol": data["role"].value})
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
+def authenticate_user(session: Session, user_login: UserLogin) -> Optional[User]:
+    """Verifica credenciales de usuario."""
+    user = session.exec(select(User).where(User.email == user_login.email)).first()
+    if user and pwd_context.verify(user_login.password, user.hashed_password):
+        return user
+    return None
+
+oauth2_scheme = HTTPBearer()
+
+async def get_current_user(
+    session: Annotated[Session, Depends(get_session)],
+    token: Annotated[HTTPAuthorizationCredentials, Depends(oauth2_scheme)]
+) -> User:
+    """Decodifica el token y devuelve el objeto User del usuario autenticado."""
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="No se pudo validar la credencial",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        payload = jwt.decode(token.credentials, SECRET_KEY, algorithms=[ALGORITHM])
+        user_id: str = payload.get("sub") # El 'sub' contiene el ID del usuario
+        
+        if user_id is None:
+            raise credentials_exception
+        
+        user = session.get(User, int(user_id))
+        if user is None:
+            raise credentials_exception
+        
+        return user
+    except JWTError:
+        raise credentials_exception
+    except Exception:
+        raise credentials_exception
+
+def get_current_professor(current_user: Annotated[User, Depends(get_current_user)]) -> User:
+    """Verifica que el usuario actual tenga rol de Profesor."""
+    if current_user.role != UserRole.PROFESSOR:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Acceso denegado: Se requiere rol de Profesor.")
+    return current_user
+
+def get_current_student(current_user: Annotated[User, Depends(get_current_user)]) -> User:
+    """Verifica que el usuario actual tenga rol de Alumno."""
+    if current_user.role != UserRole.STUDENT:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Acceso denegado: Se requiere rol de Alumno.")
+    return current_user
+
+
 # ----------------------------------------------------------------------
-# Eventos de la Aplicaci贸n (Startup/Shutdown)
+# Configuración de FastAPI
 # ----------------------------------------------------------------------
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Crea todas las tablas al iniciar."""
-    print("Iniciando la aplicaci贸n y creando tablas de DB...")
-    create_db_and_tables() 
+    # Inicializa la base de datos al inicio de la aplicación
+    create_db_and_tables()
     yield
-    print("Apagando la aplicaci贸n...")
-
-# ----------------------------------------------------------------------
-# Inicializaci贸n de la Aplicaci贸n
-# ----------------------------------------------------------------------
+    # No hay código de cierre por ahora
 
 app = FastAPI(
-    title="Gym Routine Manager API",
-    version="1.0.0",
+    title="Gym App API",
+    version="0.1.0",
     lifespan=lifespan
 )
 
-# ----------------------------------------------------------------------
-# Dependencias de Autenticaci贸n y Autorizaci贸n
-# ----------------------------------------------------------------------
-
-def get_current_user(
-    session: Annotated[Session, Depends(get_session)], 
-    auth: Annotated[HTTPAuthorizationCredentials, Depends(http_bearer)]
-) -> User:
-    """Decodifica el JWT y devuelve el objeto User autenticado."""
-    token = auth.credentials 
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="No se pudieron validar las credenciales",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        # El DNI est谩 en el campo 'sub'
-        dni: str = payload.get("sub")
-        if dni is None:
-            raise credentials_exception
-    except JWTError:
-        raise credentials_exception
-    
-    # Buscar usuario por DNI
-    user = session.exec(select(User).where(User.dni == dni)).first()
-    if user is None:
-        raise credentials_exception
-    
-    return user
-
-def get_current_professor(current_user: Annotated[User, Depends(get_current_user)]) -> User:
-    """Dependencia que verifica si el usuario actual es un Profesor."""
-    if current_user.rol != UserRole.PROFESSOR:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Se requiere rol de Profesor para acceder a este recurso."
-        )
-    return current_user
-
-def get_current_student(current_user: Annotated[User, Depends(get_current_user)]) -> User:
-    """Dependencia que verifica si el usuario actual es un Alumno."""
-    if current_user.rol != UserRole.STUDENT:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Se requiere rol de Alumno para acceder a este recurso."
-        )
-    return current_user
 
 # ----------------------------------------------------------------------
-# Rutas P煤blicas (Health Check y Autenticaci贸n)
+# Rutas de Autenticación y Usuarios Comunes (Login/Registro/Perfil)
 # ----------------------------------------------------------------------
 
-@app.get("/", tags=["General"])
-def read_root():
-    """Endpoint de bienvenida y verificaci贸n de salud de la API."""
-    return {"message": "API del Gestor de Rutinas de Gimnasio activa."}
-
-# NUEVA RUTA: Registro solo de Alumnos
-@app.post("/register/student", response_model=UserRead, status_code=status.HTTP_201_CREATED, tags=["Autenticaci贸n"])
-def register_student(
-    user_data: UserCreate, # Se usa UserCreate, pero el rol se fuerza a Alumno
-    session: Annotated[Session, Depends(get_session)]
-):
-    """Permite el registro de nuevos usuarios con rol forzado a Alumno."""
-    
-    # 1. Verificar si DNI ya existe
-    existing_dni = session.exec(select(User).where(User.dni == user_data.dni)).first()
-    if existing_dni:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="El DNI ya est谩 registrado."
-        )
-    
-    # 2. Verificar si Email ya existe
-    existing_email = session.exec(select(User).where(User.email == user_data.email)).first()
-    if existing_email:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="El email ya est谩 registrado."
-        )
-
-    # 馃毃 NOTA: Se asume que el backend maneja el l铆mite de 72 bytes para el password hash
-    hashed_password = get_password_hash(user_data.password)
-    new_user = User(
-        email=user_data.email,
-        dni=user_data.dni, # Almacenar DNI
-        password_hash=hashed_password,
-        nombre=user_data.nombre,
-        rol=UserRole.STUDENT # Forzar rol a Alumno
-    )
-    session.add(new_user)
-    session.commit()
-    session.refresh(new_user)
-    return new_user
-
-@app.post("/register", response_model=UserRead, status_code=status.HTTP_201_CREATED, tags=["Autenticaci贸n"])
-def register_user(
-    user_data: UserCreate,
-    session: Annotated[Session, Depends(get_session)]
-):
-    """Permite el registro de nuevos usuarios (Profesores o Alumnos)."""
-    
-    # 1. Verificar si DNI ya existe
-    existing_dni = session.exec(select(User).where(User.dni == user_data.dni)).first()
-    if existing_dni:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="El DNI ya est谩 registrado."
-        )
-        
-    # 2. Verificar si Email ya existe
-    existing_user = session.exec(select(User).where(User.email == user_data.email)).first()
+@app.post("/users/register", response_model=UserRead, tags=["Usuarios"])
+def create_user(*, session: Annotated[Session, Depends(get_session)], user_create: UserCreate):
+    """Crea un nuevo usuario (Profesor o Alumno)."""
+    # 1. Verificar si el email ya existe
+    existing_user = session.exec(select(User).where(User.email == user_create.email)).first()
     if existing_user:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="El email ya est谩 registrado."
+            status_code=status.HTTP_400_BAD_REQUEST, 
+            detail="El email ya está registrado."
         )
 
-    # 馃毃 NOTA: Se asume que el backend maneja el l铆mite de 72 bytes para el password hash
-    hashed_password = get_password_hash(user_data.password)
-    new_user = User(
-        email=user_data.email,
-        dni=user_data.dni, # Almacenar DNI
-        password_hash=hashed_password,
-        nombre=user_data.nombre,
-        rol=user_data.rol
-    )
-    session.add(new_user)
+    # 2. Hashear la contrase?a
+    hashed_password = pwd_context.hash(user_create.password)
+    
+    # 3. Crear el nuevo objeto User
+    user = User.model_validate(user_create, update={"hashed_password": hashed_password})
+    
+    # 4. Guardar en DB
+    session.add(user)
     session.commit()
-    session.refresh(new_user)
-    return new_user
+    session.refresh(user)
+    return user
 
-@app.post("/login", response_model=Token, tags=["Autenticaci贸n"])
+
+@app.post("/users/login", response_model=Token, tags=["Usuarios"])
 def login_for_access_token(
-    form_data: UserLogin, # form_data tiene .dni y .password
-    session: Annotated[Session, Depends(get_session)]
+    session: Annotated[Session, Depends(get_session)],
+    user_login: UserLogin
 ):
-    """Verifica credenciales (Email/DNI y Password) y devuelve un JWT para la sesi贸n."""
-    
-    # 馃攽 B煤squeda por EMAIL (asumiendo que el campo 'dni' en el payload del frontend es el Email)
-    user = session.exec(select(User).where(User.email == form_data.dni)).first()
-    
-    # Si la b煤squeda por email falla, intentar por DNI (fallback)
+    """Autentica a un usuario y devuelve un token JWT."""
+    user = authenticate_user(session, user_login)
     if not user:
-        user = session.exec(select(User).where(User.dni == form_data.dni)).first()
-    
-    if not user or not verify_password(form_data.password, user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="DNI o contrase帽a incorrectos",
+            detail="Email o contrase?a incorrectos",
             headers={"WWW-Authenticate": "Bearer"},
         )
     
+    # ?? CRíTICO: Incluir ID y ROL en el token
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    # 馃毃 CORRECCI脫N CLAVE: Incluimos el nombre del usuario en el token.
     access_token = create_access_token(
-        data={"dni": user.dni, "rol": user.rol.value, "nombre": user.nombre}, 
-        expires_delta=access_token_expires
+        data={"id": user.id, "role": user.role}, expires_delta=access_token_expires
     )
-    return {"access_token": access_token, "token_type": "bearer"}
+    return Token(access_token=access_token, token_type="bearer")
 
-# ----------------------------------------------------------------------
-# Rutas Protegidas (Usuarios)
-# ----------------------------------------------------------------------
 
 @app.get("/users/me", response_model=UserRead, tags=["Usuarios"])
-def read_users_me(
-    current_user: Annotated[User, Depends(get_current_user)]
-):
-    """Obtiene la informaci贸n del usuario actualmente autenticado."""
+def read_users_me(current_user: Annotated[User, Depends(get_current_user)]):
+    """
+    (Común) Obtiene los datos del usuario logueado. 
+    útil para que el frontend sepa el rol y el ID.
+    """
     return current_user
 
-# 馃毃 RUTA: CAMBIO DE CONTRASE脩A
-@app.post("/users/change-password", tags=["Usuarios"])
+@app.put("/users/me/password", status_code=status.HTTP_204_NO_CONTENT, tags=["Usuarios"])
 def change_password(
-    password_data: ChangePassword, # Usamos el nuevo esquema ChangePassword
+    password_data: ChangePassword,
     session: Annotated[Session, Depends(get_session)],
-    # Permite a profesores y alumnos cambiar su contrase帽a
     current_user: Annotated[User, Depends(get_current_user)]
 ):
     """
-    Permite a un usuario (Profesor o Alumno) cambiar su contrase帽a.
-    Requiere la contrase帽a antigua para la verificaci贸n.
+    (Común) Permite a un usuario cambiar su contrase?a.
+    Requiere la contrase?a actual para validación.
     """
-    
-    # 1. Verificar la contrase帽a antigua
-    if not verify_password(password_data.old_password, current_user.password_hash):
+    # 1. Verificar la contrase?a actual
+    if not pwd_context.verify(password_data.old_password, current_user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Contrase帽a antigua incorrecta."
+            detail="Contrase?a actual incorrecta."
         )
 
-    # 2. Verificar la longitud de la nueva contrase帽a (buena pr谩ctica)
-    if len(password_data.new_password) < 6:
+    # 2. Validar que la nueva contrase?a no sea la misma (Opcional, pero buena práctica)
+    if pwd_context.verify(password_data.new_password, current_user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="La nueva contrase帽a debe tener al menos 6 caracteres."
+            detail="La nueva contrase?a no puede ser igual a la anterior."
         )
 
-    # 3. Generar el nuevo hash y actualizar el usuario
-    new_hashed_password = get_password_hash(password_data.new_password)
-    current_user.password_hash = new_hashed_password
-    
+    # 3. Hashear la nueva contrase?a y actualizar
+    hashed_new_password = pwd_context.hash(password_data.new_password)
+    current_user.hashed_password = hashed_new_password
+
+    # 4. Guardar en DB
     session.add(current_user)
     session.commit()
-    session.refresh(current_user)
-    
-    return {"message": "Contrase帽a actualizada exitosamente."}
+    return
 
 
-@app.get("/users/students", response_model=List[UserReadSimple], tags=["Usuarios"])
-def read_students_list(
+# ----------------------------------------------------------------------
+# Rutas del Profesor
+# ----------------------------------------------------------------------
+
+# --- Rutas de Gestión de Usuarios (Alumnos) ---
+
+@app.get("/students", response_model=List[UserReadSimple], tags=["Profesores"])
+def get_all_students(
     session: Annotated[Session, Depends(get_session)],
     current_professor: Annotated[User, Depends(get_current_professor)]
 ):
-    """Obtiene una lista de todos los usuarios con rol 'Alumno' (para asignar rutinas)."""
-    students = session.exec(select(User).where(User.rol == UserRole.STUDENT)).all()
+    """
+    (Profesor) Obtiene una lista simple de todos los alumnos
+    para ser usados en la asignación de rutinas.
+    """
+    # ?? CRíTICO: Filtrar SOLAMENTE a los alumnos
+    statement = select(User).where(User.role == UserRole.STUDENT).order_by(User.nombre)
+    students = session.exec(statement).all()
     return students
 
-# ----------------------------------------------------------------------
-# Rutas de visualizacion para Profesor de todas las rutinas
-# ----------------------------------------------------------------------
 
-@app.get("/professor/assignments/student/{student_id}", response_model=List[RoutineAssignmentRead], tags=["Asignaciones"])
-def get_student_assignments_for_professor(
-    student_id: int, # Tomamos el ID del alumno desde la URL
-    session: Annotated[Session, Depends(get_session)],
-    current_professor: Annotated[User, Depends(get_current_professor)] # 馃攽 Requiere rol de Profesor
-):
-    """
-    (Profesor) Obtiene TODAS las asignaciones (activas e inactivas) de un alumno por su ID.
-    """
-    
-    # 1. Verificar que el alumno exista
-    student = session.get(User, student_id)
-    if not student or student.rol != UserRole.STUDENT:
-        raise HTTPException(status_code=404, detail="Alumno no encontrado.")
-        
-    statement = (
-        select(RoutineAssignment)
-        .where(RoutineAssignment.student_id == student_id) # Filtramos por el ID del alumno
-        .order_by(desc(RoutineAssignment.assigned_at)) 
-        .options(selectinload(RoutineAssignment.routine).selectinload(Routine.exercise_links).selectinload(RoutineExercise.exercise))
-        .options(selectinload(RoutineAssignment.student))
-        .options(selectinload(RoutineAssignment.professor))
-    )
-    
-    assignments = session.exec(statement).all()
-    
-    if not assignments:
-        # Devuelve 200 con lista vac铆a, que el frontend espera
-        return []
-        
-    return assignments
+# --- Rutas de Gestión de Ejercicios ---
 
-# ----------------------------------------------------------------------
-# Rutas de Ejercicios (CRUD)
-# ----------------------------------------------------------------------
-
-@app.post("/exercises/", response_model=List[ExerciseRead], status_code=status.HTTP_201_CREATED, tags=["Ejercicios"])
-def create_exercise_batch(
-    exercises: List[ExerciseCreate],
-    session: Annotated[Session, Depends(get_session)],
+@app.post("/exercises", response_model=ExerciseRead, tags=["Profesores"])
+def create_exercise(
+    *, 
+    session: Annotated[Session, Depends(get_session)], 
+    exercise_create: ExerciseCreate,
     current_professor: Annotated[User, Depends(get_current_professor)]
 ):
-    """Crea m煤ltiples ejercicios a la vez. Solo accesible para Profesores."""
-    
-    created_exercises = []
-    for exercise_data in exercises:
-        existing_exercise = session.exec(select(Exercise).where(Exercise.nombre == exercise_data.nombre)).first()
-        if existing_exercise:
-            print(f"Advertencia: Ejercicio '{exercise_data.nombre}' ya existe, omitiendo.")
-            continue 
+    """(Profesor) Crea un nuevo ejercicio."""
+    # Validación básica (e.g., que el nombre no esté duplicado, aunque no es CRíTICO)
+    existing_exercise = session.exec(select(Exercise).where(Exercise.nombre == exercise_create.nombre)).first()
+    if existing_exercise:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Ya existe un ejercicio con ese nombre."
+        )
 
-        db_exercise = Exercise.model_validate(exercise_data)
-        session.add(db_exercise)
-        created_exercises.append(db_exercise)
-        
+    exercise = Exercise.model_validate(exercise_create)
+    session.add(exercise)
     session.commit()
-
-    for db_exercise in created_exercises:
-        session.refresh(db_exercise)
-        
-    return created_exercises
-
-@app.get("/exercises/", response_model=List[ExerciseRead], tags=["Ejercicios"])
-def read_exercises(
-    session: Annotated[Session, Depends(get_session)],
-    current_user: Annotated[User, Depends(get_current_user)]
-):
-    """Obtiene una lista de todos los ejercicios. Accesible para todos los usuarios autenticados."""
-    exercises = session.exec(select(Exercise)).all()
-    return exercises
-
-@app.get("/exercises/{exercise_id}", response_model=ExerciseRead, tags=["Ejercicios"])
-def read_exercise(
-    exercise_id: int,
-    session: Annotated[Session, Depends(get_session)],
-    current_user: Annotated[User, Depends(get_current_user)]
-):
-    """Obtiene un ejercicio por su ID."""
-    exercise = session.get(Exercise, exercise_id)
-    if not exercise:
-        raise HTTPException(status_code=404, detail="Ejercicio no encontrado")
+    session.refresh(exercise)
     return exercise
 
-@app.patch("/exercises/{exercise_id}", response_model=ExerciseRead, tags=["Ejercicios"])
+@app.get("/exercises", response_model=List[ExerciseRead], tags=["Profesores", "Alumnos"])
+def get_all_exercises(session: Annotated[Session, Depends(get_session)]):
+    """
+    (Común) Obtiene una lista de todos los ejercicios.
+    """
+    exercises = session.exec(select(Exercise).order_by(Exercise.nombre)).all()
+    return exercises
+
+@app.put("/exercises/{exercise_id}", response_model=ExerciseRead, tags=["Profesores"])
 def update_exercise(
-    exercise_id: int,
-    exercise_data: ExerciseUpdate,
+    exercise_id: int, 
+    exercise_update: ExerciseUpdate, 
     session: Annotated[Session, Depends(get_session)],
     current_professor: Annotated[User, Depends(get_current_professor)]
 ):
-    """Actualiza un ejercicio existente por ID. Solo accesible para Profesores."""
-    db_exercise = session.get(Exercise, exercise_id)
-    if not db_exercise:
-        raise HTTPException(status_code=404, detail="Ejercicio no encontrado")
-        
-    exercise_dict = exercise_data.model_dump(exclude_unset=True)
-    for key, value in exercise_dict.items():
-        setattr(db_exercise, key, value)
-
-    session.add(db_exercise)
-    session.commit()
-    session.refresh(db_exercise)
-    return db_exercise
-
-@app.delete("/exercises/{exercise_id}", status_code=status.HTTP_204_NO_CONTENT, tags=["Ejercicios"])
-def delete_exercise(
-    exercise_id: int,
-    session: Annotated[Session, Depends(get_session)],
-    current_professor: Annotated[User, Depends(get_current_professor)]
-):
-    """Elimina un ejercicio por ID. Solo accesible para Profesores."""
+    """(Profesor) Actualiza un ejercicio existente."""
     exercise = session.get(Exercise, exercise_id)
     if not exercise:
-        raise HTTPException(status_code=404, detail="Ejercicio no encontrado")
-        
+        raise HTTPException(status_code=404, detail="Ejercicio no encontrado.")
+    
+    update_data = exercise_update.model_dump(exclude_none=True)
+    exercise.sqlmodel_update(update_data)
+    
+    session.add(exercise)
+    session.commit()
+    session.refresh(exercise)
+    return exercise
+
+
+@app.delete("/exercises/{exercise_id}", status_code=status.HTTP_204_NO_CONTENT, tags=["Profesores"])
+def delete_exercise(
+    exercise_id: int, 
+    session: Annotated[Session, Depends(get_session)],
+    current_professor: Annotated[User, Depends(get_current_professor)]
+):
+    """(Profesor) Elimina un ejercicio por su ID."""
+    exercise = session.get(Exercise, exercise_id)
+    if not exercise:
+        raise HTTPException(status_code=404, detail="Ejercicio no encontrado.")
+    
     session.delete(exercise)
     session.commit()
     return
 
-# ----------------------------------------------------------------------
-# Rutas de Rutinas (CRUD - Muchos-a-Muchos)
-# ----------------------------------------------------------------------
 
-@app.post("/routines/", response_model=RoutineRead, status_code=status.HTTP_201_CREATED, tags=["Rutinas"])
+# --- Rutas de Gestión de Rutinas ---
+
+@app.post("/routines", response_model=RoutineRead, tags=["Profesores"])
 def create_routine(
-    routine_data: RoutineCreate,
+    *,
     session: Annotated[Session, Depends(get_session)],
+    routine_data: RoutineCreate,
     current_professor: Annotated[User, Depends(get_current_professor)]
 ):
-    """Crea una nueva rutina (plantilla) y la asocia con ejercicios."""
+    """(Profesor) Crea una nueva rutina y sus ejercicios asociados."""
     
-    db_routine = Routine(
-        nombre=routine_data.nombre,
-        descripcion=routine_data.descripcion,
-        owner_id=current_professor.id
+    # 1. Crear la Rutina principal
+    # Usamos .copy() para evitar modificar el objeto Pydantic si es necesario.
+    routine_dict = routine_data.model_dump(exclude={"exercises"})
+    routine_db = Routine.model_validate(
+        routine_dict, 
+        update={"owner_id": current_professor.id, "created_at": datetime.now(timezone.utc)}
     )
     
-    # 1. Creamos la rutina y hacemos commit INMEDIATO para que la DB le asigne el ID.
-    session.add(db_routine)
+    session.add(routine_db)
     session.commit()
-    session.refresh(db_routine)
-    
-    # 2. Ahora creamos los enlaces usando el db_routine.id (que ya NO es null)
+    session.refresh(routine_db)
+
+    # 2. Crear los enlaces de ejercicios (RoutineExercise)
+    exercise_links = []
     for exercise_link_data in routine_data.exercises:
-        exercise = session.get(Exercise, exercise_link_data.exercise_id)
-        if not exercise:
-            session.rollback() 
-            raise HTTPException(
-                status_code=404, 
-                detail=f"Ejercicio con id {exercise_link_data.exercise_id} no encontrado. Creaci贸n cancelada."
-            )
+        # ?? CRíTICO: Validación de existencia del ejercicio
+        exercise_exists = session.get(Exercise, exercise_link_data.exercise_id)
+        if not exercise_exists:
+            # Si el ejercicio no existe, se revierte la rutina y se lanza una excepción.
+            session.delete(routine_db)
+            session.commit()
+            raise HTTPException(status_code=404, detail=f"Ejercicio con ID {exercise_link_data.exercise_id} no encontrado.")
             
         link = RoutineExercise(
-            routine_id=db_routine.id, 
-            exercise_id=exercise.id,
-            sets=exercise_link_data.sets,
-            repetitions=exercise_link_data.repetitions,
-            order=exercise_link_data.order
+            **exercise_link_data.model_dump(), 
+            routine_id=routine_db.id
         )
-        session.add(link)
-
-    # 3. Commit final para los enlaces
-    try:
-        session.commit()
-        # Recargamos la rutina con las relaciones anidadas
-        statement = (
-            select(Routine)
-            .where(Routine.id == db_routine.id)
-            .options(selectinload(Routine.exercise_links).selectinload(RoutineExercise.exercise))
-        )
-        final_routine = session.exec(statement).first()
+        exercise_links.append(link)
         
-        return final_routine
+    session.add_all(exercise_links)
+    session.commit()
+    session.refresh(routine_db)
 
-    except Exception as e:
-        session.rollback()
-        print(f"ERROR: Fallo al guardar los enlaces de ejercicios: {e}")
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error en la base de datos al crear enlaces de rutina: {str(e)}")
+    # 3. Cargar las relaciones anidadas para la respuesta
+    statement = (
+        select(Routine)
+        .where(Routine.id == routine_db.id)
+        .options(selectinload(Routine.exercise_links).selectinload(RoutineExercise.exercise))
+    )
+    
+    # Debe ser el primero, ya que se acaba de crear
+    routine_with_links = session.exec(statement).first() 
 
-@app.get("/routines/", response_model=List[RoutineRead], tags=["Rutinas"])
-def read_routines(
+    if not routine_with_links:
+        # Caso de fallo inesperado
+        raise HTTPException(status_code=500, detail="Error al recuperar la rutina creada.")
+        
+    return routine_with_links
+
+@app.get("/routines", response_model=List[RoutineRead], tags=["Profesores"])
+def get_my_routines(
     session: Annotated[Session, Depends(get_session)],
     current_professor: Annotated[User, Depends(get_current_professor)]
 ):
     """
-    Obtiene una lista de todas las rutinas maestras creadas por el profesor.
+    (Profesor) Obtiene todas las rutinas creadas por el profesor logueado.
     """
-    try:
-        # 馃毃 CORRECCI脫N/MEJORA: Forzamos la carga de relaciones anidadas (links + detalles del ejercicio)
-        statement = (
-            select(Routine)
-            .where(Routine.owner_id == current_professor.id)
-            .options(selectinload(Routine.exercise_links).selectinload(RoutineExercise.exercise)) 
-        )
-        
-        routines = session.exec(statement).all()
-        
-        if not routines:
-            return []
-            
-        return routines
-        
-    except Exception as e:
-        print(f"ERROR: Fallo al leer /routines/. Causa: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error interno: Fallo al cargar la lista de rutinas. {e}"
-        )
+    statement = (
+        select(Routine)
+        .where(Routine.owner_id == current_professor.id)
+        .order_by(desc(Routine.created_at))
+        .options(selectinload(Routine.exercise_links).selectinload(RoutineExercise.exercise))
+    )
+    
+    routines = session.exec(statement).all()
+    return routines
 
-@app.get("/routines/{routine_id}", response_model=RoutineRead, tags=["Rutinas"])
-def read_routine(
+@app.get("/routines/{routine_id}", response_model=RoutineRead, tags=["Profesores", "Alumnos"])
+def get_routine_by_id(
     routine_id: int,
     session: Annotated[Session, Depends(get_session)],
     current_user: Annotated[User, Depends(get_current_user)]
 ):
-    """Obtiene una rutina espec铆fica por su ID, incluyendo todos sus ejercicios."""
-    # 馃毃 CORRECCI脫N/MEJORA: Forzamos la carga de relaciones anidadas (links + detalles del ejercicio)
+    """(Común) Obtiene una rutina por su ID (usado principalmente por el profesor para editar)."""
+    # 1. Cargar la rutina con las relaciones
     statement = (
         select(Routine)
         .where(Routine.id == routine_id)
@@ -528,179 +400,242 @@ def read_routine(
     routine = session.exec(statement).first()
     
     if not routine:
-        raise HTTPException(status_code=404, detail="Rutina no encontrada")
+        raise HTTPException(status_code=404, detail="Rutina no encontrada.")
+
+    # 2. Verificar permisos
+    # El Profesor debe ser el due?o
+    if current_user.role == UserRole.PROFESSOR and routine.owner_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Acceso denegado: Esta rutina no fue creada por este profesor.")
+    
+    # El Alumno no necesita tener permisos aquí, ya que el front de Alumno usa otra ruta.
+    # Pero si llegara aquí, solo necesita que exista.
     
     return routine
 
-# 馃毃 RUTA ACTUALIZADA: EDICI脫N COMPLETA (Metadata y Ejercicios)
-@app.patch("/routines/{routine_id}", response_model=RoutineRead, tags=["Rutinas"])
-def update_routine_full(
+
+@app.put("/routines/{routine_id}", response_model=RoutineRead, tags=["Profesores"])
+def update_routine(
     routine_id: int,
-    routine_data: RoutineCreateOrUpdate, # 馃攽 Usamos el esquema de actualizaci贸n completa
+    routine_data: RoutineCreateOrUpdate, # Usamos el esquema que permite reemplazar ejercicios
     session: Annotated[Session, Depends(get_session)],
     current_professor: Annotated[User, Depends(get_current_professor)]
 ):
-    """Actualiza completamente una rutina maestra (nombre, descripci贸n y REEMPLAZA la lista de ejercicios)."""
-    db_routine = session.get(Routine, routine_id)
-    if not db_routine:
-        raise HTTPException(status_code=404, detail="Rutina no encontrada")
-        
-    if db_routine.owner_id != current_professor.id:
-        raise HTTPException(status_code=403, detail="No autorizado para editar esta rutina")
+    """(Profesor) Actualiza los datos de una rutina y *reemplaza* su lista de ejercicios."""
+    
+    # 1. Obtener y validar la rutina
+    routine = session.get(Routine, routine_id)
+    
+    if not routine or routine.owner_id != current_professor.id:
+        raise HTTPException(status_code=404, detail="Rutina no encontrada o no pertenece al profesor.")
 
-    # 1. Actualizar metadata (Nombre/Descripci贸n)
-    db_routine.nombre = routine_data.nombre
-    db_routine.descripcion = routine_data.descripcion
-    
-    # 2. Eliminar todos los enlaces de ejercicios existentes para reemplazarlos
-    session.exec(select(RoutineExercise).where(RoutineExercise.routine_id == routine_id)).delete()
-    
-    # 3. Crear los nuevos enlaces
-    for exercise_link_data in routine_data.exercises:
-        exercise = session.get(Exercise, exercise_link_data.exercise_id)
-        if not exercise:
-            session.rollback() 
-            raise HTTPException(
-                status_code=404, 
-                detail=f"Ejercicio con id {exercise_link_data.exercise_id} no encontrado. Edici贸n cancelada."
+    # 2. Actualizar metadatos (nombre, descripción)
+    update_data = routine_data.model_dump(exclude={"exercises"}, exclude_none=True)
+    routine.sqlmodel_update(update_data)
+
+    # 3. Eliminar los enlaces de ejercicios existentes (si se pasó una nueva lista)
+    if routine_data.exercises is not None:
+        # Eliminar todos los RoutineExercise vinculados a esta rutina
+        delete_statement = select(RoutineExercise).where(RoutineExercise.routine_id == routine_id)
+        links_to_delete = session.exec(delete_statement).all()
+        for link in links_to_delete:
+            session.delete(link)
+        
+        # 4. Crear los nuevos enlaces de ejercicios
+        new_exercise_links = []
+        for exercise_link_data in routine_data.exercises:
+            # ?? CRíTICO: Validación de existencia del ejercicio
+            exercise_exists = session.get(Exercise, exercise_link_data.exercise_id)
+            if not exercise_exists:
+                # Si el ejercicio no existe, se lanza una excepción.
+                session.rollback() # Asegurar que los metadatos no se guarden si falla el enlace.
+                raise HTTPException(status_code=404, detail=f"Ejercicio con ID {exercise_link_data.exercise_id} no encontrado.")
+
+            link = RoutineExercise(
+                **exercise_link_data.model_dump(),
+                routine_id=routine_id
             )
-            
-        link = RoutineExercise(
-            routine_id=db_routine.id, 
-            exercise_id=exercise.id,
-            sets=exercise_link_data.sets,
-            repetitions=exercise_link_data.repetitions,
-            order=exercise_link_data.order
-        )
-        session.add(link)
+            new_exercise_links.append(link)
+        
+        session.add_all(new_exercise_links)
 
-    # 4. Commit final
-    try:
-        session.add(db_routine)
-        session.commit()
-        
-        # Recargamos la rutina con todas las relaciones anidadas para devolver el objeto completo
-        statement = (
-            select(Routine)
-            .where(Routine.id == routine_id)
-            .options(selectinload(Routine.exercise_links).selectinload(RoutineExercise.exercise))
-        )
-        updated_routine = session.exec(statement).first()
-        
-        if not updated_routine:
-            raise HTTPException(status_code=500, detail="Fallo al recargar la rutina actualizada.")
-            
-        return updated_routine
-        
-    except Exception as e:
-        session.rollback()
-        print(f"ERROR: Fallo al actualizar los enlaces de ejercicios: {e}")
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error en la base de datos al actualizar rutina: {str(e)}")
+    # 5. Guardar todos los cambios y refrescar
+    session.add(routine)
+    session.commit()
+    session.refresh(routine)
+
+    # 6. Cargar la rutina con las nuevas relaciones para la respuesta
+    statement = (
+        select(Routine)
+        .where(Routine.id == routine.id)
+        .options(selectinload(Routine.exercise_links).selectinload(RoutineExercise.exercise))
+    )
+    routine_with_links = session.exec(statement).first()
+    
+    if not routine_with_links:
+        raise HTTPException(status_code=500, detail="Error al recuperar la rutina actualizada.")
+
+    return routine_with_links
 
 
-@app.delete("/routines/{routine_id}", status_code=status.HTTP_204_NO_CONTENT, tags=["Rutinas"])
+@app.delete("/routines/{routine_id}", status_code=status.HTTP_204_NO_CONTENT, tags=["Profesores"])
 def delete_routine(
     routine_id: int,
     session: Annotated[Session, Depends(get_session)],
     current_professor: Annotated[User, Depends(get_current_professor)]
 ):
-    """Elimina una rutina maestra. Esto tambi茅n eliminar谩 los enlaces en RoutineExercise y asignaciones."""
-    db_routine = session.get(Routine, routine_id)
-    if not db_routine:
-        raise HTTPException(status_code=404, detail="Rutina no encontrada")
+    """(Profesor) Elimina una rutina (y sus enlaces de ejercicios)."""
+    routine = session.get(Routine, routine_id)
     
-    if db_routine.owner_id != current_professor.id:
-        raise HTTPException(status_code=403, detail="No autorizado para eliminar esta rutina")
-
-    # Eliminamos enlaces y asignaciones antes de eliminar la rutina
-    session.exec(select(RoutineExercise).where(RoutineExercise.routine_id == routine_id)).delete()
-    session.exec(select(RoutineAssignment).where(RoutineAssignment.routine_id == routine_id)).delete()
-        
-    session.delete(db_routine)
+    if not routine or routine.owner_id != current_professor.id:
+        raise HTTPException(status_code=404, detail="Rutina no encontrada o no pertenece al profesor.")
+    
+    session.delete(routine)
     session.commit()
     return
 
-# ----------------------------------------------------------------------
-# Rutas de Asignaci贸n (Profesor y Alumno)
-# ----------------------------------------------------------------------
 
-# --- Rutas del Profesor ---
+# --- Rutas de Asignación de Rutinas ---
 
-@app.post("/assignments/", response_model=RoutineAssignmentRead, tags=["Asignaciones"])
-def assign_routine_to_student(
-    assignment_data: RoutineAssignmentCreate,
+@app.post("/assignments", response_model=RoutineAssignmentRead, tags=["Profesores"])
+def create_routine_assignment(
+    *, 
     session: Annotated[Session, Depends(get_session)],
+    assignment_data: RoutineAssignmentCreate,
     current_professor: Annotated[User, Depends(get_current_professor)]
 ):
-    """(Profesor) Asigna una rutina a un alumno. Permite m煤ltiples asignaciones (no desactiva las antiguas)."""
+    """(Profesor) Asigna una rutina a un alumno."""
     
-    # 1. Verificar que la rutina exista
+    # 1. Validar que la rutina exista y sea del profesor
     routine = session.get(Routine, assignment_data.routine_id)
-    if not routine:
-        raise HTTPException(status_code=404, detail="Rutina no encontrada")
-        
-    # 2. Verificar que el alumno exista
+    if not routine or routine.owner_id != current_professor.id:
+        raise HTTPException(status_code=404, detail="Rutina no encontrada o no pertenece a este profesor.")
+
+    # 2. Validar que el alumno exista
     student = session.get(User, assignment_data.student_id)
-    if not student or student.rol != UserRole.STUDENT:
-        raise HTTPException(status_code=404, detail="Alumno no encontrado")
+    if not student or student.role != UserRole.STUDENT:
+        raise HTTPException(status_code=404, detail="Alumno no encontrado.")
+
+    # 3. Si la nueva asignación es activa, desactivar las anteriores del mismo alumno
+    if assignment_data.is_active:
+        # Buscar asignaciones activas anteriores para este alumno
+        old_active_assignments = session.exec(
+            select(RoutineAssignment)
+            .where(
+                RoutineAssignment.student_id == assignment_data.student_id,
+                RoutineAssignment.is_active == True
+            )
+        ).all()
         
-    # 3. Crear la nueva asignaci贸n
-    db_assignment = RoutineAssignment(
-        student_id=student.id,
-        routine_id=routine.id,
-        professor_id=current_professor.id,
-        is_active=True # Todas las rutinas asignadas se consideran 'activas' por defecto.
+        # Desactivarlas
+        for assignment in old_active_assignments:
+            assignment.is_active = False
+            session.add(assignment)
+
+    # 4. Crear la nueva asignación
+    assignment = RoutineAssignment.model_validate(
+        assignment_data, 
+        update={
+            "professor_id": current_professor.id, 
+            "assigned_at": datetime.now(timezone.utc)
+        }
     )
     
-    session.add(db_assignment)
-    
-    try:
-        session.commit()
-        session.refresh(db_assignment)
-    except Exception as e:
-        session.rollback()
-        print(f"ERROR DB ASIGNACI脫N: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
-            detail=f"Fallo al guardar la asignaci贸n en DB. {e}"
-        )
-        
-    return db_assignment
-
-# 馃毃 RUTA EXISTENTE: PATCH para cambiar el estado de activaci贸n de una asignaci贸n
-@app.patch("/assignments/{assignment_id}/active", response_model=RoutineAssignmentRead, tags=["Asignaciones"])
-def set_assignment_active_status(
-    assignment_id: int,
-    is_active: bool, # Nuevo par谩metro booleano para el estado
-    session: Annotated[Session, Depends(get_session)],
-    current_professor: Annotated[User, Depends(get_current_professor)]
-):
-    """(Profesor) Cambia el estado de activaci贸n (is_active) de una asignaci贸n de rutina espec铆fica."""
-    
-    assignment = session.get(RoutineAssignment, assignment_id)
-    
-    if not assignment:
-        raise HTTPException(status_code=404, detail="Asignaci贸n no encontrada.")
-        
-    assignment.is_active = is_active # 馃毃 Aplica el nuevo estado
-        
     session.add(assignment)
     session.commit()
     session.refresh(assignment)
-    return assignment
+    
+    # 5. Cargar las relaciones para la respuesta
+    statement = (
+        select(RoutineAssignment)
+        .where(RoutineAssignment.id == assignment.id)
+        .options(selectinload(RoutineAssignment.routine).selectinload(Routine.exercise_links).selectinload(RoutineExercise.exercise))
+        .options(selectinload(RoutineAssignment.student))
+        .options(selectinload(RoutineAssignment.professor))
+    )
+    
+    new_assignment = session.exec(statement).first()
+    
+    if not new_assignment:
+        raise HTTPException(status_code=500, detail="Error al recuperar la asignación creada.")
+        
+    return new_assignment
 
-@app.delete("/assignments/{assignment_id}", status_code=status.HTTP_204_NO_CONTENT, tags=["Asignaciones"])
+
+@app.get("/professor/assignments/student/{student_id}", response_model=List[RoutineAssignmentRead], tags=["Profesores"])
+def get_student_assignments(
+    student_id: int,
+    session: Annotated[Session, Depends(get_session)],
+    current_professor: Annotated[User, Depends(get_current_professor)]
+):
+    """
+    (Profesor) Obtiene todas las asignaciones (activas e inactivas) de un alumno específico.
+    """
+    # 1. Validar que el alumno exista
+    student = session.get(User, student_id)
+    if not student or student.role != UserRole.STUDENT:
+        raise HTTPException(status_code=404, detail="Alumno no encontrado.")
+
+    # 2. Obtener las asignaciones
+    statement = (
+        select(RoutineAssignment)
+        .where(RoutineAssignment.student_id == student_id)
+        # ?? Ordenamos por fecha de asignación descendente.
+        .order_by(desc(RoutineAssignment.assigned_at)) 
+        # Cargamos las relaciones anidadas
+        .options(selectinload(RoutineAssignment.routine).selectinload(Routine.exercise_links).selectinload(RoutineExercise.exercise))
+        .options(selectinload(RoutineAssignment.student))
+        .options(selectinload(RoutineAssignment.professor))
+    )
+    
+    assignments = session.exec(statement).all()
+    return assignments
+
+@app.patch("/assignments/{assignment_id}/active", status_code=status.HTTP_204_NO_CONTENT, tags=["Profesores"])
+def toggle_assignment_active(
+    assignment_id: int,
+    is_active: bool,
+    session: Annotated[Session, Depends(get_session)],
+    current_professor: Annotated[User, Depends(get_current_professor)]
+):
+    """(Profesor) Activa o desactiva una asignación de rutina."""
+    assignment = session.get(RoutineAssignment, assignment_id)
+    
+    if not assignment:
+        raise HTTPException(status_code=404, detail="Asignación no encontrada.")
+
+    # 1. Si se intenta activar, desactivar la anterior del mismo alumno
+    if is_active:
+        old_active_assignments = session.exec(
+            select(RoutineAssignment)
+            .where(
+                RoutineAssignment.student_id == assignment.student_id,
+                RoutineAssignment.is_active == True
+            )
+        ).all()
+        
+        for old_assignment in old_active_assignments:
+            if old_assignment.id != assignment_id:
+                old_assignment.is_active = False
+                session.add(old_assignment)
+
+    # 2. Aplicar el nuevo estado
+    assignment.is_active = is_active
+    session.add(assignment)
+    session.commit()
+    return
+
+
+@app.delete("/assignments/{assignment_id}", status_code=status.HTTP_204_NO_CONTENT, tags=["Profesores"])
 def delete_assignment(
     assignment_id: int,
     session: Annotated[Session, Depends(get_session)],
     current_professor: Annotated[User, Depends(get_current_professor)]
 ):
-    """(Profesor) Elimina una asignaci贸n de rutina espec铆fica por ID."""
-    
+    """(Profesor) Elimina una asignación de rutina por su ID."""
     assignment = session.get(RoutineAssignment, assignment_id)
     
     if not assignment:
-        raise HTTPException(status_code=404, detail="Asignaci贸n no encontrada.")
+        raise HTTPException(status_code=404, detail="Asignación no encontrada.")
         
     session.delete(assignment)
     session.commit()
@@ -715,15 +650,15 @@ def get_my_active_routine(
     current_student: Annotated[User, Depends(get_current_student)]
 ):
     """
-    (Alumno) Obtiene SOLAMENTE las rutinas asignadas que est谩n marcadas como activas (is_active=True).
+    (Alumno) Obtiene SOLAMENTE las rutinas asignadas que están marcadas como activas (is_active=True).
     """
     statement = (
         select(RoutineAssignment)
         .where(
             RoutineAssignment.student_id == current_student.id,
-            RoutineAssignment.is_active == True # 馃毃 FILTRO CR脥TICO: Solo rutinas activas
+            RoutineAssignment.is_active == True # ?? FILTRO CRíTICO: Solo rutinas activas
         )
-        # 馃攽 Ordenamos por fecha de asignaci贸n descendente.
+        # ?? Ordenamos por fecha de asignación descendente.
         .order_by(desc(RoutineAssignment.assigned_at)) 
         # Cargamos las relaciones anidadas
         .options(selectinload(RoutineAssignment.routine).selectinload(Routine.exercise_links).selectinload(RoutineExercise.exercise))
@@ -733,8 +668,5 @@ def get_my_active_routine(
     
     active_assignments = session.exec(statement).all()
     
-    # 馃毃 CORRECCI脫N APLICADA: Devolvemos una lista vac铆a en lugar de un error 404.
-    if not active_assignments:
-        return []
-        
+    # Si no hay rutinas activas, devuelve una lista vacía.
     return active_assignments
