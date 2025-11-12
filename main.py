@@ -543,7 +543,7 @@ def create_routine_assignment(
     new_assignment = session.exec(statement).first()
     
     if not new_assignment:
-        raise HTTPException(status_code=500, detail="Error al recuperar la asignaci¨®n creada.")
+        raise HTTPException(status_code=500, detail="Error al recuperar la asignacion creada.")
         
     return new_assignment
 
@@ -586,7 +586,7 @@ def toggle_assignment_active(
     assignment = session.get(RoutineAssignment, assignment_id)
     
     if not assignment:
-        raise HTTPException(status_code=404, detail="Asignaci¨®n no encontrada.")
+        raise HTTPException(status_code=404, detail="Asignacion no encontrada.")
 
     # 1. Si se intenta activar, desactivar la anterior del mismo alumno
     if is_active:
@@ -620,7 +620,7 @@ def delete_assignment(
     assignment = session.get(RoutineAssignment, assignment_id)
     
     if not assignment:
-        raise HTTPException(status_code=404, detail="Asignaci¨®n no encontrada.")
+        raise HTTPException(status_code=404, detail="Asignacion no encontrada.")
         
     session.delete(assignment)
     session.commit()
