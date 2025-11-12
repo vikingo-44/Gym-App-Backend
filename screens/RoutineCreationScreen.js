@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { 
     StyleSheet, Text, View, TextInput, Button, SafeAreaView, 
-    ScrollView, TouchableOpacity, Alert, KeyboardAvoidingView, Platform, ActivityIndicator
+    ScrollView, TouchableOpacity, Alert, KeyboardAvoidingView, Platform, ActivityIndicator,
+    // Importamos un componente básico para el selector de días
 } from 'react-native';
 // 🚨 Importar useRoute para acceder a los parámetros de navegación
 import { useRoute } from '@react-navigation/native';
@@ -17,88 +18,9 @@ const API_URL = "https://gym-app-backend-e9bn.onrender.com";
 // ----------------------------------------------------------------------
 
 // ----------------------------------------------------------------------
-// Generador de Estilos Dinámicos (Ejercicios)
-// ----------------------------------------------------------------------
-const getExerciseStyles = (colors) => StyleSheet.create({
-    card: {
-        backgroundColor: colors.card,
-        borderRadius: 10,
-        padding: 15,
-        marginBottom: 15,
-        borderLeftWidth: 5,
-        borderLeftColor: colors.primary,
-        shadowColor: colors.isDark ? '#000' : '#444',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: colors.isDark ? 0.3 : 0.1,
-        shadowRadius: 3,
-        elevation: 3,
-    },
-    header: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: 10,
-    },
-    title: {
-        fontSize: 18,
-        fontWeight: '700',
-        color: colors.textPrimary,
-    },
-    deleteButton: {
-        backgroundColor: colors.danger,
-        width: 28,
-        height: 28,
-        borderRadius: 14,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    deleteButtonText: {
-        color: colors.card,
-        fontWeight: 'bold',
-        fontSize: 14,
-    },
-    selectButton: {
-        backgroundColor: colors.inputBackground,
-        borderColor: colors.inputBorder,
-        borderWidth: 1,
-        borderRadius: 6,
-        padding: 15,
-        marginBottom: 15,
-    },
-    selectButtonText: {
-        color: colors.textPrimary,
-        fontSize: 16,
-        textAlign: 'center',
-    },
-    row: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        marginTop: 5,
-    },
-    input: {
-        height: 40,
-        backgroundColor: colors.inputBackground,
-        borderColor: colors.inputBorder,
-        borderWidth: 1,
-        borderRadius: 6,
-        paddingHorizontal: 10,
-        fontSize: 14,
-        color: colors.textPrimary,
-        width: '48%', 
-    },
-    smallInput: {
-        width: '48%', 
-        marginBottom: 10, 
-    },
-    warning: {
-        fontSize: 14,
-        color: colors.warning,
-        textAlign: 'left',
-        paddingVertical: 5,
-    }
-});
-
 // Componente para un solo ejercicio
+// (Se mantiene intacto, pero ahora maneja el ejercicio del día actual)
+// ----------------------------------------------------------------------
 const ExerciseItem = ({ index, exercise, updateExercise, removeExercise, toggleSelector }) => {
     
     // 🔑 Obtener el tema y los colores
@@ -167,6 +89,50 @@ const getScreenStyles = (colors) => StyleSheet.create({
         alignItems: 'center',
         backgroundColor: colors.background,
     },
+    // 🚨 AÑADIDO: Estilos para el Selector de Días (Step 5)
+    daySelectorContainer: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 20,
+        backgroundColor: colors.card,
+        borderRadius: 10,
+        padding: 10,
+        elevation: 1,
+    },
+    dayButton: {
+        paddingVertical: 8,
+        paddingHorizontal: 15,
+        borderRadius: 6,
+        backgroundColor: colors.divider,
+    },
+    dayButtonActive: {
+        backgroundColor: colors.primary,
+        shadowColor: colors.primary,
+        shadowOpacity: 0.3,
+        shadowRadius: 3,
+        elevation: 3,
+    },
+    dayButtonText: {
+        color: colors.textPrimary,
+        fontWeight: 'bold',
+    },
+    dayButtonTextActive: {
+        color: colors.card,
+    },
+    // 🚨 AÑADIDO: Estilos para el campo de Fecha de Fin (Step 6)
+    dateInput: {
+        height: 50,
+        backgroundColor: colors.inputBackground,
+        borderColor: colors.inputBorder,
+        borderWidth: 1,
+        borderRadius: 8,
+        paddingHorizontal: 15,
+        fontSize: 16,
+        marginBottom: 10,
+        color: colors.textPrimary,
+    },
+    // Estilos existentes...
     errorView: {
         flex: 1,
         justifyContent: 'center',
@@ -194,8 +160,15 @@ const getScreenStyles = (colors) => StyleSheet.create({
         fontSize: 26,
         fontWeight: 'bold',
         color: colors.textPrimary,
+        marginBottom: 5, // Reducido para meter el subtítulo
+        textAlign: 'center',
+    },
+    headerSubtitle: { // 🚨 AÑADIDO
+        fontSize: 16,
+        color: colors.textSecondary,
         marginBottom: 20,
         textAlign: 'center',
+        fontStyle: 'italic',
     },
     label: {
         fontSize: 16,
@@ -313,16 +286,33 @@ export default function RoutineCreationScreen({ navigation }) {
     const { colors: themeColors } = useTheme();
     const styles = getScreenStyles(themeColors); // 🚨 Generar estilos dinámicos
     
-    // 🚨 1. OBTENER PARÁMETROS DEL ALUMNO (Creación) o RUTINA (Edición)
+    // 🚨 1. OBTENER PARÁMETROS: Incluir los metadatos del wizard
     const route = useRoute();
-    const { studentId, studentName, routineId } = route.params || {};
+    const { 
+        studentId, studentName, routineId, 
+        routineMetadata // 🚨 NUEVO: Recibe { nombre, descripcion, days } desde el Wizard
+    } = route.params || {};
     
     const isEditMode = !!routineId; // Bandera para saber si estamos editando
     
     // --- ESTADOS DE LA RUTINA ---
-    const [routineName, setRoutineName] = useState('');
-    const [routineDescription, setRoutineDescription] = useState(''); // Nuevo campo para descripción
-    const [exercises, setExercises] = useState([]); 
+    const [routineName, setRoutineName] = useState(routineMetadata?.nombre || '');
+    const [routineDescription, setRoutineDescription] = useState(routineMetadata?.descripcion || '');
+    
+    // 🚨 ESTADO CLAVE: Ejercicios por Día (array de arrays)
+    // Inicializado: [[ej1, ej2], [ej1, ej2], ...]
+    const daysFromMetadata = routineMetadata?.days || 1;
+    const initialExercises = isEditMode ? [] : Array(daysFromMetadata).fill(0).map(() => []);
+
+    const [exercisesPerDay, setExercisesPerDay] = useState(initialExercises);
+    
+    // --- ESTADOS DEL FLUJO DE DÍAS (Step 5) y FECHA (Step 6) ---
+    const [daysCount, setDaysCount] = useState(daysFromMetadata);
+    const [currentDayIndex, setCurrentDayIndex] = useState(0); // 0-indexed
+    const [routineEndDate, setRoutineEndDate] = useState(''); // 🚨 NUEVO: Fecha de fin de la rutina (Step 6)
+    
+    // Acceso rápido a los ejercicios del día actual
+    const exercises = exercisesPerDay[currentDayIndex] || [];
     
     // --- ESTADOS DE EJERCICIOS ---
     const [availableExercises, setAvailableExercises] = useState([]); 
@@ -355,30 +345,31 @@ export default function RoutineCreationScreen({ navigation }) {
 
                 setRoutineName(routineData.nombre);
                 setRoutineDescription(routineData.descripcion || '');
-
-                // Mapear los ejercicios de la rutina para el estado del formulario
+                // 🚨 Asumo que en el backend no se guarda la separación por días, solo el orden.
+                // Aquí deberías tener lógica para reconstruir los días si fuera necesario.
+                // Para simplificar, en modo edición, se mantiene el flujo original (un solo día)
                 const loadedExercises = routineData.exercise_links
                     .sort((a, b) => a.order - b.order) 
                     .map(link => ({
-                        // Usamos el ID del ejercicio
                         exercise_id: link.exercise_id, 
-                        // Usamos el nombre del ejercicio (del objeto anidado)
                         name: link.exercise?.nombre || 'Ejercicio Desconocido',
-                        // 🚨 CORRECCIÓN CLAVE: Asegurar que sets y repetitions nunca sean null y siempre sean String
                         series: String(link.sets || ''), 
                         repetitions: String(link.repetitions || ''), 
                         order: link.order
                     }));
-                setExercises(loadedExercises);
+                
+                // Si es edición, volvemos a un solo día para simplificar la compatibilidad con el backend actual
+                setExercisesPerDay([loadedExercises]);
+                setDaysCount(1);
+                setCurrentDayIndex(0);
+                
+                // 🚨 Si tu API guardara la fecha de fin: setRoutineEndDate(routineData.end_date || '');
 
                 navigation.setOptions({ title: `Editar: ${routineData.nombre}` });
             } else {
-                // Si es modo CREACIÓN, solo ajustamos el título si se está asignando a un alumno
-                if (studentName) {
-                    navigation.setOptions({ title: `Crear para ${studentName.split(' ')[0]}` });
-                } else {
-                    navigation.setOptions({ title: `Crear Rutina Maestra` });
-                }
+                // Si es modo CREACIÓN desde el Wizard, ya tenemos nombre y descripción, solo ajustamos título
+                const title = studentName ? `Crear para ${studentName.split(' ')[0]}` : `Crear Rutina Maestra`;
+                navigation.setOptions({ title });
             }
 
         } catch (e) {
@@ -393,20 +384,29 @@ export default function RoutineCreationScreen({ navigation }) {
         fetchData();
     }, [routineId]); // Recargar si cambiamos el ID de la rutina a editar
 
-    // --- Lógica de Manejo de Ejercicios ---
+    // --- Lógica de Manejo de Ejercicios por Día (Step 5) ---
     const addExercise = () => {
-        setExercises([...exercises, { exercise_id: null, name: '', series: '', repetitions: '' }]);
+        const newExercisesPerDay = [...exercisesPerDay];
+        newExercisesPerDay[currentDayIndex] = [
+            ...(newExercisesPerDay[currentDayIndex] || []), 
+            { exercise_id: null, name: '', series: '', repetitions: '' }
+        ];
+        setExercisesPerDay(newExercisesPerDay);
     };
 
     const updateExercise = (index, field, value) => {
-        const newExercises = [...exercises];
-        newExercises[index][field] = value;
-        setExercises(newExercises);
+        const newExercisesPerDay = [...exercisesPerDay];
+        const dayExercises = [...(newExercisesPerDay[currentDayIndex] || [])];
+        dayExercises[index][field] = value;
+        newExercisesPerDay[currentDayIndex] = dayExercises;
+        setExercisesPerDay(newExercisesPerDay);
     };
 
     const removeExercise = (index) => {
-        const newExercises = exercises.filter((_, i) => i !== index);
-        setExercises(newExercises);
+        const newExercisesPerDay = [...exercisesPerDay];
+        const dayExercises = (newExercisesPerDay[currentDayIndex] || []).filter((_, i) => i !== index);
+        newExercisesPerDay[currentDayIndex] = dayExercises;
+        setExercisesPerDay(newExercisesPerDay);
     };
     
     // --- Lógica de la Lista Desplegable de Ejercicios ---
@@ -417,10 +417,12 @@ export default function RoutineCreationScreen({ navigation }) {
     
     const handleSelectExercise = (exerciseId, exerciseName) => {
         if (currentExerciseIndex !== null) {
-            // Revisa si el ejercicio ya fue agregado para evitar duplicados.
-            const isDuplicate = exercises.some((ex, i) => i !== currentExerciseIndex && ex.exercise_id === exerciseId);
+            // Revisa si el ejercicio ya fue agregado en ESTE DÍA.
+            const dayExercises = exercisesPerDay[currentDayIndex] || [];
+            const isDuplicate = dayExercises.some((ex, i) => i !== currentExerciseIndex && ex.exercise_id === exerciseId);
+            
             if (isDuplicate) {
-                Alert.alert("Advertencia", "Este ejercicio ya está en la rutina. Puedes editar sus series/repeticiones.");
+                Alert.alert("Advertencia", `Este ejercicio ya está en la rutina del Día ${currentDayIndex + 1}.`);
                 return;
             }
             
@@ -434,15 +436,22 @@ export default function RoutineCreationScreen({ navigation }) {
     // --- Lógica de Guardado (POST /routines/ ó PATCH /routines/{id}) ---
     const handleSaveRoutine = async () => {
         // 1. Validaciones
-        if (!routineName.trim() || exercises.length === 0) {
-            Alert.alert("Error", "Debes ingresar un nombre y al menos un ejercicio.");
+        const finalRoutineName = routineName.trim();
+        if (!finalRoutineName) {
+            Alert.alert("Error", "Debes ingresar un nombre de rutina.");
+            return;
+        }
+
+        // 🚨 Validar que todos los días tengan AL MENOS un ejercicio
+        const totalExercises = exercisesPerDay.flat();
+        if (totalExercises.length === 0) {
+            Alert.alert("Error", "La rutina debe contener al menos un ejercicio en total.");
             return;
         }
         
-        // Validar ejercicios
-        const invalidExercise = exercises.find(ex => 
+        // Validar ejercicios y series/repeticiones
+        const invalidExercise = totalExercises.find(ex => 
             !ex.exercise_id || 
-            // 🚨 Esta validación ahora es segura gracias a la corrección en fetchData
             !ex.series.trim() || !ex.repetitions.trim() || 
             isNaN(parseInt(ex.series)) || parseInt(ex.series) <= 0
         );
@@ -453,34 +462,48 @@ export default function RoutineCreationScreen({ navigation }) {
         }
 
         setIsSaving(true);
+        
+        // 🚨 2. Preparar el JSON para la API: Combinar todos los días en una sola lista y reordenar
+        let overallOrder = 0;
+        const allExercises = exercisesPerDay.flatMap((dayExercises, dayIndex) => 
+            dayExercises.map(ex => {
+                overallOrder++;
+                return {
+                    exercise_id: ex.exercise_id, 
+                    sets: parseInt(ex.series), // Convertir a int
+                    repetitions: ex.repetitions.trim(), 
+                    // Usamos el order general. Si el backend necesitara el día, se añadiría aquí.
+                    order: overallOrder 
+                };
+            })
+        );
+        
+        // 🔑 Formato del JSON para la API (RoutineCreate)
+        const finalRoutineData = {
+            nombre: finalRoutineName,
+            descripcion: routineDescription.trim() || null,
+            exercises: allExercises,
+            // 🚨 Aquí se debe enviar la Fecha de Fin si el backend la soporta (se requiere campo en FastAPI/DB)
+            // end_date: routineEndDate.trim() || null, 
+        };
+
+
         try {
             const token = await getToken();
             const headers = { 'Authorization': `Bearer ${token}` };
             
-            // 🔑 Formato del JSON para la API (RoutineCreate - usado para crear y actualizar)
-            const routineData = {
-                nombre: routineName.trim(),
-                descripcion: routineDescription.trim() || null,
-                exercises: exercises.map((ex, index) => ({ 
-                    exercise_id: ex.exercise_id, 
-                    sets: parseInt(ex.series), // Convertir a int
-                    repetitions: ex.repetitions.trim(), 
-                    order: index + 1 // Añadir el campo 'order'
-                }))
-            };
-
             let successMessage = "";
 
             if (isEditMode) {
                 // MODO EDICIÓN: PATCH /routines/{id}
-                await axios.patch(`${API_URL}/routines/${routineId}`, routineData, { headers });
-                successMessage = `Rutina "${routineName.trim()}" actualizada exitosamente.`;
+                await axios.patch(`${API_URL}/routines/${routineId}`, finalRoutineData, { headers });
+                successMessage = `Rutina "${finalRoutineName}" actualizada exitosamente.`;
                 
             } else {
                 // MODO CREACIÓN: POST /routines/ y luego POST /assignments/
                 
                 // 1. POST /routines/ (Crear la plantilla)
-                const routineResponse = await axios.post(`${API_URL}/routines/`, routineData, { headers });
+                const routineResponse = await axios.post(`${API_URL}/routines/`, finalRoutineData, { headers });
                 const newRoutineId = routineResponse.data.id;
                 
                 // 2. Si se seleccionó un alumno al iniciar, ASIGNAR la rutina
@@ -492,9 +515,9 @@ export default function RoutineCreationScreen({ navigation }) {
                     };
 
                     await axios.post(`${API_URL}/assignments/`, assignmentData, { headers });
-                    successMessage = `Rutina "${routineName.trim()}" creada y asignada a ${studentName} correctamente.`;
+                    successMessage = `Rutina "${finalRoutineName}" creada y asignada a ${studentName} correctamente.`;
                 } else {
-                    successMessage = `Rutina Maestra "${routineName.trim()}" creada exitosamente. Puedes asignarla desde el Panel de Profesor.`;
+                    successMessage = `Rutina Maestra "${finalRoutineName}" creada exitosamente.`;
                 }
 
             }
@@ -565,7 +588,7 @@ export default function RoutineCreationScreen({ navigation }) {
         );
     }
 
-    // --- VISTA PRINCIPAL DE CREACIÓN ---
+    // --- VISTA PRINCIPAL DE CREACIÓN (Steps 5 & 6) ---
     return (
         <SafeAreaView style={styles.container}>
             <KeyboardAvoidingView 
@@ -574,7 +597,13 @@ export default function RoutineCreationScreen({ navigation }) {
                 keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
             >
                 <ScrollView contentContainerStyle={styles.content}>
-                    <Text style={styles.headerTitle}>{isEditMode ? "✍️ Editar Rutina" : "🛠️ Crear Nueva Rutina"}</Text>
+                    <Text style={styles.headerTitle}>{routineName || (isEditMode ? "✍️ Editar Rutina" : "🛠️ Nueva Rutina")}</Text>
+                    {/* 🚨 DISPLAY DE AGRUPACIÓN (Step 2/3) */}
+                    {!!routineDescription && (
+                        <Text style={styles.headerSubtitle}>
+                            Objetivo: {routineDescription} | {studentName ? `Para: ${studentName}` : 'Maestra'}
+                        </Text>
+                    )}
                     
                     {/* DISPLAY DEL ALUMNO SELECCIONADO (Solo en modo Creación y si se seleccionó) */}
                     {!isEditMode && studentName && (
@@ -587,17 +616,17 @@ export default function RoutineCreationScreen({ navigation }) {
                     )}
                     {/* FIN DEL DISPLAY DE ALUMNO */}
                     
-                    {/* INPUT NOMBRE RUTINA */}
+                    {/* INPUT NOMBRE RUTINA (Mantenido aunque se rellene desde el wizard) */}
                     <Text style={styles.label}>Nombre de la Rutina:</Text>
                     <TextInput
                         style={styles.input}
-                        placeholder="e.g., Rutina Hipertrofia Día A"
+                        placeholder="e.g., Rutina Full Body"
                         placeholderTextColor={themeColors.textSecondary}
                         value={routineName}
                         onChangeText={setRoutineName}
                     />
                     
-                    {/* INPUT DESCRIPCIÓN */}
+                    {/* INPUT DESCRIPCIÓN (Mantenido aunque se rellene desde el wizard) */}
                     <Text style={styles.label}>Descripción (Opcional):</Text>
                     <TextInput
                         style={[styles.input, styles.textArea]}
@@ -608,6 +637,33 @@ export default function RoutineCreationScreen({ navigation }) {
                         multiline
                     />
                     
+                    {/* -------------------- STEP 5: SELECCIÓN DE DÍA Y EJERCICIOS -------------------- */}
+                    <Text style={[styles.label, {marginTop: 20, fontSize: 18, color: themeColors.primary, borderBottomWidth: 1, borderBottomColor: themeColors.divider, paddingBottom: 5}]}>
+                        Planificación por Días ({daysCount} Días):
+                    </Text>
+
+                    {/* Selector de Días */}
+                    <View style={styles.daySelectorContainer}>
+                        {[...Array(daysCount)].map((_, dayIndex) => (
+                            <TouchableOpacity
+                                key={dayIndex}
+                                style={[
+                                    styles.dayButton, 
+                                    currentDayIndex === dayIndex && styles.dayButtonActive
+                                ]}
+                                onPress={() => setCurrentDayIndex(dayIndex)}
+                            >
+                                <Text style={[
+                                    styles.dayButtonText, 
+                                    currentDayIndex === dayIndex && styles.dayButtonTextActive
+                                ]}>
+                                    Día {dayIndex + 1}
+                                </Text>
+                            </TouchableOpacity>
+                        ))}
+                    </View>
+                    
+                    {/* Lista de Ejercicios para el Día Actual */}
                     {availableExercises.length === 0 && (
                         <View style={styles.noExercisesWarning}>
                             <Text style={styles.warningText}>
@@ -617,14 +673,14 @@ export default function RoutineCreationScreen({ navigation }) {
                         </View>
                     )}
 
-                    <Text style={[styles.label, {marginTop: 20, fontSize: 18, color: themeColors.primary}]}>
-                        Ejercicios ({exercises.length}):
+                    <Text style={[styles.label, {marginTop: 10}]}>
+                        Ejercicios del Día {currentDayIndex + 1} ({exercises.length}):
                     </Text>
 
                     <View style={styles.exerciseListContainer}>
                         {exercises.map((exercise, index) => (
                             <ExerciseItem 
-                                key={index.toString()}
+                                key={`${currentDayIndex}-${index}`} // Clave única por día e índice
                                 index={index}
                                 exercise={exercise}
                                 updateExercise={updateExercise}
@@ -635,8 +691,21 @@ export default function RoutineCreationScreen({ navigation }) {
                     </View>
 
                     <TouchableOpacity onPress={addExercise} style={styles.addButton} disabled={fetchError || availableExercises.length === 0}>
-                        <Text style={styles.addButtonText}>➕ Agregar Ejercicio</Text>
+                        <Text style={styles.addButtonText}>➕ Agregar Ejercicio al Día {currentDayIndex + 1}</Text>
                     </TouchableOpacity>
+                    {/* -------------------- FIN STEP 5 -------------------- */}
+                    
+                    {/* -------------------- STEP 6: FECHA DE FIN -------------------- */}
+                    <Text style={[styles.label, {marginTop: 30}]}>Fecha de Fin de la Rutina (dd/mm/aaaa):</Text>
+                    <TextInput
+                        style={styles.dateInput}
+                        placeholder="Opcional. Ej: 31/12/2025"
+                        placeholderTextColor={themeColors.textSecondary}
+                        value={routineEndDate}
+                        onChangeText={setRoutineEndDate}
+                        keyboardType="default" // Usar default, pero puedes usar 'numbers-and-punctuation' si tu formato es fijo
+                    />
+                    {/* -------------------- FIN STEP 6 -------------------- */}
 
                 </ScrollView>
             </KeyboardAvoidingView>
@@ -645,7 +714,7 @@ export default function RoutineCreationScreen({ navigation }) {
                 <Button 
                     title={isSaving ? "Guardando..." : (isEditMode ? "GUARDAR CAMBIOS" : (studentId ? "GUARDAR Y ASIGNAR" : "GUARDAR MAESTRA"))} 
                     onPress={handleSaveRoutine} 
-                    disabled={isSaving || !routineName.trim() || exercises.length === 0}
+                    disabled={isSaving || !routineName.trim() || totalExercises.length === 0}
                     color={isEditMode ? themeColors.warning : themeColors.success} // Naranja para editar, verde para crear
                 />
                 <View style={{marginTop: 10}}>
@@ -659,3 +728,85 @@ export default function RoutineCreationScreen({ navigation }) {
         </SafeAreaView>
     );
 }
+
+// ----------------------------------------------------------------------
+// Generador de Estilos Dinámicos (Ejercicios) - Mantenido al final
+// ----------------------------------------------------------------------
+const getExerciseStyles = (colors) => StyleSheet.create({
+    card: {
+        backgroundColor: colors.card,
+        borderRadius: 10,
+        padding: 15,
+        marginBottom: 15,
+        borderLeftWidth: 5,
+        borderLeftColor: colors.primary,
+        shadowColor: colors.isDark ? '#000' : '#444',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: colors.isDark ? 0.3 : 0.1,
+        shadowRadius: 3,
+        elevation: 3,
+    },
+    header: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 10,
+    },
+    title: {
+        fontSize: 18,
+        fontWeight: '700',
+        color: colors.textPrimary,
+    },
+    deleteButton: {
+        backgroundColor: colors.danger,
+        width: 28,
+        height: 28,
+        borderRadius: 14,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    deleteButtonText: {
+        color: colors.card,
+        fontWeight: 'bold',
+        fontSize: 14,
+    },
+    selectButton: {
+        backgroundColor: colors.inputBackground,
+        borderColor: colors.inputBorder,
+        borderWidth: 1,
+        borderRadius: 6,
+        padding: 15,
+        marginBottom: 15,
+    },
+    selectButtonText: {
+        color: colors.textPrimary,
+        fontSize: 16,
+        textAlign: 'center',
+    },
+    row: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        marginTop: 5,
+    },
+    input: {
+        height: 40,
+        backgroundColor: colors.inputBackground,
+        borderColor: colors.inputBorder,
+        borderWidth: 1,
+        borderRadius: 6,
+        paddingHorizontal: 10,
+        fontSize: 14,
+        color: colors.textPrimary,
+        width: '48%', 
+    },
+    smallInput: {
+        width: '48%', 
+        marginBottom: 10, 
+    },
+    warning: {
+        fontSize: 14,
+        color: colors.warning,
+        textAlign: 'left',
+        paddingVertical: 5,
+    }
+});
