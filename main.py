@@ -250,7 +250,7 @@ def login_for_access_token(
 def read_users_me(
     current_user: Annotated[User, Depends(get_current_user)]
 ):
-    """Obtiene la informaci車n del usuario actualmente autenticado."""
+    """Obtiene la informacion del usuario actualmente autenticado."""
     return current_user
 
 # ?? RUTA: CAMBIO DE CONTRASE?A
@@ -261,10 +261,6 @@ def change_password(
     # Permite a profesores y alumnos cambiar su contrase?a
     current_user: Annotated[User, Depends(get_current_user)]
 ):
-    """
-    Permite a un usuario (Profesor o Alumno) cambiar su contrase?a.
-    Requiere la contrase?a antigua para la verificaci車n.
-    """
     
     # 1. Verificar la contrase?a antigua
     if not verify_password(password_data.old_password, current_user.password_hash):
@@ -317,7 +313,7 @@ def create_routine_group_and_routines(
     # 1. Validar Alumno
     student = session.get(User, data.student_id)
     if not student or student.rol != UserRole.STUDENT:
-        raise HTTPException(status_code=404, detail="Alumno no encontrado o rol incorrecto para la asignaci車n.")
+        raise HTTPException(status_code=404, detail="Alumno no encontrado o rol incorrecto para la asignacion.")
 
     # 2. Crear el Grupo de Rutinas (RoutineGroup)
     routine_group = RoutineGroup(
@@ -416,10 +412,6 @@ def get_student_assignments_for_professor(
     session: Annotated[Session, Depends(get_session)],
     current_professor: Annotated[User, Depends(get_current_professor)] # ?? Requiere rol de Profesor
 ):
-    """
-    (Profesor) Obtiene TODAS las asignaciones (activas e inactivas) de un alumno por su ID, 
-    incluyendo la informaci車n del grupo de rutina.
-    """
     
     # 1. Verificar que el alumno exista
     student = session.get(User, student_id)
@@ -565,7 +557,7 @@ def create_routine(
             session.rollback() 
             raise HTTPException(
                 status_code=404, 
-                detail=f"Ejercicio con id {exercise_link_data.exercise_id} no encontrado. Creaci車n cancelada."
+                detail=f"Ejercicio con id {exercise_link_data.exercise_id} no encontrado. Creacion cancelada."
             )
             
         link = RoutineExercise(
@@ -659,7 +651,6 @@ def update_routine_full(
     session: Annotated[Session, Depends(get_session)],
     current_professor: Annotated[User, Depends(get_current_professor)]
 ):
-    """Actualiza completamente una rutina maestra (nombre, descripci車n y REEMPLAZA la lista de ejercicios)."""
     db_routine = session.get(Routine, routine_id)
     if not db_routine:
         raise HTTPException(status_code=404, detail="Rutina no encontrada")
@@ -681,7 +672,7 @@ def update_routine_full(
             session.rollback() 
             raise HTTPException(
                 status_code=404, 
-                detail=f"Ejercicio con id {exercise_link_data.exercise_id} no encontrado. Edici車n cancelada."
+                detail=f"Ejercicio con id {exercise_link_data.exercise_id} no encontrado. Edicion cancelada."
             )
             
         link = RoutineExercise(
@@ -797,12 +788,11 @@ def set_assignment_active_status(
     session: Annotated[Session, Depends(get_session)],
     current_professor: Annotated[User, Depends(get_current_professor)]
 ):
-    """(Profesor) Cambia el estado de activaci車n (is_active) de una asignaci車n de rutina espec赤fica."""
     
     assignment = session.get(RoutineAssignment, assignment_id)
     
     if not assignment:
-        raise HTTPException(status_code=404, detail="Asignaci車n no encontrada.")
+        raise HTTPException(status_code=404, detail="Asignacion no encontrada.")
         
     assignment.is_active = is_active # ?? Aplica el nuevo estado
         
@@ -817,12 +807,12 @@ def delete_assignment(
     session: Annotated[Session, Depends(get_session)],
     current_professor: Annotated[User, Depends(get_current_professor)]
 ):
-    """(Profesor) Elimina una asignaci車n de rutina espec赤fica por ID."""
+
     
     assignment = session.get(RoutineAssignment, assignment_id)
     
     if not assignment:
-        raise HTTPException(status_code=404, detail="Asignaci車n no encontrada.")
+        raise HTTPException(status_code=404, detail="Asignacion no encontrada.")
         
     session.delete(assignment)
     session.commit()
