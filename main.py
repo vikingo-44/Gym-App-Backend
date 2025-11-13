@@ -966,38 +966,76 @@ def get_assignments_for_student_by_professor(
 
 # --- Rutas del Alumno (Continuacion) ---
 
+# Reemplaza la funci車n en tu main.py con la siguiente versi車n corregida:
+
 @app.get("/students/me/routine", response_model=List[RoutineAssignmentRead], tags=["Alumnos"])
 def get_my_active_routine(
     session: Annotated[Session, Depends(get_session)],
     current_student: Annotated[User, Depends(get_current_student)]
 ):
     """
-    (Alumno) Obtiene SOLAMENTE las rutinas asignadas que estan marcadas como activas (is_active=True).
+    (Alumno) Obtiene SOLAMENTE las rutinas asignadas que estan marcadas como activas.
+    Si la asignacion es parte de un grupo, devuelve TODAS las rutinas de ese grupo.
     """
+    # 1. Buscar la asignaci車n activa (el "ancla")
     statement = (
         select(RoutineAssignment)
         .where(
             RoutineAssignment.student_id == current_student.id,
-            RoutineAssignment.is_active == True # ?? FILTRO CRiTICO: Solo rutinas activas
+            RoutineAssignment.is_active == True 
         )
-        # ?? Ordenamos por fecha de asignacion descendente.
         .order_by(desc(RoutineAssignment.assigned_at)) 
-        # Cargamos las relaciones anidadas
         .options(
             selectinload(RoutineAssignment.routine)
-                .selectinload(Routine.routine_group), # ?? NUEVO: Cargar el grupo
+                .selectinload(Routine.routine_group),
             selectinload(RoutineAssignment.routine)
                 .selectinload(Routine.exercise_links)
                 .selectinload(RoutineExercise.exercise)
         )
-        .options(selectinload(RoutineAssignment.student))
-        .options(selectinload(RoutineAssignment.professor))
     )
+    # Solo necesitamos la m芍s reciente
+    active_assignment = session.exec(statement).first()
     
-    active_assignments = session.exec(statement).all()
-    
-    # ?? CORRECCIoN APLICADA: Devolvemos una lista vacia en lugar de un error 404.
-    if not active_assignments:
+    if not active_assignment:
         return []
         
-    return active_assignments
+    # 2. Verificar si pertenece a un grupo
+    if active_assignment.routine.routine_group_id:
+        routine_group_id = active_assignment.routine.routine_group_id
+        
+        # 3. Traer TODAS las rutinas de ese grupo (D赤a 1, D赤a 2, etc.)
+        routine_statement = (
+            select(Routine)
+            .where(Routine.routine_group_id == routine_group_id)
+            .order_by(Routine.id) 
+            .options(
+                selectinload(Routine.routine_group),
+                selectinload(Routine.exercise_links).selectinload(RoutineExercise.exercise)
+            )
+        )
+        grouped_routines = session.exec(routine_statement).all()
+        
+        # 4. Crear "pseudo-asignaciones" para devolver todas las rutinas del grupo
+        expanded_assignments = []
+        for routine in grouped_routines:
+            is_the_original_assigned_routine = (routine.id == active_assignment.routine_id)
+
+            # Creamos un objeto RoutineAssignmentRead para cada rutina en el grupo
+            pseudo_assignment_data = RoutineAssignmentRead(
+                # Usamos el ID de la asignaci車n original para la que es la "ancla"
+                id=active_assignment.id if is_the_original_assigned_routine else -(routine.id),
+                routine_id=routine.id,
+                student_id=active_assignment.student_id,
+                professor_id=active_assignment.professor_id,
+                assigned_at=active_assignment.assigned_at,
+                is_active=True, # Todas las rutinas del grupo activo se consideran "activas" para visualizaci車n
+                routine=routine,
+                student=active_assignment.student,
+                professor=active_assignment.professor
+            )
+            expanded_assignments.append(pseudo_assignment_data)
+            
+        return expanded_assignments
+        
+    # 5. Si no hay grupo (rutina simple antigua), devuelve la asignaci車n original
+    return [active_assignment]
