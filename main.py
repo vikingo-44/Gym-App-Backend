@@ -135,7 +135,6 @@ def get_current_student(current_user: Annotated[User, Depends(get_current_user)]
 
 @app.get("/", tags=["General"])
 def read_root():
-    """Endpoint de bienvenida y verificaci¨®n de salud de la API."""
     return {"message": "API del Gestor de Rutinas de Gimnasio activa."}
 
 # NUEVA RUTA: Registro solo de Alumnos
@@ -144,7 +143,6 @@ def register_student(
     user_data: UserCreate, # Se usa UserCreate, pero el rol se fuerza a Alumno
     session: Annotated[Session, Depends(get_session)]
 ):
-    """Permite el registro de nuevos usuarios con rol forzado a Alumno."""
     
     # 1. Verificar si DNI ya existe
     existing_dni = session.exec(select(User).where(User.dni == user_data.dni)).first()
@@ -181,7 +179,6 @@ def register_user(
     user_data: UserCreate,
     session: Annotated[Session, Depends(get_session)]
 ):
-    """Permite el registro de nuevos usuarios (Profesores o Alumnos)."""
     
     # 1. Verificar si DNI ya existe
     existing_dni = session.exec(select(User).where(User.dni == user_data.dni)).first()
@@ -218,7 +215,6 @@ def login_for_access_token(
     form_data: UserLogin, # form_data tiene .dni y .password
     session: Annotated[Session, Depends(get_session)]
 ):
-    """Verifica credenciales (Email/DNI y Password) y devuelve un JWT para la sesi¨®n."""
     
     # ?? B¨²squeda por EMAIL (asumiendo que el campo 'dni' en el payload del frontend es el Email)
     user = session.exec(select(User).where(User.email == form_data.dni)).first()
@@ -250,7 +246,6 @@ def login_for_access_token(
 def read_users_me(
     current_user: Annotated[User, Depends(get_current_user)]
 ):
-    """Obtiene la informacion del usuario actualmente autenticado."""
     return current_user
 
 # ?? RUTA: CAMBIO DE CONTRASE?A
@@ -292,7 +287,6 @@ def read_students_list(
     session: Annotated[Session, Depends(get_session)],
     current_professor: Annotated[User, Depends(get_current_professor)]
 ):
-    """Obtiene una lista de todos los usuarios con rol 'Alumno' (para asignar rutinas)."""
     students = session.exec(select(User).where(User.rol == UserRole.STUDENT)).all()
     return students
 
@@ -306,10 +300,6 @@ def create_routine_group_and_routines(
     session: Annotated[Session, Depends(get_session)],
     current_professor: Annotated[User, Depends(get_current_professor)]
 ):
-    """
-    (Profesor) Crea un nuevo grupo de rutinas, crea N rutinas individuales
-    asociadas a ese grupo, y asigna la ¨²LTIMA rutina al alumno.
-    """
     # 1. Validar Alumno
     student = session.get(User, data.student_id)
     if not student or student.rol != UserRole.STUDENT:
@@ -450,7 +440,6 @@ def create_exercise_batch(
     session: Annotated[Session, Depends(get_session)],
     current_professor: Annotated[User, Depends(get_current_professor)]
 ):
-    """Crea m¨²ltiples ejercicios a la vez. Solo accesible para Profesores."""
     
     created_exercises = []
     for exercise_data in exercises:
