@@ -7,7 +7,7 @@ import {
 import axios from 'axios';
 import { AuthContext } from '../App'; 
 import { useTheme } from '../ThemeContext'; 
-// ?? Importamos ChevronDown/Up para el efecto colapsable
+// Importaciones de iconos
 import { Trash2, Edit, RefreshCcw, Settings, Key, LogOut, Minus, Plus, ChevronDown, ChevronUp } from 'lucide-react-native'; 
 
 // ----------------------------------------------------------------------
@@ -90,7 +90,7 @@ const getAssignmentStyles = (colors) => StyleSheet.create({
         width: '100%',
         marginBottom: 20,
     },
-    // ?? ESTILOS DE AGRUPACION
+    // ESTILOS DE AGRUPACION
     groupHeader: {
         fontSize: 18,
         fontWeight: 'bold',
@@ -108,7 +108,6 @@ const getAssignmentStyles = (colors) => StyleSheet.create({
         backgroundColor: colors.card,
         borderRadius: 10,
         marginBottom: 10,
-        // Eliminamos el borderLeftWidth de aqui
         shadowColor: colors.isDark ? '#000' : '#444',
         shadowOffset: { width: 0, height: 1 },
         shadowOpacity: colors.isDark ? 0.3 : 0.1,
@@ -116,7 +115,7 @@ const getAssignmentStyles = (colors) => StyleSheet.create({
         elevation: 2,
         overflow: 'hidden', // Importante para que el borderRadius funcione bien con la barra
     },
-    // ?? NUEVO: Barra lateral de estado
+    // NUEVO: Barra lateral de estado
     statusBar: {
         width: 40,
         justifyContent: 'center',
@@ -181,9 +180,10 @@ const getAssignmentStyles = (colors) => StyleSheet.create({
     exerciseListContainer: {
         marginTop: 15,
         paddingTop: 10,
+        paddingHorizontal: 15,
+        paddingBottom: 5,
         borderTopWidth: 1,
         borderTopColor: colors.divider,
-        // El padding lateral se manejo en la tarjeta
     },
     exerciseItem: {
         paddingLeft: 10,
@@ -227,7 +227,7 @@ const getAssignmentStyles = (colors) => StyleSheet.create({
 });
 
 // ----------------------------------------------------------------------
-// ?? COMPONENTE: Tarjeta Colapsable de Asignacion (Modificado para barra lateral)
+// COMPONENTE: Tarjeta Colapsable de Asignacion (Modificado para barra lateral)
 // ----------------------------------------------------------------------
 const CollapsibleAssignmentCard = ({ assignment, assignmentStyles, themeColors, handleEditAssignment, handleDeleteAssignment, handleToggleActive }) => {
     
@@ -322,6 +322,7 @@ const CollapsibleAssignmentCard = ({ assignment, assignmentStyles, themeColors, 
                                 assignmentStyles.toggleButton, 
                                 { backgroundColor: assignment.is_active ? themeColors.warning : themeColors.success } 
                             ]} 
+                            // Llamamos a la función de toggle con el ID y el estado actual
                             onPress={() => handleToggleActive(assignment.id, assignment.is_active)}
                         >
                             <Text style={{ color: themeColors.card, fontWeight: 'bold', fontSize: 12 }}>
@@ -331,7 +332,8 @@ const CollapsibleAssignmentCard = ({ assignment, assignmentStyles, themeColors, 
 
                         <TouchableOpacity 
                             style={assignmentStyles.deleteButton} 
-                            onPress={() => handleDeleteAssignment(assignment.id)}
+                            // 🚨 CAMBIO CLAVE: Pasamos el objeto completo para la nueva lógica de grupo
+                            onPress={() => handleDeleteAssignment(assignment)} 
                         >
                             <Trash2 size={20} color={themeColors.card} />
                         </TouchableOpacity>
@@ -402,12 +404,33 @@ function AssignmentView({ student, routines, onAssignmentComplete, onCancel, nav
     };
 
     // ----------------------------------------------------------------
-    // FUNCION 2: ELIMINAR ASIGNACION
+    // FUNCION 2: ELIMINAR ASIGNACION (LÓGICA MEJORADA)
     // ----------------------------------------------------------------
-    const handleDeleteAssignment = (assignmentId) => {
+    const handleDeleteAssignment = (assignment) => { 
+        const assignmentId = assignment.id;
+        // Obtenemos el ID del grupo si existe
+        const routineGroupId = assignment.routine.routine_group?.id;
+        const isGroupMember = !!routineGroupId;
+        
+        let deletionURL;
+        let deletionMessage;
+        let successMessage;
+
+        if (isGroupMember) {
+            // Eliminar el grupo completo para este alumno (Requiere ruta en backend)
+            deletionURL = `${API_URL}/assignments/group/${routineGroupId}/student/${student.id}`;
+            deletionMessage = "¿Estás seguro de que quieres **ELIMINAR ESTE GRUPO COMPLETO** de rutinas para **SOLO ESTE ALUMNO**? (Esto eliminará Día 1, Día 2, etc.)";
+            successMessage = "Grupo de asignaciones eliminado correctamente.";
+        } else {
+            // Eliminar asignación individual
+            deletionURL = `${API_URL}/assignments/${assignmentId}`;
+            deletionMessage = "¿Estás seguro de que quieres eliminar esta asignación de rutina individual?";
+            successMessage = "Asignación individual eliminada correctamente.";
+        }
+
         Alert.alert(
-            "Confirmar Eliminacion",
-            "¿Estas seguro de que quieres eliminar esta asignación de rutina?",
+            "Confirmar Eliminación",
+            deletionMessage,
             [
                 {
                     text: "Cancelar",
@@ -418,23 +441,19 @@ function AssignmentView({ student, routines, onAssignmentComplete, onCancel, nav
                     style: "destructive",
                     onPress: async () => {
                         try {
-                            // Prevenir la eliminacion de pseudo-asignaciones de grupo activo
-                            if (assignmentId < 0) {
-                                Alert.alert("Error", "No puedes eliminar una rutina individual de un grupo activo. Desactiva el grupo primero.");
-                                return;
-                            }
                             const token = await getToken();
                             const headers = { 'Authorization': `Bearer ${token}` };
                             
-                            await axios.delete(`${API_URL}/assignments/${assignmentId}`, { headers });
+                            await axios.delete(deletionURL, { headers });
                             
-                            Alert.alert("Éxito", "Asignación eliminada correctamente.");
+                            Alert.alert("Éxito", successMessage);
                             
+                            // Refrescar la lista
                             fetchCurrentAssignments();
                             
                         } catch (e) {
                             console.error("Error eliminando asignación:", e.response ? e.response.data : e.message);
-                            Alert.alert("Error", "Fallo al eliminar la asignación.");
+                            Alert.alert("Error", `Fallo al eliminar: ${e.response?.data?.detail || "Error de red/servidor."}`);
                         }
                     }
                 }
@@ -443,7 +462,7 @@ function AssignmentView({ student, routines, onAssignmentComplete, onCancel, nav
     };
 
     // ----------------------------------------------------------------
-    // FUNCION 3: CAMBIAR ESTADO ACTIVO/INACTIVO
+    // FUNCION 3: CAMBIAR ESTADO ACTIVO/INACTIVO (CORREGIDA)
     // ----------------------------------------------------------------
     const handleToggleActive = async (assignmentId, currentStatus) => {
         const newStatus = !currentStatus;
@@ -451,7 +470,13 @@ function AssignmentView({ student, routines, onAssignmentComplete, onCancel, nav
             const token = await getToken();
             const headers = { 'Authorization': `Bearer ${token}` };
 
-            await axios.patch(`${API_URL}/assignments/${assignmentId}/active?is_active=${newStatus}`, null, { headers });
+            // 🚨 CORRECCIÓN: Usamos PATCH al endpoint principal y enviamos el estado en el BODY.
+            // Esto soluciona el error "Fallo al cambiar el estado de la asignación".
+            await axios.patch(
+                `${API_URL}/assignments/${assignmentId}`, 
+                { is_active: newStatus }, // Body con el nuevo estado (Requiere el esquema RoutineAssignmentUpdate en models.py)
+                { headers }
+            );
 
             Alert.alert("Éxito", `Rutina ${newStatus ? 'activada' : 'inactivada'} correctamente.`);
             
@@ -459,7 +484,7 @@ function AssignmentView({ student, routines, onAssignmentComplete, onCancel, nav
 
         } catch (e) {
             console.error("Error cambiando estado:", e.response ? e.response.data : e.message);
-            Alert.alert("Error", "Fallo al cambiar el estado de la asignación.");
+            Alert.alert("Error", `Fallo al cambiar el estado. Detalle: ${e.response?.data?.detail || "Error de red/servidor."}`);
         }
     };
 
@@ -469,7 +494,7 @@ function AssignmentView({ student, routines, onAssignmentComplete, onCancel, nav
         fetchCurrentAssignments();
     }, [student.id, isDark]); 
 
-    // --- ASIGNACION DE RUTINA (Logica original, no usada en esta vista, pero mantenida) ---
+    // --- ASIGNACION DE RUTINA (Logica original) ---
     const handleAssign = async () => {
         if (!selectedRoutine) {
             Alert.alert("Error", "No hay rutinas disponibles para asignar.");
@@ -504,7 +529,7 @@ function AssignmentView({ student, routines, onAssignmentComplete, onCancel, nav
     };
     
     // ----------------------------------------------------------------
-    // ?? FUNCION DE AGRUPACION (Por el nombre base de la rutina)
+    // FUNCION DE AGRUPACION (Por el nombre base de la rutina)
     // ----------------------------------------------------------------
     const getGroupedAssignments = () => {
         const groups = {};
@@ -514,7 +539,7 @@ function AssignmentView({ student, routines, onAssignmentComplete, onCancel, nav
         for (const assignment of currentAssignments) {
             const fullName = assignment.routine?.nombre || 'Rutina Sin Nombre';
             
-            // ?? Si la rutina tiene un grupo_id asociado (desde la API), usamos el nombre del grupo.
+            // Si la rutina tiene un grupo_id asociado (desde la API), usamos el nombre del grupo.
             let groupName;
             let groupExpiryDate = null;
 
@@ -573,7 +598,7 @@ function AssignmentView({ student, routines, onAssignmentComplete, onCancel, nav
                                     
                                     {/* Listado de rutinas dentro del grupo - Usamos el nuevo componente colapsable */}
                                     {groupedAssignments[groupName].assignments
-                                        // ?? Opcional: Ordenar las rutinas por el numero de dia (si existe)
+                                        // Opcional: Ordenar las rutinas por el numero de dia (si existe)
                                         .sort((a, b) => {
                                             const aDayMatch = a.routine.nombre.match(/ - Dia (\d+)$/);
                                             const bDayMatch = b.routine.nombre.match(/ - Dia (\d+)$/);
@@ -622,7 +647,7 @@ const getMainScreenStyles = (colors) => StyleSheet.create({
         alignItems: 'center',
         backgroundColor: colors.background,
     },
-    // ?? ESTILO NUEVO: Campo de Busqueda
+    // ESTILO NUEVO: Campo de Busqueda
     searchInput: {
         height: 45,
         backgroundColor: colors.card,
@@ -722,7 +747,7 @@ const getMainScreenStyles = (colors) => StyleSheet.create({
         fontSize: 14,
         color: colors.textSecondary,
     },
-    // 🚨 NUEVOS ESTILOS PARA LOS BOTONES EN LA TARJETA
+    // NUEVOS ESTILOS PARA LOS BOTONES EN LA TARJETA
     studentCardActions: {
         flexDirection: 'row',
         gap: 10,
@@ -740,7 +765,7 @@ const getMainScreenStyles = (colors) => StyleSheet.create({
         fontWeight: 'bold',
         color: colors.card,
     },
-    // FIN NUEVOS ESTILOS 🚨
+    // FIN NUEVOS ESTILOS 
     warningTextCenter: {
         color: colors.warning,
         textAlign: 'center',
@@ -825,7 +850,7 @@ const getMainScreenStyles = (colors) => StyleSheet.create({
         fontWeight: '600',
         padding: 5,
     },
-    // ?? ESTILOS DEL WIZARD (se mantienen)
+    // ESTILOS DEL WIZARD (se mantienen)
     wizardContainer: {
         flex: 1,
         padding: 20,
@@ -862,7 +887,7 @@ const getMainScreenStyles = (colors) => StyleSheet.create({
         justifyContent: 'space-between',
         marginTop: 30,
     },
-    // ?? ESTILOS DEL CONTADOR
+    // ESTILOS DEL CONTADOR
     routineCounter: {
         flexDirection: 'row',
         justifyContent: 'center',
@@ -886,7 +911,7 @@ const getMainScreenStyles = (colors) => StyleSheet.create({
 });
 
 
-// --- ?? COMPONENTE: Asistente de Creacion Simplificado (3 Pasos) ---
+// --- COMPONENTE: Asistente de Creacion Simplificado (3 Pasos) ---
 function CreationWizardSimplified({ students, onCancel, navigation }) {
     
     const { colors: themeColors } = useTheme();
@@ -895,7 +920,7 @@ function CreationWizardSimplified({ students, onCancel, navigation }) {
     const [step, setStep] = useState(1);
     const [routineName, setRoutineName] = useState(''); // Paso 1: Nombre de Agrupacion
     const [routinesCount, setRoutinesCount] = useState(1); // Paso 2: Cantidad de Rutinas
-    const [expirationDate, setExpirationDate] = useState(''); // ?? NUEVO: Fecha de vencimiento
+    const [expirationDate, setExpirationDate] = useState(''); // FECHA DE VENCIMIENTO
     const [searchTerm, setSearchTerm] = useState(''); // Filtro de alumnos
 
     // Filtra los alumnos solo para la seleccion (Step 3)
@@ -915,12 +940,12 @@ function CreationWizardSimplified({ students, onCancel, navigation }) {
         navigation.navigate('RoutineCreation', { 
             studentId: student.id,
             studentName: student.nombre,
-            // ?? Enviamos la metadata completa al frontend
+            // Enviamos la metadata completa al frontend
             routineMetadata: {
                 nombre: routineName.trim(),
                 descripcion: `Agrupacion de ${routinesCount} rutinas.`, 
                 days: routinesCount, // Cantidad de rutinas a crear
-                expirationDate: expirationDate.trim() // ?? FECHA DE VENCIMIENTO
+                expirationDate: expirationDate.trim() // FECHA DE VENCIMIENTO
             }
         });
         onCancel(); // Cerramos el wizard en ProfessorScreen
@@ -974,7 +999,7 @@ function CreationWizardSimplified({ students, onCancel, navigation }) {
                             </TouchableOpacity>
                         </View>
                         
-                        {/* ?? NUEVO: INPUT DE FECHA DE VENCIMIENTO */}
+                        {/* NUEVO: INPUT DE FECHA DE VENCIMIENTO */}
                         <Text style={[styles.label, {marginTop: 20}]}>Fecha de Vencimiento:</Text>
                         <TextInput
                             style={styles.wizardInput}
@@ -1041,14 +1066,14 @@ function CreationWizardSimplified({ students, onCancel, navigation }) {
                 Alert.alert("Error", "Debes seleccionar al menos una rutina para crear.");
                 return;
             }
-            // ?? NUEVA VALIDACION DE FECHA (Formato AAAA-MM-DD)
+            // VALIDACION DE FECHA (Formato AAAA-MM-DD)
             const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
             if (!dateRegex.test(expirationDate.trim())) {
-                 Alert.alert("Error", "Debes ingresar una fecha de vencimiento válida en formato AAAA-MM-DD.");
-                 return;
+                Alert.alert("Error", "Debes ingresar una fecha de vencimiento válida en formato AAAA-MM-DD.");
+                return;
             }
 
-            // Opcional: Validacion de fecha futura simple
+            // Validacion de fecha futura simple
             try {
                 const today = new Date();
                 today.setHours(0,0,0,0);
@@ -1058,8 +1083,8 @@ function CreationWizardSimplified({ students, onCancel, navigation }) {
                     return;
                 }
             } catch (e) {
-                 Alert.alert("Error", "Formato de fecha no reconocido. Usa AAAA-MM-DD.");
-                 return;
+                Alert.alert("Error", "Formato de fecha no reconocido. Usa AAAA-MM-DD.");
+                return;
             }
 
 
@@ -1141,7 +1166,7 @@ export default function ProfessorScreen({ navigation }) {
                 errorMsg = "Sesión inválida o expirada. Saliendo...";
                 signOut(); 
             } else if (e.response && e.response.status === 500) {
-                 errorMsg = "Error interno del servidor (500) al cargar listas. Base de datos inconsistente.";
+                errorMsg = "Error interno del servidor (500) al cargar listas. Base de datos inconsistente.";
             } else {
                 errorMsg = "Error al cargar datos. Token inválido o backend.";
             }
@@ -1156,7 +1181,7 @@ export default function ProfessorScreen({ navigation }) {
     // FUNCIÓN: NAVEGAR A EDICIÓN DE DETALLES DEL ALUMNO (NUEVA)
     // ----------------------------------------------------------------
     const handleEditStudent = (studentData) => {
-        // 🚨 Navega a la nueva pantalla 'StudentDetails'
+        // Navega a la nueva pantalla 'StudentDetails'
         navigation.navigate('StudentDetails', { student: studentData });
     };
 
@@ -1294,7 +1319,7 @@ export default function ProfessorScreen({ navigation }) {
 
                 <Text style={styles.listTitle}>Alumnos ({filteredStudents.length})</Text> 
 
-                {/* ?? Input de busqueda */}
+                {/* Input de busqueda */}
                 <TextInput
                     style={styles.searchInput} 
                     placeholder="Buscar alumno por nombre o email..."
@@ -1315,7 +1340,7 @@ export default function ProfessorScreen({ navigation }) {
                                     <Text style={styles.studentEmail}>{item.email}</Text>
                                 </View>
                                 
-                                {/* 🚨 NUEVOS BOTONES DE ACCIÓN */}
+                                {/* BOTONES DE ACCIÓN */}
                                 <View style={styles.studentCardActions}>
                                     {/* Botón 1: Gestionar Rutina */}
                                     <TouchableOpacity 
