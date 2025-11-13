@@ -12,7 +12,7 @@ import { RefreshCcw, LogOut, ChevronDown, ChevronUp } from 'lucide-react-native'
 const API_URL = "https://gym-app-backend-e9bn.onrender.com"; 
 
 // ----------------------------------------------------------------------
-// GENERADOR DE ESTILOS DINÁMICOS (Basado en ProfessorScreen)
+// GENERADOR DE ESTILOS DINÁMICOS (Consolidando el estilo Profesor/Alumno)
 // ----------------------------------------------------------------------
 const getStudentStyles = (colors) => StyleSheet.create({
     container: {
@@ -25,6 +25,7 @@ const getStudentStyles = (colors) => StyleSheet.create({
         alignItems: 'center',
         backgroundColor: colors.background,
     },
+    // --- Cabecera (Profesor style) ---
     header: {
         flexDirection: 'row',
         justifyContent: 'space-between',
@@ -49,6 +50,7 @@ const getStudentStyles = (colors) => StyleSheet.create({
         borderRadius: 8,
         justifyContent: 'center',
         alignItems: 'center',
+        backgroundColor: colors.highlight, // Fondo de resaltado para iconos
     },
     content: {
         flex: 1,
@@ -93,25 +95,44 @@ const getStudentStyles = (colors) => StyleSheet.create({
         color: colors.textSecondary,
         textAlign: 'center',
     },
-    // --- ESTILOS DE LA TARJETA COLAPSABLE ---
-    routineMainCard: {
+    // --- Estilos de la Tarjeta Colapsable (Profesor Style) ---
+    routineCardContainer: {
+        flexDirection: 'row', // Para la barra lateral
         backgroundColor: colors.card,
-        borderRadius: 12,
+        borderRadius: 10,
         marginBottom: 15,
         shadowColor: colors.isDark ? '#000' : '#444',
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: colors.isDark ? 0.3 : 0.1,
         shadowRadius: 3,
         elevation: 3,
-        borderLeftWidth: 6,
-        borderLeftColor: colors.primary,
         overflow: 'hidden',
+    },
+    // 🚨 Barra lateral de estado
+    statusBar: {
+        width: 40, 
+        justifyContent: 'center',
+        alignItems: 'center',
+        paddingVertical: 10,
+    },
+    statusText: {
+        fontSize: 10,
+        fontWeight: 'bold',
+        color: 'white',
+        transform: [{ rotate: '-90deg' }], // Texto vertical
+        width: 80, 
+        textAlign: 'center',
+    },
+    // Contenido principal (derecha de la barra)
+    assignmentContent: {
+        flex: 1,
     },
     cardHeader: {
         padding: 15,
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
+        flex: 1,
     },
     routineTitle: {
         fontSize: 18,
@@ -128,7 +149,7 @@ const getStudentStyles = (colors) => StyleSheet.create({
         fontSize: 12,
         color: colors.textSecondary,
         fontStyle: 'italic',
-        marginBottom: 10,
+        marginTop: 5,
     },
     toggleIndicator: {
         flexDirection: 'row',
@@ -142,7 +163,6 @@ const getStudentStyles = (colors) => StyleSheet.create({
         paddingBottom: 15,
         borderTopWidth: 1,
         borderTopColor: colors.divider,
-        backgroundColor: colors.isDark ? colors.background : '#F7F7F7',
     },
     exerciseItem: {
         paddingLeft: 10,
@@ -166,7 +186,7 @@ const getStudentStyles = (colors) => StyleSheet.create({
     detailItem: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: colors.highlight,
+        backgroundColor: colors.isDark ? colors.highlight : colors.divider, // Estilo de ProfesorScreen
         borderRadius: 6,
         paddingHorizontal: 8,
         paddingVertical: 4,
@@ -193,6 +213,10 @@ const CollapsibleRoutineCard = ({ assignment, styles, themeColors }) => {
     const routine = assignment.routine;
     const linkCount = routine?.exercise_links ? routine.exercise_links.length : 0;
     
+    // 🚨 Lógica de Estado (Barra Lateral)
+    const statusColor = assignment.is_active ? themeColors.success : themeColors.warning;
+    const statusText = assignment.is_active ? 'ACTIVA' : 'INACTIVA';
+
     // Formateo de fecha (si existe)
     const formattedExpiryDate = routine?.routine_group?.fecha_vencimiento 
         ? `Vence: ${routine.routine_group.fecha_vencimiento}` 
@@ -235,48 +259,54 @@ const CollapsibleRoutineCard = ({ assignment, styles, themeColors }) => {
     );
 
     return (
-        <View style={styles.routineMainCard}>
+        <View style={styles.routineCardContainer}>
             
-            <TouchableOpacity 
-                style={styles.cardHeader}
-                onPress={() => setIsExpanded(!isExpanded)}
-                activeOpacity={0.8}
-            >
-                <View style={{flex: 1}}>
-                    <Text style={styles.routineTitle}>
-                        {routine?.nombre ?? 'Rutina Sin Título'}
-                    </Text>
-                    {routine?.routine_group?.nombre && (
-                         <Text style={styles.routineGroup}>
-                            Grupo: {routine.routine_group.nombre}
-                        </Text>
-                    )}
-                    <Text style={styles.routineGroup}>{formattedExpiryDate}</Text>
-                    
-                    <View style={styles.toggleIndicator}>
-                        {isExpanded ? 
-                            <ChevronUp size={16} color={themeColors.primary} /> : 
-                            <ChevronDown size={16} color={themeColors.primary} />
-                        }
-                        <Text style={{marginLeft: 5, color: themeColors.primary, fontSize: 13, fontWeight: '500'}}>
-                            {isExpanded ? 'COLAPSAR' : `VER ${linkCount} EJERCICIOS`}
-                        </Text>
-                    </View>
-                </View>
+            {/* 🚨 1. BARRA LATERAL DE ESTADO */}
+            <View style={[styles.statusBar, { backgroundColor: statusColor }]}>
+                <Text style={styles.statusText}>{statusText}</Text>
+            </View>
 
-                <View style={{alignItems: 'flex-end'}}>
-                     <Text style={[styles.detailValue, {color: themeColors.success}]}>
-                         {assignment.is_active ? 'ACTIVA' : 'INACTIVA'}
-                    </Text>
-                    <Text style={styles.assignedBy}>
-                        Profesor: {assignment.professor?.nombre ?? 'Desconocido'}
-                    </Text>
-                </View>
+            {/* 2. CONTENIDO PRINCIPAL Y COLAPSABLE */}
+            <View style={styles.assignmentContent}>
                 
-            </TouchableOpacity>
+                <TouchableOpacity 
+                    style={styles.cardHeader}
+                    onPress={() => setIsExpanded(!isExpanded)}
+                    activeOpacity={0.8}
+                >
+                    <View style={{flex: 1}}>
+                        <Text style={styles.routineTitle}>
+                            {routine?.nombre ?? 'Rutina Sin Título'}
+                        </Text>
+                        
+                        {/* Grupo y Vencimiento */}
+                        <Text style={styles.routineGroup}>
+                            {routine?.routine_group?.nombre ? `Grupo: ${routine.routine_group.nombre}` : 'Rutina Individual'}
+                        </Text>
+                        <Text style={styles.routineGroup}>{formattedExpiryDate}</Text>
+                        
+                        {/* Indicador de Profesor */}
+                        <Text style={styles.assignedBy}>
+                            Profesor: {assignment.professor?.nombre ?? 'Desconocido'}
+                        </Text>
+                        
+                        {/* Indicador Colapsable */}
+                        <View style={styles.toggleIndicator}>
+                            {isExpanded ? 
+                                <ChevronUp size={16} color={themeColors.primary} /> : 
+                                <ChevronDown size={16} color={themeColors.primary} />
+                            }
+                            <Text style={{marginLeft: 5, color: themeColors.primary, fontSize: 13, fontWeight: '500'}}>
+                                {isExpanded ? 'TOCAR PARA COLAPSAR' : `VER ${linkCount} EJERCICIOS`}
+                            </Text>
+                        </View>
+                    </View>
+                    
+                </TouchableOpacity>
 
-            {/* Contenido Colapsable */}
-            {isExpanded && renderExercises()}
+                {/* Contenido Colapsable */}
+                {isExpanded && renderExercises()}
+            </View>
         </View>
     );
 }
@@ -313,6 +343,10 @@ export default function StudentRoutineScreen() {
 
             if (assignments && assignments.length > 0) {
                 const validAssignments = assignments.filter(a => a.routine !== null);
+                
+                // 🚨 Ordenamos por el ID interno de la rutina para asegurar Día 1, Día 2, etc.
+                validAssignments.sort((a, b) => a.routine.id - b.routine.id);
+
                 setActiveAssignments(validAssignments);
                 if (validAssignments.length === 0) {
                      setError("No tienes ninguna rutina activa asignada.");
@@ -328,12 +362,10 @@ export default function StudentRoutineScreen() {
             if (e.response && (e.response.status === 404 || e.response.data?.detail === "No tienes ninguna rutina activa asignada.")) {
                 setError("No tienes ninguna rutina activa asignada.");
             } else {
-                // Usamos Alert para errores críticos (ej: red o token)
                 Alert.alert("Error de Conexión", "Fallo al cargar la rutina. Verifica tu conexión o token.");
                 setError("Error al cargar la rutina. Revisa tu conexión.");
             }
         } finally {
-            // Un pequeño retraso para que la UX se sienta mejor
             setTimeout(() => setIsLoading(false), 300); 
         }
     };
@@ -369,14 +401,14 @@ export default function StudentRoutineScreen() {
                         style={styles.iconButton}
                         disabled={isLoading}
                     >
-                        <RefreshCcw size={24} color={themeColors.primaryDark} />
+                        <RefreshCcw size={24} color={themeColors.primaryDark} /> 
                     </TouchableOpacity>
                     {/* Botón Cerrar Sesión */}
                     <TouchableOpacity 
                         onPress={signOut} 
-                        style={styles.iconButton}
+                        style={[styles.iconButton, {backgroundColor: themeColors.danger + '20'}]}
                     >
-                        <LogOut size={24} color={themeColors.danger} />
+                        <LogOut size={24} color={themeColors.danger} /> 
                     </TouchableOpacity>
                 </View>
             </View>
@@ -390,7 +422,6 @@ export default function StudentRoutineScreen() {
 
                 {activeAssignments.length > 0 ? (
                     activeAssignments.map((assignment, assignmentIndex) => (
-                        // 🚨 USAMOS EL NUEVO COMPONENTE COLAPSABLE
                         <CollapsibleRoutineCard 
                             key={assignment.id?.toString() ?? assignmentIndex.toString()} 
                             assignment={assignment}
