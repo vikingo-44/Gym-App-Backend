@@ -54,11 +54,6 @@ class RoutineAssignment(SQLModel, table=True):
     
     id: Optional[int] = Field(default=None, primary_key=True)
     
-    # --- Esquemas de Asignacion (Actualizacion) ---
-    # ?? NUEVO ESQUEMA: Solo para actualizar el estado activo/inactivo
-class RoutineAssignmentUpdate(BaseModel):
-        is_active: Optional[bool] = None
-
     # --- Relaciones (Claves Foraneas) ---
     student_id: int = Field(foreign_key="USERS.id", index=True)
     routine_id: int = Field(foreign_key="ROUTINES.id", index=True)
@@ -194,7 +189,8 @@ class RoutineGroupRead(BaseModel):
 class RoutineGroupCreateAndRoutines(RoutineGroupCreate):
     """Esquema para crear el grupo y todas sus rutinas asociadas."""
     student_id: int # A quien se le asignara (se usara la ultima rutina creada)
-    routines: List["RoutineCreateOrUpdate"] # Lista de los Day 1, Day 2, etc.
+    # **NOTA**: Se asume que en el frontend solo se envia la cantidad de dias
+    days: int # Cantidad de dias/rutinas a crear (del frontend)
 
 
 # --- Esquemas de Usuario ---
@@ -335,6 +331,11 @@ class RoutineAssignmentCreate(BaseModel):
     routine_id: int
     student_id: int
     is_active: bool = True
+
+# ?? SOLUCION AL ERROR: Esquema de ACTUALIZACION de Asignacion (Ahora definido correctamente)
+class RoutineAssignmentUpdate(BaseModel):
+    """Esquema para ACTUALIZAR el estado activo/inactivo de una asignacion."""
+    is_active: Optional[bool] = None
 
 # CRITICO: Esquema para LEER las asignaciones (Alumno)
 class RoutineAssignmentRead(BaseModel):
