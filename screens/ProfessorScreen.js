@@ -2,13 +2,13 @@ import React, { useState, useEffect, useContext, useMemo } from 'react';
 import { 
     StyleSheet, Text, View, ScrollView, SafeAreaView, Button, 
     ActivityIndicator, FlatList, TouchableOpacity, Alert, Modal,
-    TextInput // ?? ANADIDO: Importado para el campo de busqueda
+    TextInput 
 } from 'react-native';
 import axios from 'axios';
 import { AuthContext } from '../App'; 
 import { useTheme } from '../ThemeContext'; 
 // ?? Importamos TODOS los iconos necesarios (Lucide)
-import { Trash2, Edit, RefreshCcw, Settings, Key, LogOut } from 'lucide-react-native'; 
+import { Trash2, Edit, RefreshCcw, Settings, Key, LogOut, Minus, Plus } from 'lucide-react-native'; 
 
 // ----------------------------------------------------------------------
 // URL de la API (DEBE COINCIDIR con la de App.js)
@@ -90,6 +90,18 @@ const getAssignmentStyles = (colors) => StyleSheet.create({
         width: '100%',
         marginBottom: 20,
     },
+    // ?? ESTILOS DE AGRUPACION
+    groupHeader: {
+        fontSize: 18,
+        fontWeight: 'bold',
+        color: colors.textPrimary,
+        marginTop: 20,
+        marginBottom: 10,
+        borderBottomWidth: 2,
+        borderBottomColor: colors.primary,
+        paddingBottom: 5,
+        width: '100%',
+    },
     assignmentCard: {
         flexDirection: 'row',
         justifyContent: 'space-between',
@@ -109,7 +121,7 @@ const getAssignmentStyles = (colors) => StyleSheet.create({
     assignmentDetails: {
         flex: 1,
     },
-    assignmentActions: { // ?? Nuevo contenedor para los 3 iconos
+    assignmentActions: { 
         flexDirection: 'row',
         alignItems: 'center',
         gap: 5,
@@ -124,7 +136,7 @@ const getAssignmentStyles = (colors) => StyleSheet.create({
         backgroundColor: colors.danger, 
         borderRadius: 8,
     },
-    editButton: { // ?? Estilo para el nuevo boton de Editar
+    editButton: { 
         padding: 10,
         backgroundColor: colors.primary, 
         borderRadius: 8,
@@ -143,7 +155,6 @@ const getAssignmentStyles = (colors) => StyleSheet.create({
 
 
 // --- Sub-componente para Asignar y Gestionar Rutinas ---
-// ?? CAMBIO: Recibe 'navigation' para navegar a edicion
 function AssignmentView({ student, routines, onAssignmentComplete, onCancel, navigation }) {
     
     const { colors: themeColors, isDark } = useTheme(); 
@@ -151,11 +162,9 @@ function AssignmentView({ student, routines, onAssignmentComplete, onCancel, nav
 
     const availableRoutines = Array.isArray(routines) ? routines : []; 
     
-    // Asignacion
     const [selectedRoutine, setSelectedRoutine] = useState(availableRoutines.length > 0 ? availableRoutines[0].id : null); 
     const [isAssigning, setIsAssigning] = useState(false);
     
-    // Gestion de Asignaciones
     const [currentAssignments, setCurrentAssignments] = useState([]);
     const [isAssignmentsLoading, setIsAssignmentsLoading] = useState(true);
 
@@ -175,7 +184,6 @@ function AssignmentView({ student, routines, onAssignmentComplete, onCancel, nav
                 { headers }
             );
             
-            // Asumiendo que la respuesta incluye las rutinas completas para la edicion
             setCurrentAssignments(Array.isArray(response.data) ? response.data : []); 
 
         } catch (e) {
@@ -193,7 +201,6 @@ function AssignmentView({ student, routines, onAssignmentComplete, onCancel, nav
     // FUNCION: NAVEGAR A EDICION DE RUTINA ASIGNADA
     // ----------------------------------------------------------------
     const handleEditAssignment = (routineId) => {
-        // Navega a RoutineCreationScreen, pasando el ID de la rutina maestra vinculada
         if (navigation) {
             navigation.navigate('RoutineCreation', { 
                 routineId: routineId
@@ -248,12 +255,10 @@ function AssignmentView({ student, routines, onAssignmentComplete, onCancel, nav
             const token = await getToken();
             const headers = { 'Authorization': `Bearer ${token}` };
 
-            // Llamada a la ruta PATCH /assignments/{assignment_id}/active?is_active=...
             await axios.patch(`${API_URL}/assignments/${assignmentId}/active?is_active=${newStatus}`, null, { headers });
 
             Alert.alert("Exito", `Rutina ${newStatus ? 'activada' : 'inactivada'} correctamente.`);
             
-            // Refrescar la lista en la vista actual
             fetchCurrentAssignments();
 
         } catch (e) {
@@ -292,7 +297,6 @@ function AssignmentView({ student, routines, onAssignmentComplete, onCancel, nav
             console.error("Error asignando rutina:", e.response ? e.response.data : e.message);
             let errorMessage = "Fallo al asignar la rutina. Verifica la conexion o backend.";
             if (e.response && e.response.data && e.response.data.detail) {
-                // Muestra un mensaje mas amigable si es un error de validacion
                 errorMessage = `Error de API: ${JSON.stringify(e.response.data.detail)}`;
             } else if (e.response && (e.response.status === 401 || e.response.status === 403)) {
                 errorMessage = "Token expirado o no autorizado. Vuelve a iniciar sesion.";
@@ -303,72 +307,128 @@ function AssignmentView({ student, routines, onAssignmentComplete, onCancel, nav
         }
     };
     
+    // ----------------------------------------------------------------
+    // ?? FUNCION DE AGRUPACION (Por el nombre base de la rutina)
+    // ----------------------------------------------------------------
+    const getGroupedAssignments = () => {
+        const groups = {};
+        // Expresion regular para encontrar el patron " - Dia X"
+        const dayPattern = / - Dia \d+$/;
+
+        for (const assignment of currentAssignments) {
+            const fullName = assignment.routine?.nombre || 'Rutina Sin Nombre';
+            
+            // ?? Si la rutina tiene un grupo_id asociado (desde la API), usamos el nombre del grupo.
+            let groupName;
+            let groupExpiryDate = null;
+
+            if (assignment.routine?.routine_group?.nombre) {
+                groupName = assignment.routine.routine_group.nombre;
+                groupExpiryDate = assignment.routine.routine_group.fecha_vencimiento;
+            } else {
+                // Si no hay grupo, usamos la logica de deteccion por sufijo para rutinas antiguas.
+                const match = fullName.match(dayPattern);
+                if (match) {
+                    groupName = fullName.substring(0, fullName.length - match[0].length).trim();
+                } else {
+                    groupName = fullName;
+                }
+            }
+
+            if (!groups[groupName]) {
+                groups[groupName] = {
+                    assignments: [],
+                    expiryDate: groupExpiryDate // Usamos la fecha del grupo si esta disponible
+                };
+            }
+            groups[groupName].assignments.push(assignment);
+        }
+
+        return groups;
+    };
+
+    const groupedAssignments = getGroupedAssignments();
+    
     // --- VISTA DE RENDERIZADO ---
     return (
         <ScrollView style={assignmentStyles.scrollContainer}>
             <View style={assignmentStyles.container}>
                 <Text style={assignmentStyles.title}>Gestionar: {student.nombre}</Text>
 
-                {/* -------------------- 1. GESTIONAR ASIGNACIONES (ACTIVAR/INACTIVAR/EDITAR) -------------------- */}
+                {/* -------------------- 1. GESTIONAR ASIGNACIONES (AGRUPADAS) -------------------- */}
                 <Text style={assignmentStyles.subtitle}>Rutinas Asignadas Actualmente ({currentAssignments.length})</Text>
                 
                 {isAssignmentsLoading ? (
                     <ActivityIndicator size="small" color={themeColors.primary} style={{marginBottom: 15}}/>
                 ) : (
                     <View style={assignmentStyles.currentAssignmentList}>
-                        {currentAssignments.length > 0 ? (
-                            currentAssignments.map((assignment) => (
-                                <View key={assignment.id.toString()} style={[
-                                    assignmentStyles.assignmentCard, 
-                                    // Estilo visual para estado activo/inactivo
-                                    { borderLeftColor: assignment.is_active ? themeColors.success : themeColors.warning }
-                                ]}>
-                                    
-                                    <View style={assignmentStyles.assignmentDetails}>
-                                        <Text style={assignmentStyles.routineName}>{assignment.routine.nombre}</Text>
-                                        <Text style={assignmentStyles.assignmentDate}>
-                                            Estado: 
-                                            <Text style={{fontWeight: 'bold', color: assignment.is_active ? themeColors.success : themeColors.warning}}>
-                                                {assignment.is_active ? ' ACTIVA' : ' INACTIVA'}
+                        {Object.keys(groupedAssignments).length > 0 ? (
+                            Object.keys(groupedAssignments).map((groupName) => (
+                                <View key={groupName}>
+                                    {/* Encabezado del grupo */}
+                                    <Text style={assignmentStyles.groupHeader}>
+                                        {groupName} ({groupedAssignments[groupName].assignments.length})
+                                        {groupedAssignments[groupName].expiryDate && (
+                                            <Text style={{fontSize: 14, fontWeight: 'normal', color: themeColors.textSecondary}}>
+                                                {"\n"}Vence: {groupedAssignments[groupName].expiryDate}
                                             </Text>
-                                        </Text>
-                                    </View>
+                                        )}
+                                    </Text>
                                     
-                                    {/* ?? NUEVO CONTENEDOR DE ACCIONES (3 botones) */}
-                                    <View style={assignmentStyles.assignmentActions}>
-                                    
-                                        {/* BOTON 1: EDITAR (Dirige a la edicion de la rutina maestra) */}
-                                        <TouchableOpacity 
-                                            style={assignmentStyles.editButton} 
-                                            onPress={() => handleEditAssignment(assignment.routine_id)}
-                                        >
-                                            <Edit size={20} color={themeColors.card} />
-                                        </TouchableOpacity>
+                                    {/* Listado de rutinas dentro del grupo */}
+                                    {groupedAssignments[groupName].assignments
+                                        // ?? Opcional: Ordenar las rutinas por el numero de dia (si existe)
+                                        .sort((a, b) => {
+                                            const aDayMatch = a.routine.nombre.match(/ - Dia (\d+)$/);
+                                            const bDayMatch = b.routine.nombre.match(/ - Dia (\d+)$/);
+                                            const aDay = aDayMatch ? parseInt(aDayMatch[1]) : 999;
+                                            const bDay = bDayMatch ? parseInt(bDayMatch[1]) : 999;
+                                            return aDay - bDay;
+                                        })
+                                        .map((assignment) => (
+                                        <View key={assignment.id.toString()} style={[
+                                            assignmentStyles.assignmentCard, 
+                                            { borderLeftColor: assignment.is_active ? themeColors.success : themeColors.warning }
+                                        ]}>
+                                            <View style={assignmentStyles.assignmentDetails}>
+                                                <Text style={assignmentStyles.routineName}>{assignment.routine.nombre}</Text>
+                                                <Text style={assignmentStyles.assignmentDate}>
+                                                    Estado: 
+                                                    <Text style={{fontWeight: 'bold', color: assignment.is_active ? themeColors.success : themeColors.warning}}>
+                                                        {assignment.is_active ? ' ACTIVA' : ' INACTIVA'}
+                                                    </Text>
+                                                </Text>
+                                            </View>
+                                            
+                                            <View style={assignmentStyles.assignmentActions}>
+                                                <TouchableOpacity 
+                                                    style={assignmentStyles.editButton} 
+                                                    onPress={() => handleEditAssignment(assignment.routine_id)}
+                                                >
+                                                    <Edit size={20} color={themeColors.card} />
+                                                </TouchableOpacity>
 
-                                        {/* BOTON 2: ACTIVAR / INACTIVAR */}
-                                        <TouchableOpacity 
-                                            style={[
-                                                assignmentStyles.toggleButton, 
-                                                // Color opuesto al estado actual
-                                                { backgroundColor: assignment.is_active ? themeColors.warning : themeColors.success } 
-                                            ]} 
-                                            onPress={() => handleToggleActive(assignment.id, assignment.is_active)}
-                                        >
-                                            <Text style={{ color: themeColors.card, fontWeight: 'bold', fontSize: 12 }}>
-                                                {assignment.is_active ? 'INACTIVAR' : 'ACTIVAR'}
-                                            </Text>
-                                        </TouchableOpacity>
+                                                <TouchableOpacity 
+                                                    style={[
+                                                        assignmentStyles.toggleButton, 
+                                                        { backgroundColor: assignment.is_active ? themeColors.warning : themeColors.success } 
+                                                    ]} 
+                                                    onPress={() => handleToggleActive(assignment.id, assignment.is_active)}
+                                                >
+                                                    <Text style={{ color: themeColors.card, fontWeight: 'bold', fontSize: 12 }}>
+                                                        {assignment.is_active ? 'INACTIVAR' : 'ACTIVAR'}
+                                                    </Text>
+                                                </TouchableOpacity>
 
-                                        {/* BOTON 3: ELIMINACION */}
-                                        <TouchableOpacity 
-                                            style={assignmentStyles.deleteButton} 
-                                            onPress={() => handleDeleteAssignment(assignment.id)}
-                                        >
-                                            <Trash2 size={20} color={themeColors.card} />
-                                        </TouchableOpacity>
-                                    </View>
-                                    {/* ?? FIN CONTENEDOR DE ACCIONES */}
-
+                                                <TouchableOpacity 
+                                                    style={assignmentStyles.deleteButton} 
+                                                    onPress={() => handleDeleteAssignment(assignment.id)}
+                                                >
+                                                    <Trash2 size={20} color={themeColors.card} />
+                                                </TouchableOpacity>
+                                            </View>
+                                        </View>
+                                    ))}
                                 </View>
                             ))
                         ) : (
@@ -376,6 +436,40 @@ function AssignmentView({ student, routines, onAssignmentComplete, onCancel, nav
                         )}
                     </View>
                 )}
+
+
+                {/* -------------------- 2. ASIGNAR NUEVA RUTINA (OPCION ANTIGUA) -------------------- */}
+                <Text style={assignmentStyles.subtitle}>Asignar Rutina Existente</Text>
+                
+                <View style={assignmentStyles.routineListContainer}>
+                    <Text style={assignmentStyles.label}>Rutinas maestras disponibles:</Text>
+                    <ScrollView style={{maxHeight: 200, marginBottom: 15}}>
+                        {availableRoutines.length > 0 ? (
+                            availableRoutines.map((r) => (
+                                <TouchableOpacity 
+                                    key={r.id.toString()}
+                                    style={[
+                                        assignmentStyles.routineItem, 
+                                        selectedRoutine === r.id && assignmentStyles.routineItemSelected
+                                    ]}
+                                    onPress={() => setSelectedRoutine(r.id)}
+                                >
+                                    <Text style={assignmentStyles.routineNameItem}>{r.nombre}</Text>
+                                </TouchableOpacity>
+                            ))
+                        ) : (
+                            <Text style={assignmentStyles.warning}>No hay rutinas creadas en la base de datos.</Text>
+                        )}
+                    </ScrollView>
+                </View>
+
+                {/* Usamos el componente Button nativo, ajustando el color principal */}
+                <Button 
+                    title={isAssigning ? "Asignando..." : "ASIGNAR RUTINA"} 
+                    onPress={handleAssign} 
+                    disabled={isAssigning || !selectedRoutine}
+                    color={themeColors.success}
+                />
 
                 <View style={assignmentStyles.backButton}>
                     <Button title="Volver al Panel" onPress={onCancel} color={themeColors.textSecondary} />
@@ -503,7 +597,6 @@ const getMainScreenStyles = (colors) => StyleSheet.create({
         fontWeight: 'bold',
         color: colors.warning, 
     },
-    // --- (Estilos eliminados de Rutinas Maestras) ---
     warningTextCenter: {
         color: colors.warning,
         textAlign: 'center',
@@ -588,52 +681,274 @@ const getMainScreenStyles = (colors) => StyleSheet.create({
         fontWeight: '600',
         padding: 5,
     },
+    // ?? ESTILOS DEL WIZARD
+    wizardContainer: {
+        flex: 1,
+        padding: 20,
+        width: '100%',
+    },
+    wizardTitle: {
+        fontSize: 24,
+        fontWeight: 'bold',
+        color: colors.primary,
+        marginBottom: 20,
+        textAlign: 'center',
+    },
+    wizardInput: {
+        height: 50,
+        backgroundColor: colors.card,
+        borderColor: colors.divider,
+        borderWidth: 1,
+        borderRadius: 8,
+        paddingHorizontal: 15,
+        fontSize: 16,
+        color: colors.textPrimary,
+        marginBottom: 20,
+        width: '100%',
+    },
+    stepText: {
+        fontSize: 18,
+        fontWeight: '600',
+        color: colors.textPrimary,
+        marginBottom: 10,
+        textAlign: 'center',
+    },
+    wizardActions: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        marginTop: 30,
+    },
+    // ?? ESTILOS DEL CONTADOR
+    routineCounter: {
+        flexDirection: 'row',
+        justifyContent: 'center',
+        alignItems: 'center',
+        gap: 20,
+        marginBottom: 20,
+        paddingVertical: 10,
+    },
+    counterButton: {
+        padding: 10,
+        backgroundColor: colors.primary,
+        borderRadius: 8,
+    },
+    counterCountText: {
+        fontSize: 32,
+        fontWeight: 'bold',
+        color: colors.textPrimary,
+        width: 60,
+        textAlign: 'center',
+    },
 });
 
 
-// --- VISTA DE SELECCION DE ALUMNO PARA CREAR RUTINA (NUEVO COMPONENTE) ---
-function StudentSelectionForCreation({ navigation, students, onCancel }) {
+// --- ?? COMPONENTE: Asistente de Creacion Simplificado (3 Pasos) ---
+function CreationWizardSimplified({ students, onCancel, navigation }) {
     
     const { colors: themeColors } = useTheme();
     const styles = getMainScreenStyles(themeColors); // Estilos dinamicos
 
+    const [step, setStep] = useState(1);
+    const [routineName, setRoutineName] = useState(''); // Paso 1: Nombre de Agrupacion
+    const [routinesCount, setRoutinesCount] = useState(1); // Paso 2: Cantidad de Rutinas
+    const [expirationDate, setExpirationDate] = useState(''); // ?? NUEVO: Fecha de vencimiento
+    const [searchTerm, setSearchTerm] = useState(''); // Filtro de alumnos
+
+    // Filtra los alumnos solo para la seleccion (Step 3)
+    const filteredStudents = useMemo(() => {
+        if (!searchTerm) {
+            return students;
+        }
+        const lowerCaseSearch = searchTerm.toLowerCase();
+        return students.filter(student => 
+            student.nombre.toLowerCase().includes(lowerCaseSearch) ||
+            student.email.toLowerCase().includes(lowerCaseSearch)
+        );
+    }, [students, searchTerm]);
+
     const handleSelectStudent = (student) => {
-        // Navega a RoutineCreationScreen pasando el ID del estudiante
+        // FIN DEL WIZARD: Navegamos a RoutineCreationScreen
         navigation.navigate('RoutineCreation', { 
             studentId: student.id,
-            studentName: student.nombre
+            studentName: student.nombre,
+            // ?? Enviamos la metadata completa al frontend
+            routineMetadata: {
+                nombre: routineName.trim(),
+                descripcion: `Agrupacion de ${routinesCount} rutinas.`, 
+                days: routinesCount, // Cantidad de rutinas a crear
+                expirationDate: expirationDate.trim() // ?? FECHA DE VENCIMIENTO
+            }
         });
+        onCancel(); // Cerramos el wizard en ProfessorScreen
+    };
+
+    const renderStep = () => {
+        switch (step) {
+            case 1:
+                return (
+                    <>
+                        <Text style={styles.stepText}>Paso 1 de 3: Nombre Generico de la Agrupacion</Text>
+                        <TextInput
+                            style={styles.wizardInput}
+                            placeholder="Ej: Rutina Bloque A / Mes 1"
+                            placeholderTextColor={themeColors.textSecondary}
+                            value={routineName}
+                            onChangeText={setRoutineName}
+                            autoFocus
+                        />
+                        <Text style={styles.warningTextCenter}>
+                            Este nombre agrupara las rutinas (Dia 1, Dia 2, etc.)
+                        </Text>
+                    </>
+                );
+            case 2:
+                return (
+                    <>
+                        <Text style={styles.stepText}>Paso 2 de 3: Configuracion de la Agrupacion</Text>
+                        
+                        <Text style={styles.label}>Cantidad de Rutinas:</Text>
+                        <Text style={styles.warningTextCenter}>
+                            (Minimo 1, Maximo 5 rutinas)
+                        </Text>
+                        <View style={styles.routineCounter}>
+                            <TouchableOpacity 
+                                style={[styles.counterButton, { backgroundColor: themeColors.danger }]}
+                                onPress={() => setRoutinesCount(prev => Math.max(1, prev - 1))}
+                                disabled={routinesCount <= 1}
+                            >
+                                <Minus size={24} color={themeColors.card} />
+                            </TouchableOpacity>
+
+                            <Text style={styles.counterCountText}>{routinesCount}</Text>
+
+                            <TouchableOpacity 
+                                style={[styles.counterButton, { backgroundColor: themeColors.success }]}
+                                onPress={() => setRoutinesCount(prev => Math.min(5, prev + 1))} // Maximo 5
+                                disabled={routinesCount >= 5}
+                            >
+                                <Plus size={24} color={themeColors.card} />
+                            </TouchableOpacity>
+                        </View>
+                        
+                        {/* ?? NUEVO: INPUT DE FECHA DE VENCIMIENTO */}
+                        <Text style={[styles.label, {marginTop: 20}]}>Fecha de Vencimiento:</Text>
+                        <TextInput
+                            style={styles.wizardInput}
+                            placeholder="Ej: 2024-12-31"
+                            placeholderTextColor={themeColors.textSecondary}
+                            value={expirationDate}
+                            onChangeText={setExpirationDate}
+                            keyboardType="default"
+                        />
+                        <Text style={styles.warningTextCenter}>
+                            Formato AAAA-MM-DD requerido por la API. Esta fecha debe ser futura.
+                        </Text>
+                         
+                        <Text style={styles.studentEmail}>Agrupacion: {routineName.trim()} | Vence: {expirationDate.trim() || '[Fecha Requerida]'}</Text>
+                    </>
+                );
+            case 3:
+                return (
+                    <>
+                        <Text style={styles.stepText}>Paso 3 de 3: Selecciona el Alumno</Text>
+                        <TextInput
+                            style={styles.searchInput} 
+                            placeholder="Buscar alumno por nombre o email..."
+                            placeholderTextColor={themeColors.textSecondary}
+                            value={searchTerm}
+                            onChangeText={setSearchTerm}
+                        />
+                        <ScrollView style={{ maxHeight: 400, marginBottom: 20 }}>
+                            {filteredStudents.length > 0 ? (
+                                filteredStudents.map((item) => (
+                                    <TouchableOpacity 
+                                        key={item.id.toString()}
+                                        style={styles.studentCard}
+                                        onPress={() => handleSelectStudent(item)}
+                                    >
+                                        <View>
+                                            <Text style={styles.studentName}>{item.nombre}</Text>
+                                            <Text style={styles.studentEmail}>{item.email}</Text>
+                                        </View>
+                                        <Text style={{...styles.assignButtonText, color: themeColors.success}}>CREAR >> </Text>
+                                    </TouchableOpacity>
+                                ))
+                            ) : (
+                                <Text style={styles.warningTextCenter}>No se encontraron alumnos.</Text>
+                            )}
+                        </ScrollView>
+                        <Text style={styles.studentEmail}>Agrupacion: {routineName.trim()} | Vence: {expirationDate.trim()}</Text>
+                    </>
+                );
+            default:
+                return null;
+        }
+    };
+
+    const nextStep = () => {
+        if (step === 1) {
+            if (!routineName.trim()) {
+                Alert.alert("Error", "Debes ingresar un nombre para la agrupacion.");
+                return;
+            }
+            setStep(2);
+        } else if (step === 2) {
+            if (routinesCount < 1) {
+                Alert.alert("Error", "Debes seleccionar al menos una rutina para crear.");
+                return;
+            }
+            // ?? NUEVA VALIDACION DE FECHA (Formato AAAA-MM-DD)
+            const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+            if (!dateRegex.test(expirationDate.trim())) {
+                 Alert.alert("Error", "Debes ingresar una fecha de vencimiento valida en formato AAAA-MM-DD.");
+                 return;
+            }
+
+            // Opcional: Validacion de fecha futura simple
+            try {
+                const today = new Date();
+                today.setHours(0,0,0,0);
+                const expiry = new Date(expirationDate.trim());
+                if (expiry <= today) {
+                    Alert.alert("Error", "La fecha de vencimiento debe ser una fecha futura.");
+                    return;
+                }
+            } catch (e) {
+                 Alert.alert("Error", "Formato de fecha no reconocido. Usa AAAA-MM-DD.");
+                 return;
+            }
+
+
+            setStep(3);
+        }
     };
     
     return (
         <SafeAreaView style={styles.container}>
             <View style={styles.headerSelection}>
-                <Text style={styles.titleSelection}>Selecciona un Alumno</Text>
+                <Text style={styles.wizardTitle}>Crear Rutina Agrupada</Text>
                 <Button title="Cancelar" onPress={onCancel} color={themeColors.danger} />
             </View>
             
-            <Text style={styles.listTitle}>Alumnos para Nueva Rutina ({students.length})</Text>
+            <ScrollView contentContainerStyle={styles.wizardContainer}>
+                {renderStep()}
 
-            <ScrollView contentContainerStyle={{ paddingBottom: 20, paddingTop: 10 }}>
-                {students.length > 0 ? (
-                    students.map((item) => (
-                        <TouchableOpacity 
-                            key={item.id.toString()}
-                            style={styles.studentCard}
-                            onPress={() => handleSelectStudent(item)}
-                        >
-                            <View>
-                                <Text style={styles.studentName}>{item.nombre}</Text>
-                                <Text style={styles.studentEmail}>{item.email}</Text>
-                            </View>
-                            <Text style={{...styles.assignButtonText, color: themeColors.success}}>CREAR >> </Text>
-                        </TouchableOpacity>
-                    ))
-                ) : (
-                    <View style={{ padding: 20, alignItems: 'center' }}>
-                         <Text style={{ color: themeColors.textSecondary }}>No hay alumnos registrados.</Text>
-                    </View>
-                )}
+                <View style={styles.wizardActions}>
+                    <Button 
+                        title="< Atras" 
+                        onPress={() => setStep(step - 1)} 
+                        disabled={step === 1}
+                        color={themeColors.textSecondary}
+                    />
+                    {(step === 1 || step === 2) && (
+                        <Button 
+                            title={"Siguiente >"} 
+                            onPress={nextStep} 
+                            disabled={step === 1 ? !routineName.trim() : routinesCount < 1 || !expirationDate.trim()}
+                            color={themeColors.primary}
+                        />
+                    )}
+                </View>
             </ScrollView>
         </SafeAreaView>
     );
@@ -647,14 +962,13 @@ export default function ProfessorScreen({ navigation }) {
     const styles = getMainScreenStyles(themeColors); // Estilos dinamicos
 
     const [students, setStudents] = useState([]);
-    // ?? CAMBIO: Eliminamos el estado 'routines' ya que no se necesitan en la vista principal
     const [isLoading, setIsLoading] = useState(true);
     const [selectedStudent, setSelectedStudent] = useState(null); // Alumno para asignar/gestionar
-    const [creatingForStudent, setCreatingForStudent] = useState(false); // Modo: seleccionar alumno para crear
+    
+    const [creatingForStudent, setCreatingForStudent] = useState(false); 
     const [dataError, setDataError] = useState(null); 
     const [isMenuVisible, setIsMenuVisible] = useState(false); // Estado para el modal de menu
 
-    // ?? ANADIDO: Estado para el campo de busqueda
     const [searchTerm, setSearchTerm] = useState('');
 
     const { signOut, getToken } = useContext(AuthContext);
@@ -671,10 +985,6 @@ export default function ProfessorScreen({ navigation }) {
 
             const studentsResponse = await axios.get(`${API_URL}/users/students`, { headers });
             setStudents(Array.isArray(studentsResponse.data) ? studentsResponse.data : []);
-
-            // ?? CAMBIO: Eliminamos la llamada a la API de rutinas maestras de la vista principal
-            // const routinesResponse = await axios.get(`${API_URL}/routines/`, { headers });
-            // setRoutines(Array.isArray(routinesResponse.data) ? routinesResponse.data : []);
 
         } catch (e) {
             console.error("Error cargando datos del profesor:", e.response ? e.response.data : e.message);
@@ -723,7 +1033,7 @@ export default function ProfessorScreen({ navigation }) {
     };
     
     // ----------------------------------------------------------------
-    // ?? ANADIDO: Logica de filtrado de estudiantes
+    // Logica de filtrado de estudiantes
     // ----------------------------------------------------------------
     const filteredStudents = useMemo(() => {
         if (!searchTerm) {
@@ -766,10 +1076,10 @@ export default function ProfessorScreen({ navigation }) {
         );
     }
     
-    // Paso 1: Modo Seleccionar Alumno para CREAR Rutina
+    // Paso 1: Modo Wizard de Creacion de Rutina (Simplificado)
     if (creatingForStudent) {
         return (
-            <StudentSelectionForCreation
+            <CreationWizardSimplified
                 navigation={navigation}
                 students={students}
                 onCancel={() => setCreatingForStudent(false)}
@@ -779,8 +1089,6 @@ export default function ProfessorScreen({ navigation }) {
 
     // Paso 2: Modo Gestionar Asignacion de Alumno existente
     if (selectedStudent) {
-        // En este punto, 'routines' no esta definido en el scope, pasamos un array vacio
-        // y AssignmentView cargara las asignaciones.
         return (
             <SafeAreaView style={styles.container}>
                 <AssignmentView 
@@ -826,18 +1134,15 @@ export default function ProfessorScreen({ navigation }) {
                     
                     {/* BOTON CREAR RUTINA */}
                     <Button 
-                        title="Crear Nueva Rutina y Asignar" 
+                        title="Crear Nueva Rutina Agrupada y Asignar" 
                         onPress={() => setCreatingForStudent(true)} 
                         color={themeColors.success} 
                     />
                 </View>
 
-                {/* -------------------- SECCION DE GESTION DE RUTINAS MAESTRAS ELIMINADA -------------------- */}
-
                 <Text style={styles.listTitle}>Alumnos ({filteredStudents.length})</Text> 
-                {/* ?? MODIFICADO: Muestra el numero de alumnos filtrados */}
 
-                {/* ?? ANADIDO: Input de busqueda */}
+                {/* ?? Input de busqueda */}
                 <TextInput
                     style={styles.searchInput} 
                     placeholder="Buscar alumno por nombre o email..."
