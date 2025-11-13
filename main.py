@@ -9,6 +9,7 @@ from sqlmodel import Session, select
 # Importamos selectinload para forzar la carga de relaciones anidadas
 from sqlalchemy.orm import selectinload 
 from sqlalchemy import desc 
+from sqlalchemy import func # ?? NECESARIO para usar func.lower() en validaci車n de email
 
 from passlib.context import CryptContext
 from jose import JWTError, jwt
@@ -18,7 +19,7 @@ from dotenv import load_dotenv
 from database import create_db_and_tables, get_session
 from models import (
     User, UserCreate, UserRead, UserReadSimple, UserRole, UserLogin, Token,
-    # ?? Importaciones de EJERCICIOS RESTAURADAS
+    # ?? Importaciones de EJERCICIOS
     Exercise, ExerciseCreate, ExerciseRead, ExerciseUpdate, MuscleGroup,
     Routine, RoutineCreate, RoutineRead, RoutineUpdate,
     RoutineExercise, RoutineAssignment, 
@@ -26,7 +27,9 @@ from models import (
     ChangePassword,
     RoutineCreateOrUpdate, 
     # ?? Importaciones de Grupo y Transaccional
-    RoutineGroup, RoutineGroupCreate, RoutineGroupRead, RoutineGroupCreateAndRoutines 
+    RoutineGroup, RoutineGroupCreate, RoutineGroupRead, RoutineGroupCreateAndRoutines,
+    # ?? SOLUCI車N AL ERROR: Importar el nuevo esquema para que no de NameError
+    UserUpdateByProfessor 
 )
 
 
@@ -236,7 +239,7 @@ def login_for_access_token(
         )
     
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    # ?? CORRECCIoN CLAVE: Incluimos el nombre del usuario en el token.
+    # ?? CORRECCI車N CLAVE: Incluimos el nombre del usuario en el token.
     access_token = create_access_token(
         data={"dni": user.dni, "rol": user.rol.value, "nombre": user.nombre}, 
         expires_delta=access_token_expires
@@ -291,6 +294,7 @@ def change_password(
     
     return {"message": "Contrase?a actualizada exitosamente."}
 
+
 @app.get("/users/students", response_model=List[UserReadSimple], tags=["Usuarios"])
 def read_students_list(
     session: Annotated[Session, Depends(get_session)],
@@ -300,14 +304,15 @@ def read_students_list(
     students = session.exec(select(User).where(User.rol == UserRole.STUDENT)).all()
     return students
 
+# ?? NUEVA RUTA: Actualizar Datos del Alumno por el Profesor
 @app.patch("/users/student/{student_id}", response_model=UserRead, tags=["Usuarios"])
 def update_student_data(
     student_id: int,
-    user_data: UserUpdateByProfessor, # Usamos el nuevo esquema
+    user_data: UserUpdateByProfessor, # Usamos el esquema importado (FIX!)
     session: Annotated[Session, Depends(get_session)],
     current_professor: Annotated[User, Depends(get_current_professor)]
 ):
-    """(Profesor) Permite actualizar el nombre, email o DNI de un alumno especifico."""
+    """(Profesor) Permite actualizar el nombre, email o DNI de un alumno espec赤fico."""
     
     # 1. Buscar al alumno
     student_to_update = session.get(User, student_id)
@@ -323,13 +328,13 @@ def update_student_data(
         # Validar si el DNI o Email ya existen en OTRO usuario
         if key == 'email' and value is not None and value.lower() != student_to_update.email.lower():
             existing_user = session.exec(select(User).where(func.lower(User.email) == value.lower())).first()
-            if existing_user:
-                raise HTTPException(status_code=400, detail="El nuevo email ya esta en uso.")
+            if existing_user and existing_user.id != student_to_update.id: # Aseguramos que no sea el mismo
+                raise HTTPException(status_code=400, detail="El nuevo email ya est芍 en uso por otro usuario.")
         
         if key == 'dni' and value is not None and value != student_to_update.dni:
             existing_user = session.exec(select(User).where(User.dni == value)).first()
-            if existing_user:
-                raise HTTPException(status_code=400, detail="El nuevo DNI ya esta en uso.")
+            if existing_user and existing_user.id != student_to_update.id: # Aseguramos que no sea el mismo
+                raise HTTPException(status_code=400, detail="El nuevo DNI ya est芍 en uso por otro usuario.")
                 
         setattr(student_to_update, key, value)
         
@@ -430,7 +435,7 @@ def delete_exercise(
 
 
 # ----------------------------------------------------------------------
-# ?? NUEVA RUTA TRANSACCIONAL DE CREACIoN DE GRUPO Y RUTINAS
+# ?? NUEVA RUTA TRANSACCIONAL DE CREACI車N DE GRUPO Y RUTINAS
 # ----------------------------------------------------------------------
 
 @app.post("/routines-group/create-transactional", response_model=RoutineAssignmentRead, tags=["Rutinas"])
@@ -441,7 +446,7 @@ def create_routine_group_and_routines(
 ):
     """
     (Profesor) Crea un nuevo grupo de rutinas, crea N rutinas individuales
-    asociadas a ese grupo, y asigna la uLTIMA rutina al alumno.
+    asociadas a ese grupo, y asigna la 迆LTIMA rutina al alumno.
     """
     # 1. Validar Alumno
     student = session.get(User, data.student_id)
@@ -491,7 +496,7 @@ def create_routine_group_and_routines(
 
         last_routine = routine_model
     
-    # 4. Asignar la uLTIMA rutina creada al alumno
+    # 4. Asignar la 迆LTIMA rutina creada al alumno
         
     # 4a. Desactivar cualquier asignacion activa anterior del alumno (para que solo tenga una activa)
     statement_deactivate = (
@@ -607,7 +612,7 @@ def read_routines(
     Obtiene una lista de todas las rutinas maestras creadas por el profesor.
     """
     try:
-        # ?? CORRECCIoN/MEJORA: Forzamos la carga de relaciones anidadas (links + detalles del ejercicio + grupo)
+        # ?? CORRECCI車N/MEJORA: Forzamos la carga de relaciones anidadas (links + detalles del ejercicio + grupo)
         statement = (
             select(Routine)
             .where(Routine.owner_id == current_professor.id)
@@ -638,7 +643,7 @@ def read_routine(
     current_user: Annotated[User, Depends(get_current_user)]
 ):
     """Obtiene una rutina especifica por su ID, incluyendo todos sus ejercicios."""
-    # ?? CORRECCIoN/MEJORA: Forzamos la carga de relaciones anidadas (links + detalles del ejercicio + grupo)
+    # ?? CORRECCI車N/MEJORA: Forzamos la carga de relaciones anidadas (links + detalles del ejercicio + grupo)
     statement = (
         select(Routine)
         .where(Routine.id == routine_id)
@@ -654,7 +659,7 @@ def read_routine(
     
     return routine
 
-# ?? RUTA ACTUALIZADA: EDICIoN COMPLETA (Metadata y Ejercicios)
+# ?? RUTA ACTUALIZADA: EDICI車N COMPLETA (Metadata y Ejercicios)
 @app.patch("/routines/{routine_id}", response_model=RoutineRead, tags=["Rutinas"])
 def update_routine_full(
     routine_id: int,
@@ -784,7 +789,7 @@ def assign_routine_to_student(
         session.refresh(db_assignment)
     except Exception as e:
         session.rollback()
-        print(f"ERROR DB ASIGNACIoN: {e}")
+        print(f"ERROR DB ASIGNACION: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
             detail=f"Fallo al guardar la asignacion en DB. {e}"
@@ -792,7 +797,7 @@ def assign_routine_to_student(
         
     return db_assignment
 
-# ?? RUTA CRiTICA CORREGIDA: PATCH para cambiar el estado de activacion de una asignacion
+# ?? RUTA CR赤TICA CORREGIDA: PATCH para cambiar el estado de activacion de una asignacion
 @app.patch("/assignments/{assignment_id}/active", response_model=RoutineAssignmentRead, tags=["Asignaciones"])
 def set_assignment_active_status(
     assignment_id: int,
@@ -815,13 +820,13 @@ def set_assignment_active_status(
         session.commit()
     except Exception as e:
         session.rollback()
-        print(f"ERROR DB PATCH ASIGNACIoN: {e}")
+        print(f"ERROR DB PATCH ASIGNACION: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Fallo al confirmar el cambio de estado en la base de datos."
         )
 
-    # ?? CORRECCIoN CLAVE: Recargar la asignacion con todas las relaciones anidadas
+    # ?? CORRECCI車N CLAVE: Recargar la asignacion con todas las relaciones anidadas
     # para asegurar que el modelo RoutineAssignmentRead se serialice correctamente.
     statement_read = (
         select(RoutineAssignment)
@@ -973,7 +978,7 @@ def get_my_active_routine(
         select(RoutineAssignment)
         .where(
             RoutineAssignment.student_id == current_student.id,
-            RoutineAssignment.is_active == True # ?? FILTRO CRiTICO: Solo rutinas activas
+            RoutineAssignment.is_active == True # ?? FILTRO CR赤TICO: Solo rutinas activas
         )
         # ?? Ordenamos por fecha de asignacion descendente.
         .order_by(desc(RoutineAssignment.assigned_at)) 
@@ -991,7 +996,7 @@ def get_my_active_routine(
     
     active_assignments = session.exec(statement).all()
     
-    # ?? CORRECCIoN APLICADA: Devolvemos una lista vacia en lugar de un error 404.
+    # ?? CORRECCI車N APLICADA: Devolvemos una lista vacia en lugar de un error 404.
     if not active_assignments:
         return []
         
