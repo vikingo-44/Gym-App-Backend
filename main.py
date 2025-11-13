@@ -18,13 +18,14 @@ from dotenv import load_dotenv
 from database import create_db_and_tables, get_session
 from models import (
     User, UserCreate, UserRead, UserReadSimple, UserRole, UserLogin, Token,
+    # ?? Importaciones de EJERCICIOS RESTAURADAS
     Exercise, ExerciseCreate, ExerciseRead, ExerciseUpdate, MuscleGroup,
     Routine, RoutineCreate, RoutineRead, RoutineUpdate,
     RoutineExercise, RoutineAssignment, 
     RoutineAssignmentCreate, RoutineAssignmentRead,
     ChangePassword,
-    RoutineCreateOrUpdate, # ?? Importamos el nuevo esquema de edicion
-    # ?? NUEVOS: Importaciones de Grupo y Transaccional
+    RoutineCreateOrUpdate, 
+    # ?? Importaciones de Grupo y Transaccional
     RoutineGroup, RoutineGroupCreate, RoutineGroupRead, RoutineGroupCreateAndRoutines 
 )
 
@@ -301,6 +302,95 @@ def read_students_list(
     return students
 
 # ----------------------------------------------------------------------
+# ?? Rutas de Ejercicios (CRUD - RESTAURADAS)
+# ----------------------------------------------------------------------
+
+@app.post("/exercises/", response_model=List[ExerciseRead], status_code=status.HTTP_201_CREATED, tags=["Ejercicios"])
+def create_exercise_batch(
+    exercises: List[ExerciseCreate],
+    session: Annotated[Session, Depends(get_session)],
+    current_professor: Annotated[User, Depends(get_current_professor)]
+):
+    """Crea multiples ejercicios a la vez. Solo accesible para Profesores."""
+    
+    created_exercises = []
+    for exercise_data in exercises:
+        # Prevencion de duplicados basada en el nombre
+        existing_exercise = session.exec(select(Exercise).where(Exercise.nombre == exercise_data.nombre)).first()
+        if existing_exercise:
+            print(f"Advertencia: Ejercicio '{exercise_data.nombre}' ya existe, omitiendo.")
+            continue 
+
+        db_exercise = Exercise.model_validate(exercise_data)
+        session.add(db_exercise)
+        created_exercises.append(db_exercise)
+        
+    session.commit()
+
+    for db_exercise in created_exercises:
+        session.refresh(db_exercise)
+        
+    return created_exercises
+
+@app.get("/exercises/", response_model=List[ExerciseRead], tags=["Ejercicios"])
+def read_exercises(
+    session: Annotated[Session, Depends(get_session)],
+    current_user: Annotated[User, Depends(get_current_user)]
+):
+    """Obtiene una lista de todos los ejercicios. Accesible para todos los usuarios autenticados."""
+    exercises = session.exec(select(Exercise)).all()
+    return exercises
+
+@app.get("/exercises/{exercise_id}", response_model=ExerciseRead, tags=["Ejercicios"])
+def read_exercise(
+    exercise_id: int,
+    session: Annotated[Session, Depends(get_session)],
+    current_user: Annotated[User, Depends(get_current_user)]
+):
+    """Obtiene un ejercicio por su ID."""
+    exercise = session.get(Exercise, exercise_id)
+    if not exercise:
+        raise HTTPException(status_code=404, detail="Ejercicio no encontrado")
+    return exercise
+
+@app.patch("/exercises/{exercise_id}", response_model=ExerciseRead, tags=["Ejercicios"])
+def update_exercise(
+    exercise_id: int,
+    exercise_data: ExerciseUpdate,
+    session: Annotated[Session, Depends(get_session)],
+    current_professor: Annotated[User, Depends(get_current_professor)]
+):
+    """Actualiza un ejercicio existente por ID. Solo accesible para Profesores."""
+    db_exercise = session.get(Exercise, exercise_id)
+    if not db_exercise:
+        raise HTTPException(status_code=404, detail="Ejercicio no encontrado")
+        
+    exercise_dict = exercise_data.model_dump(exclude_unset=True)
+    for key, value in exercise_dict.items():
+        setattr(db_exercise, key, value)
+
+    session.add(db_exercise)
+    session.commit()
+    session.refresh(db_exercise)
+    return db_exercise
+
+@app.delete("/exercises/{exercise_id}", status_code=status.HTTP_204_NO_CONTENT, tags=["Ejercicios"])
+def delete_exercise(
+    exercise_id: int,
+    session: Annotated[Session, Depends(get_session)],
+    current_professor: Annotated[User, Depends(get_current_professor)]
+):
+    """Elimina un ejercicio por ID. Solo accesible para Profesores."""
+    exercise = session.get(Exercise, exercise_id)
+    if not exercise:
+        raise HTTPException(status_code=404, detail="Ejercicio no encontrado")
+        
+    session.delete(exercise)
+    session.commit()
+    return
+
+
+# ----------------------------------------------------------------------
 # ?? NUEVA RUTA TRANSACCIONAL DE CREACIoN DE GRUPO Y RUTINAS
 # ----------------------------------------------------------------------
 
@@ -407,105 +497,7 @@ def create_routine_group_and_routines(
 
 
 # ----------------------------------------------------------------------
-# ?? RUTA DE LECTURA DE ASIGNACIONES (MODIFICADA para devolver todas las rutinas del grupo activo)
-# ----------------------------------------------------------------------
-
-@app.get("/professor/assignments/student/{student_id}", response_model=List[RoutineAssignmentRead], tags=["Asignaciones"])
-def get_assignments_for_student_by_professor(
-    student_id: int, 
-    session: Annotated[Session, Depends(get_session)],
-    current_professor: Annotated[User, Depends(get_current_professor)]
-):
-    """
-    (Profesor) Obtiene TODAS las asignaciones historicas del alumno. 
-    Si hay una asignacion activa reciente que pertenece a un grupo, reemplaza esa entrada 
-    con TODAS las rutinas de ese grupo para su visualizacion.
-    """
-    
-    # 1. Verificar que el alumno exista
-    student = session.get(User, student_id)
-    if not student or student.rol != UserRole.STUDENT:
-        raise HTTPException(status_code=404, detail="Alumno no encontrado.")
-        
-    # 2. Fetch todas las asignaciones historicas (ordenadas por fecha de asignacion)
-    statement = (
-        select(RoutineAssignment)
-        .where(RoutineAssignment.student_id == student_id)
-        .order_by(desc(RoutineAssignment.assigned_at)) 
-        .options(
-            selectinload(RoutineAssignment.routine).selectinload(Routine.routine_group),
-            selectinload(RoutineAssignment.routine).selectinload(Routine.exercise_links).selectinload(RoutineExercise.exercise),
-            selectinload(RoutineAssignment.student),
-            selectinload(RoutineAssignment.professor)
-        )
-    )
-    all_assignments = session.exec(statement).all()
-    
-    if not all_assignments:
-        return []
-    
-    # 3. Identificar la asignacion activa mas reciente (la que apunta al Day N)
-    active_assignment = next((a for a in all_assignments if a.is_active), None)
-
-    if active_assignment and active_assignment.routine.routine_group_id:
-        routine_group_id = active_assignment.routine.routine_group_id
-        
-        # 4. Fetch TODAS las rutinas que pertenecen a ese grupo (Dia 1, Dia 2, etc.)
-        routine_statement = (
-            select(Routine)
-            .where(Routine.routine_group_id == routine_group_id)
-            .order_by(Routine.id) # Asegura que se ordenen como Dia 1, Dia 2, etc. (o por orden de creacion)
-            .options(
-                selectinload(Routine.routine_group),
-                selectinload(Routine.exercise_links).selectinload(RoutineExercise.exercise)
-            )
-        )
-        grouped_routines = session.exec(routine_statement).all()
-        
-        # 5. Crear "pseudo-asignaciones" para TODAS las rutinas del grupo actual
-        active_group_assignments = []
-        # Obtener los IDs de las rutinas en el grupo
-        active_group_routine_ids = {r.id for r in grouped_routines}
-        
-        for routine in grouped_routines:
-            
-            # Usamos el ID del Assignment original solo para la rutina a la que realmente esta asignado
-            is_the_original_assigned_routine = (routine.id == active_assignment.routine_id)
-
-            # Construimos el objeto de respuesta, asegurando que todos los campos del Assignment Read Model esten presentes.
-            # Nota: Usamos un ID negativo para los elementos que son parte del grupo pero no son el "Assignment" directo.
-            # Esto es para ayudar al frontend a diferenciarlos.
-            pseudo_assignment_data = RoutineAssignmentRead(
-                id=active_assignment.id if is_the_original_assigned_routine else -(routine.id),
-                routine_id=routine.id,
-                student_id=active_assignment.student_id,
-                professor_id=active_assignment.professor_id,
-                assigned_at=active_assignment.assigned_at,
-                # Marcamos todas las rutinas del grupo como activas (es la rutina en curso)
-                is_active=True, 
-                routine=routine, # La rutina individual (Dia 1, Dia 2...)
-                student=active_assignment.student,
-                professor=active_assignment.professor
-            )
-            
-            active_group_assignments.append(pseudo_assignment_data)
-
-
-        # 6. Filtrar las asignaciones historicas que NO pertenecen a este grupo activo
-        
-        historical_assignments = [
-            a for a in all_assignments 
-            if a.routine_id not in active_group_routine_ids
-        ]
-        
-        # 7. Combinar: Primero el grupo activo (Dia 1, Dia 2...), luego el historial
-        return active_group_assignments + historical_assignments
-    
-    # 8. Si no hay grupo activo, o no hay asignaciones, retornar la lista original/vacia.
-    return all_assignments
-
-# ----------------------------------------------------------------------
-# Rutas de Rutinas (CRUD)
+# Rutas de Rutinas (CRUD - Continuacion)
 # ----------------------------------------------------------------------
 
 @app.post("/routines/", response_model=RoutineRead, status_code=status.HTTP_201_CREATED, tags=["Rutinas"])
@@ -801,7 +793,103 @@ def delete_assignment(
     return
 
 
-# --- Rutas del Alumno ---
+# ----------------------------------------------------------------------
+# ?? RUTA DE LECTURA DE ASIGNACIONES (Devuelve todas las rutinas del grupo activo)
+# ----------------------------------------------------------------------
+
+@app.get("/professor/assignments/student/{student_id}", response_model=List[RoutineAssignmentRead], tags=["Asignaciones"])
+def get_assignments_for_student_by_professor(
+    student_id: int, 
+    session: Annotated[Session, Depends(get_session)],
+    current_professor: Annotated[User, Depends(get_current_professor)]
+):
+    """
+    (Profesor) Obtiene TODAS las asignaciones historicas del alumno. 
+    Si hay una asignacion activa reciente que pertenece a un grupo, reemplaza esa entrada 
+    con TODAS las rutinas de ese grupo para su visualizacion.
+    """
+    
+    # 1. Verificar que el alumno exista
+    student = session.get(User, student_id)
+    if not student or student.rol != UserRole.STUDENT:
+        raise HTTPException(status_code=404, detail="Alumno no encontrado.")
+        
+    # 2. Fetch todas las asignaciones historicas (ordenadas por fecha de asignacion)
+    statement = (
+        select(RoutineAssignment)
+        .where(RoutineAssignment.student_id == student_id)
+        .order_by(desc(RoutineAssignment.assigned_at)) 
+        .options(
+            selectinload(RoutineAssignment.routine).selectinload(Routine.routine_group),
+            selectinload(RoutineAssignment.routine).selectinload(Routine.exercise_links).selectinload(RoutineExercise.exercise),
+            selectinload(RoutineAssignment.student),
+            selectinload(RoutineAssignment.professor)
+        )
+    )
+    all_assignments = session.exec(statement).all()
+    
+    if not all_assignments:
+        return []
+    
+    # 3. Identificar la asignacion activa mas reciente (la que apunta al Day N)
+    active_assignment = next((a for a in all_assignments if a.is_active), None)
+
+    if active_assignment and active_assignment.routine.routine_group_id:
+        routine_group_id = active_assignment.routine.routine_group_id
+        
+        # 4. Fetch TODAS las rutinas que pertenecen a ese grupo (Dia 1, Dia 2, etc.)
+        routine_statement = (
+            select(Routine)
+            .where(Routine.routine_group_id == routine_group_id)
+            .order_by(Routine.id) # Asegura que se ordenen como Dia 1, Dia 2, etc. (o por orden de creacion)
+            .options(
+                selectinload(Routine.routine_group),
+                selectinload(Routine.exercise_links).selectinload(RoutineExercise.exercise)
+            )
+        )
+        grouped_routines = session.exec(routine_statement).all()
+        
+        # 5. Crear "pseudo-asignaciones" para TODAS las rutinas del grupo actual
+        active_group_assignments = []
+        # Obtener los IDs de las rutinas en el grupo
+        active_group_routine_ids = {r.id for r in grouped_routines}
+        
+        for routine in grouped_routines:
+            
+            is_the_original_assigned_routine = (routine.id == active_assignment.routine_id)
+
+            # Construimos el objeto de respuesta, asegurando que todos los campos del Assignment Read Model esten presentes.
+            pseudo_assignment_data = RoutineAssignmentRead(
+                # Usamos un ID negativo para los elementos que son parte del grupo pero no son el "Assignment" directo.
+                id=active_assignment.id if is_the_original_assigned_routine else -(routine.id),
+                routine_id=routine.id,
+                student_id=active_assignment.student_id,
+                professor_id=active_assignment.professor_id,
+                assigned_at=active_assignment.assigned_at,
+                # Marcamos todas las rutinas del grupo como activas (es la rutina en curso)
+                is_active=True, 
+                routine=routine, # La rutina individual (Dia 1, Dia 2...)
+                student=active_assignment.student,
+                professor=active_assignment.professor
+            )
+            
+            active_group_assignments.append(pseudo_assignment_data)
+
+
+        # 6. Filtrar las asignaciones historicas que NO pertenecen a este grupo activo
+        
+        historical_assignments = [
+            a for a in all_assignments 
+            if a.routine_id not in active_group_routine_ids
+        ]
+        
+        # 7. Combinar: Primero el grupo activo (Dia 1, Dia 2...), luego el historial
+        return active_group_assignments + historical_assignments
+    
+    # 8. Si no hay grupo activo, o no hay asignaciones, retornar la lista original/vacia.
+    return all_assignments
+
+# --- Rutas del Alumno (Continuacion) ---
 
 @app.get("/students/me/routine", response_model=List[RoutineAssignmentRead], tags=["Alumnos"])
 def get_my_active_routine(
