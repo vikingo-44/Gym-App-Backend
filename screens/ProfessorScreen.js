@@ -104,21 +104,44 @@ const getAssignmentStyles = (colors) => StyleSheet.create({
     },
     // Estilo base de la tarjeta (para CollapsibleAssignmentCard)
     assignmentCard: {
+        flexDirection: 'row', // Permite que la barra de estado este al lado
         backgroundColor: colors.card,
-        padding: 15,
         borderRadius: 10,
         marginBottom: 10,
-        borderLeftWidth: 4, 
+        // Eliminamos el borderLeftWidth de aqui
         shadowColor: colors.isDark ? '#000' : '#444',
         shadowOffset: { width: 0, height: 1 },
         shadowOpacity: colors.isDark ? 0.3 : 0.1,
         shadowRadius: 2,
         elevation: 2,
+        overflow: 'hidden', // Importante para que el borderRadius funcione bien con la barra
+    },
+    // ?? NUEVO: Barra lateral de estado
+    statusBar: {
+        width: 40,
+        justifyContent: 'center',
+        alignItems: 'center',
+        paddingVertical: 10,
+        // El color se asigna dinamicamente en el componente
+    },
+    statusText: {
+        fontSize: 10,
+        fontWeight: 'bold',
+        color: 'white',
+        transform: [{ rotate: '-90deg' }], // Texto vertical
+        width: 80, // Asegura que el texto quepa girado
+        textAlign: 'center',
+    },
+    // Contenido del header y acciones
+    assignmentContent: {
+        flex: 1,
+        padding: 15,
     },
     assignmentHeader: { // Nuevo: El area que se toca para expandir
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
+        flex: 1,
     },
     assignmentDetails: {
         flex: 1,
@@ -135,12 +158,12 @@ const getAssignmentStyles = (colors) => StyleSheet.create({
         marginBottom: 5,
     },
     deleteButton: {
-        padding: 8, // Reducido para ahorrar espacio
+        padding: 8, 
         backgroundColor: colors.danger, 
         borderRadius: 8,
     },
     editButton: { 
-        padding: 8, // Reducido para ahorrar espacio
+        padding: 8, 
         backgroundColor: colors.primary, 
         borderRadius: 8,
     },
@@ -154,12 +177,13 @@ const getAssignmentStyles = (colors) => StyleSheet.create({
         fontWeight: '600',
         color: colors.textPrimary,
     },
-    // ?? Estilos de la lista de ejercicios expandida
+    // Estilos de la lista de ejercicios expandida
     exerciseListContainer: {
         marginTop: 15,
         paddingTop: 10,
         borderTopWidth: 1,
         borderTopColor: colors.divider,
+        // El padding lateral se manejo en la tarjeta
     },
     exerciseItem: {
         paddingLeft: 10,
@@ -174,17 +198,17 @@ const getAssignmentStyles = (colors) => StyleSheet.create({
         color: colors.textPrimary,
         marginBottom: 5,
     },
-    // --- NUEVOS ESTILOS para Sets/Reps/Peso (Mas visuales) ---
+    // --- Estilos para Sets/Reps/Peso (Mas visuales) ---
     detailsRow: {
         flexDirection: 'row',
         justifyContent: 'flex-start',
-        gap: 15, // Espacio horizontal entre los "chips"
+        gap: 15, 
         marginTop: 5,
     },
     detailItem: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: colors.isDark ? colors.highlight : colors.divider, // Fondo sutil
+        backgroundColor: colors.isDark ? colors.highlight : colors.divider, 
         borderRadius: 6,
         paddingHorizontal: 8,
         paddingVertical: 4,
@@ -203,12 +227,16 @@ const getAssignmentStyles = (colors) => StyleSheet.create({
 });
 
 // ----------------------------------------------------------------------
-// ?? NUEVO COMPONENTE: Tarjeta Colapsable de Asignacion
+// ?? COMPONENTE: Tarjeta Colapsable de Asignacion (Modificado para barra lateral)
 // ----------------------------------------------------------------------
 const CollapsibleAssignmentCard = ({ assignment, assignmentStyles, themeColors, handleEditAssignment, handleDeleteAssignment, handleToggleActive }) => {
     
     const [isExpanded, setIsExpanded] = useState(false);
     const linkCount = assignment.routine.exercise_links ? assignment.routine.exercise_links.length : 0; 
+
+    // Define el color y el texto del estado
+    const statusColor = assignment.is_active ? themeColors.success : themeColors.warning;
+    const statusText = assignment.is_active ? 'ACTIVA' : 'INACTIVA';
 
     // Renderiza la lista de ejercicios (solo cuando se expande)
     const renderExercises = () => (
@@ -222,7 +250,6 @@ const CollapsibleAssignmentCard = ({ assignment, assignmentStyles, themeColors, 
                             {link.order}. {link.exercise.nombre}
                         </Text>
                         
-                        {/* ?? FILA DE DETALLES: Usando el nuevo formato de "chips" */}
                         <View style={assignmentStyles.detailsRow}>
                             {/* Sets */}
                             <View style={assignmentStyles.detailItem}>
@@ -248,69 +275,72 @@ const CollapsibleAssignmentCard = ({ assignment, assignmentStyles, themeColors, 
     );
 
     return (
-        <View style={[
-            assignmentStyles.assignmentCard, 
-            { borderLeftColor: assignment.is_active ? themeColors.success : themeColors.warning }
-        ]}>
-            {/* 1. CABECERA: Area Colapsable (El area de clic) */}
-            <TouchableOpacity 
-                style={assignmentStyles.assignmentHeader} 
-                onPress={() => setIsExpanded(!isExpanded)}
-                activeOpacity={0.8}
-            >
-                <View style={assignmentStyles.assignmentDetails}>
-                    <Text style={assignmentStyles.routineName}>{assignment.routine.nombre}</Text>
-                    <Text style={assignmentStyles.assignmentDate}>
-                        Estado: 
-                        <Text style={{fontWeight: 'bold', color: assignment.is_active ? themeColors.success : themeColors.warning}}>
-                            {assignment.is_active ? ' ACTIVA' : ' INACTIVA'}
+        <View style={assignmentStyles.assignmentCard}>
+            
+            {/* 1. BARRA LATERAL DE ESTADO */}
+            <View style={[assignmentStyles.statusBar, { backgroundColor: statusColor }]}>
+                <Text style={assignmentStyles.statusText}>{statusText}</Text>
+            </View>
+
+            {/* CONTENEDOR PRINCIPAL DEL CONTENIDO */}
+            <View style={assignmentStyles.assignmentContent}>
+                
+                {/* 2. CABECERA: Area Colapsable (El area de clic) */}
+                <TouchableOpacity 
+                    style={assignmentStyles.assignmentHeader} 
+                    onPress={() => setIsExpanded(!isExpanded)}
+                    activeOpacity={0.8}
+                >
+                    <View style={assignmentStyles.assignmentDetails}>
+                        <Text style={assignmentStyles.routineName}>{assignment.routine.nombre}</Text>
+                        <Text style={assignmentStyles.assignmentDate}>
+                            Vencimiento: {assignment.routine?.routine_group?.fecha_vencimiento || 'N/A'}
                         </Text>
-                    </Text>
-                    {/* Indicador de expansion */}
-                    <View style={{flexDirection: 'row', alignItems: 'center', marginTop: 5}}>
-                        {isExpanded ? 
-                            <ChevronUp size={18} color={themeColors.primary} /> : 
-                            <ChevronDown size={18} color={themeColors.primary} />
-                        }
-                        <Text style={{marginLeft: 5, color: themeColors.primary, fontSize: 13, fontWeight: '500'}}>
-                            {isExpanded ? 'TOCAR PARA COLAPSAR' : `TOCAR PARA VER ${linkCount} EJERCICIOS`}
-                        </Text>
+                        {/* Indicador de expansion */}
+                        <View style={{flexDirection: 'row', alignItems: 'center', marginTop: 5}}>
+                            {isExpanded ? 
+                                <ChevronUp size={18} color={themeColors.primary} /> : 
+                                <ChevronDown size={18} color={themeColors.primary} />
+                            }
+                            <Text style={{marginLeft: 5, color: themeColors.primary, fontSize: 13, fontWeight: '500'}}>
+                                {isExpanded ? 'TOCAR PARA COLAPSAR' : `VER ${linkCount} EJERCICIOS`}
+                            </Text>
+                        </View>
                     </View>
-                </View>
 
-                {/* 2. ACCIONES (Botones) */}
-                <View style={assignmentStyles.assignmentActions}>
-                    <TouchableOpacity 
-                        style={assignmentStyles.editButton} 
-                        onPress={() => handleEditAssignment(assignment.routine_id)}
-                    >
-                        <Edit size={20} color={themeColors.card} />
-                    </TouchableOpacity>
+                    {/* 3. ACCIONES (Botones) */}
+                    <View style={assignmentStyles.assignmentActions}>
+                        <TouchableOpacity 
+                            style={assignmentStyles.editButton} 
+                            onPress={() => handleEditAssignment(assignment.routine_id)}
+                        >
+                            <Edit size={20} color={themeColors.card} />
+                        </TouchableOpacity>
 
-                    <TouchableOpacity 
-                        style={[
-                            assignmentStyles.toggleButton, 
-                            { backgroundColor: assignment.is_active ? themeColors.warning : themeColors.success } 
-                        ]} 
-                        onPress={() => handleToggleActive(assignment.id, assignment.is_active)}
-                    >
-                        <Text style={{ color: themeColors.card, fontWeight: 'bold', fontSize: 12 }}>
-                            {assignment.is_active ? 'INACTIVAR' : 'ACTIVAR'}
-                        </Text>
-                    </TouchableOpacity>
+                        <TouchableOpacity 
+                            style={[
+                                assignmentStyles.toggleButton, 
+                                { backgroundColor: assignment.is_active ? themeColors.warning : themeColors.success } 
+                            ]} 
+                            onPress={() => handleToggleActive(assignment.id, assignment.is_active)}
+                        >
+                            <Text style={{ color: themeColors.card, fontWeight: 'bold', fontSize: 12 }}>
+                                {assignment.is_active ? 'INACTIVAR' : 'ACTIVAR'}
+                            </Text>
+                        </TouchableOpacity>
 
-                    <TouchableOpacity 
-                        style={assignmentStyles.deleteButton} 
-                        onPress={() => handleDeleteAssignment(assignment.id)}
-                    >
-                        <Trash2 size={20} color={themeColors.card} />
-                    </TouchableOpacity>
-                </View>
-            </TouchableOpacity>
+                        <TouchableOpacity 
+                            style={assignmentStyles.deleteButton} 
+                            onPress={() => handleDeleteAssignment(assignment.id)}
+                        >
+                            <Trash2 size={20} color={themeColors.card} />
+                        </TouchableOpacity>
+                    </View>
+                </TouchableOpacity>
 
-            {/* 3. CONTENIDO COLAPSABLE (Ejercicios) */}
-            {isExpanded && renderExercises()}
-
+                {/* 4. CONTENIDO COLAPSABLE (Ejercicios) */}
+                {isExpanded && renderExercises()}
+            </View>
         </View>
     );
 }
