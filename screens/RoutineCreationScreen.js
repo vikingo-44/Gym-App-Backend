@@ -214,7 +214,7 @@ export default function RoutineCreationScreen({ navigation }) {
             series: '', 
             repetitions: '', 
             // 🚨 NUEVO: Inicializar campo peso
-            peso: 'N/A', 
+            peso: '', 
         }];
         setRoutineData('exercises', newExercises);
     };
