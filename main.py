@@ -753,7 +753,7 @@ def assign_routine_to_student(
         
     return db_assignment
 
-# ?? RUTA EXISTENTE: PATCH para cambiar el estado de activacion de una asignacion
+# ?? RUTA CRiTICA CORREGIDA: PATCH para cambiar el estado de activacion de una asignacion
 @app.patch("/assignments/{assignment_id}/active", response_model=RoutineAssignmentRead, tags=["Asignaciones"])
 def set_assignment_active_status(
     assignment_id: int,
@@ -771,9 +771,39 @@ def set_assignment_active_status(
     assignment.is_active = is_active # ?? Aplica el nuevo estado
         
     session.add(assignment)
-    session.commit()
-    session.refresh(assignment)
-    return assignment
+    
+    try:
+        session.commit()
+    except Exception as e:
+        session.rollback()
+        print(f"ERROR DB PATCH ASIGNACIoN: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Fallo al confirmar el cambio de estado en la base de datos."
+        )
+
+    # ?? CORRECCIoN CLAVE: Recargar la asignacion con todas las relaciones anidadas
+    # para asegurar que el modelo RoutineAssignmentRead se serialice correctamente.
+    statement_read = (
+        select(RoutineAssignment)
+        .where(RoutineAssignment.id == assignment_id)
+        .options(
+            selectinload(RoutineAssignment.routine)
+                .selectinload(Routine.routine_group),
+            selectinload(RoutineAssignment.routine)
+                .selectinload(Routine.exercise_links)
+                .selectinload(RoutineExercise.exercise),
+            selectinload(RoutineAssignment.student),
+            selectinload(RoutineAssignment.professor)
+        )
+    )
+    updated_assignment = session.exec(statement_read).first()
+
+    if not updated_assignment:
+         # Esto solo deberia ocurrir si hay un error de logica grave
+         raise HTTPException(status_code=500, detail="Error interno: No se pudo recargar la asignacion actualizada.")
+         
+    return updated_assignment
 
 @app.delete("/assignments/{assignment_id}", status_code=status.HTTP_204_NO_CONTENT, tags=["Asignaciones"])
 def delete_assignment(
@@ -861,6 +891,7 @@ def get_assignments_for_student_by_professor(
             # Construimos el objeto de respuesta, asegurando que todos los campos del Assignment Read Model esten presentes.
             pseudo_assignment_data = RoutineAssignmentRead(
                 # Usamos un ID negativo para los elementos que son parte del grupo pero no son el "Assignment" directo.
+                # Esto ayuda al frontend a distinguir la asignacion principal.
                 id=active_assignment.id if is_the_original_assigned_routine else -(routine.id),
                 routine_id=routine.id,
                 student_id=active_assignment.student_id,
@@ -885,7 +916,7 @@ def get_assignments_for_student_by_professor(
         
         # 7. Combinar: Primero el grupo activo (Dia 1, Dia 2...), luego el historial
         return active_group_assignments + historical_assignments
-    
+        
     # 8. Si no hay grupo activo, o no hay asignaciones, retornar la lista original/vacia.
     return all_assignments
 
