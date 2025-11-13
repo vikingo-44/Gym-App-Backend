@@ -1,14 +1,15 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { 
     StyleSheet, Text, View, ScrollView, SafeAreaView, TouchableOpacity, 
-    ActivityIndicator, Button, Alert
+    ActivityIndicator, Alert
 } from 'react-native';
 import axios from 'axios';
 import { AuthContext } from '../App';
 import { useTheme } from '../ThemeContext';
-// 🚨 ICONOS NECESARIOS: RefreshCcw, LogOut, ChevronDown, ChevronUp
+// 🚨 ICONOS NECESARIOS (Deben estar instalados: npm install lucide-react-native)
 import { RefreshCcw, LogOut, ChevronDown, ChevronUp } from 'lucide-react-native'; 
 
+// URL de la API (Asegúrate que esta URL coincida con la de tu App.js/Backend)
 const API_URL = "https://gym-app-backend-e9bn.onrender.com"; 
 
 // ----------------------------------------------------------------------
@@ -50,10 +51,10 @@ const getStudentStyles = (colors) => StyleSheet.create({
         borderRadius: 8,
         justifyContent: 'center',
         alignItems: 'center',
-        backgroundColor: colors.highlight, // Fondo de resaltado para iconos
+        backgroundColor: colors.highlight,
     },
     content: {
-        flex: 1,
+        flexGrow: 1, // Permite el scroll
         padding: 20,
     },
     mainTitle: {
@@ -95,9 +96,9 @@ const getStudentStyles = (colors) => StyleSheet.create({
         color: colors.textSecondary,
         textAlign: 'center',
     },
-    // --- Estilos de la Tarjeta Colapsable (Profesor Style) ---
+    // --- Estilos de la Tarjeta Colapsable ---
     routineCardContainer: {
-        flexDirection: 'row', // Para la barra lateral
+        flexDirection: 'row',
         backgroundColor: colors.card,
         borderRadius: 10,
         marginBottom: 15,
@@ -108,7 +109,7 @@ const getStudentStyles = (colors) => StyleSheet.create({
         elevation: 3,
         overflow: 'hidden',
     },
-    // 🚨 Barra lateral de estado
+    // Barra lateral de estado
     statusBar: {
         width: 40, 
         justifyContent: 'center',
@@ -123,7 +124,6 @@ const getStudentStyles = (colors) => StyleSheet.create({
         width: 80, 
         textAlign: 'center',
     },
-    // Contenido principal (derecha de la barra)
     assignmentContent: {
         flex: 1,
     },
@@ -163,6 +163,7 @@ const getStudentStyles = (colors) => StyleSheet.create({
         paddingBottom: 15,
         borderTopWidth: 1,
         borderTopColor: colors.divider,
+        backgroundColor: colors.isDark ? colors.background : '#F7F7F7',
     },
     exerciseItem: {
         paddingLeft: 10,
@@ -186,7 +187,7 @@ const getStudentStyles = (colors) => StyleSheet.create({
     detailItem: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: colors.isDark ? colors.highlight : colors.divider, // Estilo de ProfesorScreen
+        backgroundColor: colors.isDark ? colors.highlight : colors.divider,
         borderRadius: 6,
         paddingHorizontal: 8,
         paddingVertical: 4,
@@ -213,16 +214,15 @@ const CollapsibleRoutineCard = ({ assignment, styles, themeColors }) => {
     const routine = assignment.routine;
     const linkCount = routine?.exercise_links ? routine.exercise_links.length : 0;
     
-    // 🚨 Lógica de Estado (Barra Lateral)
+    // Lógica de Estado (Barra Lateral)
     const statusColor = assignment.is_active ? themeColors.success : themeColors.warning;
     const statusText = assignment.is_active ? 'ACTIVA' : 'INACTIVA';
 
-    // Formateo de fecha (si existe)
+    // Formateo de fecha
     const formattedExpiryDate = routine?.routine_group?.fecha_vencimiento 
         ? `Vence: ${routine.routine_group.fecha_vencimiento}` 
         : 'Vencimiento: N/A';
 
-    // Renderiza la lista de ejercicios (solo cuando se expande)
     const renderExercises = () => (
         <View style={styles.exerciseListContainer}>
             <Text style={{ fontSize: 13, fontWeight: 'bold', color: themeColors.textPrimary, marginBottom: 10 }}>Detalle de Ejercicios:</Text>
@@ -247,7 +247,7 @@ const CollapsibleRoutineCard = ({ assignment, styles, themeColors }) => {
                                 <Text style={styles.detailValue}>{link.repetitions}</Text>
                             </View>
 
-                            {/* Peso (usando '-' si es nulo) */}
+                            {/* Peso */}
                             <View style={styles.detailItem}>
                                 <Text style={styles.detailLabel}>Peso:</Text>
                                 <Text style={styles.detailValue}>{link.peso || '-'}</Text>
@@ -261,7 +261,7 @@ const CollapsibleRoutineCard = ({ assignment, styles, themeColors }) => {
     return (
         <View style={styles.routineCardContainer}>
             
-            {/* 🚨 1. BARRA LATERAL DE ESTADO */}
+            {/* 1. BARRA LATERAL DE ESTADO */}
             <View style={[styles.statusBar, { backgroundColor: statusColor }]}>
                 <Text style={styles.statusText}>{statusText}</Text>
             </View>
@@ -314,7 +314,6 @@ const CollapsibleRoutineCard = ({ assignment, styles, themeColors }) => {
 // --- PANTALLA DE RUTINA (ALUMNO) ---
 export default function StudentRoutineScreen() {
     
-    // 🚨 Usamos useTheme
     const { colors: themeColors } = useTheme();
     const styles = getStudentStyles(themeColors);
 
@@ -322,8 +321,13 @@ export default function StudentRoutineScreen() {
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState(null);
 
-    // Asumimos que AuthContext proporciona signOut y getToken
     const { signOut, getToken } = useContext(AuthContext);
+
+    // Navegar a la pantalla de cambio de contraseña
+    // Aunque el App.js no te muestre los iconos, esto debería funcionar si la ruta está definida
+    // const handleChangePassword = () => {
+    //     navigation.navigate('ChangePassword'); 
+    // };
 
     const fetchRoutine = async () => {
         setIsLoading(true);
@@ -344,7 +348,7 @@ export default function StudentRoutineScreen() {
             if (assignments && assignments.length > 0) {
                 const validAssignments = assignments.filter(a => a.routine !== null);
                 
-                // 🚨 Ordenamos por el ID interno de la rutina para asegurar Día 1, Día 2, etc.
+                // Ordenamos por el ID de la rutina para asegurar el orden (Día 1, Día 2, etc.)
                 validAssignments.sort((a, b) => a.routine.id - b.routine.id);
 
                 setActiveAssignments(validAssignments);
@@ -401,6 +405,7 @@ export default function StudentRoutineScreen() {
                         style={styles.iconButton}
                         disabled={isLoading}
                     >
+                        {/* El icono aparecerá si la librería está instalada */}
                         <RefreshCcw size={24} color={themeColors.primaryDark} /> 
                     </TouchableOpacity>
                     {/* Botón Cerrar Sesión */}
@@ -408,6 +413,7 @@ export default function StudentRoutineScreen() {
                         onPress={signOut} 
                         style={[styles.iconButton, {backgroundColor: themeColors.danger + '20'}]}
                     >
+                        {/* El icono aparecerá si la librería está instalada */}
                         <LogOut size={24} color={themeColors.danger} /> 
                     </TouchableOpacity>
                 </View>
