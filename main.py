@@ -23,7 +23,7 @@ from models import (
     RoutineExercise, RoutineAssignment, 
     RoutineAssignmentCreate, RoutineAssignmentRead,
     ChangePassword,
-    RoutineCreateOrUpdate, # ?? Importamos el nuevo esquema de edici車n
+    RoutineCreateOrUpdate, # ?? Importamos el nuevo esquema de edicion
     # ?? NUEVOS: Importaciones de Grupo y Transaccional
     RoutineGroup, RoutineGroupCreate, RoutineGroupRead, RoutineGroupCreateAndRoutines 
 )
@@ -32,7 +32,7 @@ from models import (
 load_dotenv()
 
 # ----------------------------------------------------------------------
-# Configuraci車n de Seguridad y JWT
+# Configuracion de Seguridad y JWT
 # ----------------------------------------------------------------------
 pwd_context = CryptContext(schemes=["sha256_crypt"], deprecated="auto")
 SECRET_KEY = os.environ.get("SECRET_KEY", "CLAVE_SECRETA_DEFAULT_DEBES_CAMBIARLA")
@@ -59,7 +59,7 @@ def create_access_token(data: dict, expires_delta: timedelta | None = None) -> s
     return encoded_jwt
 
 # ----------------------------------------------------------------------
-# Eventos de la Aplicaci車n (Startup/Shutdown)
+# Eventos de la Aplicacion (Startup/Shutdown)
 # ----------------------------------------------------------------------
 
 @asynccontextmanager
@@ -71,7 +71,7 @@ async def lifespan(app: FastAPI):
     print("Apagando la aplicacion...")
 
 # ----------------------------------------------------------------------
-# Inicializaci車n de la Aplicaci車n
+# Inicializacion de la Aplicacion
 # ----------------------------------------------------------------------
 
 app = FastAPI(
@@ -81,7 +81,7 @@ app = FastAPI(
 )
 
 # ----------------------------------------------------------------------
-# Dependencias de Autenticaci車n y Autorizaci車n
+# Dependencias de Autenticacion y Autorizacion
 # ----------------------------------------------------------------------
 
 def get_current_user(
@@ -130,7 +130,7 @@ def get_current_student(current_user: Annotated[User, Depends(get_current_user)]
     return current_user
 
 # ----------------------------------------------------------------------
-# Rutas P迆blicas (Health Check y Autenticaci車n)
+# Rutas P迆blicas (Health Check y Autenticacion)
 # ----------------------------------------------------------------------
 
 @app.get("/", tags=["General"])
@@ -138,7 +138,7 @@ def read_root():
     return {"message": "API del Gestor de Rutinas de Gimnasio activa."}
 
 # NUEVA RUTA: Registro solo de Alumnos
-@app.post("/register/student", response_model=UserRead, status_code=status.HTTP_201_CREATED, tags=["Autenticaci車n"])
+@app.post("/register/student", response_model=UserRead, status_code=status.HTTP_201_CREATED, tags=["Autenticacion"])
 def register_student(
     user_data: UserCreate, # Se usa UserCreate, pero el rol se fuerza a Alumno
     session: Annotated[Session, Depends(get_session)]
@@ -174,7 +174,7 @@ def register_student(
     session.refresh(new_user)
     return new_user
 
-@app.post("/register", response_model=UserRead, status_code=status.HTTP_201_CREATED, tags=["Autenticaci車n"])
+@app.post("/register", response_model=UserRead, status_code=status.HTTP_201_CREATED, tags=["Autenticacion"])
 def register_user(
     user_data: UserCreate,
     session: Annotated[Session, Depends(get_session)]
@@ -210,7 +210,7 @@ def register_user(
     session.refresh(new_user)
     return new_user
 
-@app.post("/login", response_model=Token, tags=["Autenticaci車n"])
+@app.post("/login", response_model=Token, tags=["Autenticacion"])
 def login_for_access_token(
     form_data: UserLogin, # form_data tiene .dni y .password
     session: Annotated[Session, Depends(get_session)]
@@ -231,7 +231,7 @@ def login_for_access_token(
         )
     
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    # ?? CORRECCI車N CLAVE: Incluimos el nombre del usuario en el token.
+    # ?? CORRECCIoN CLAVE: Incluimos el nombre del usuario en el token.
     access_token = create_access_token(
         data={"dni": user.dni, "rol": user.rol.value, "nombre": user.nombre}, 
         expires_delta=access_token_expires
@@ -291,7 +291,7 @@ def read_students_list(
     return students
 
 # ----------------------------------------------------------------------
-# ?? NUEVA RUTA TRANSACCIONAL DE CREACI車N DE GRUPO Y RUTINAS
+# ?? NUEVA RUTA TRANSACCIONAL DE CREACIoN DE GRUPO Y RUTINAS
 # ----------------------------------------------------------------------
 
 @app.post("/routines-group/create-transactional", response_model=RoutineAssignmentRead, tags=["Rutinas"])
@@ -350,7 +350,7 @@ def create_routine_group_and_routines(
     
     # 4. Asignar la 迆LTIMA rutina creada al alumno
         
-    # 4a. Desactivar cualquier asignaci車n activa anterior del alumno (para que solo tenga una activa)
+    # 4a. Desactivar cualquier asignacion activa anterior del alumno (para que solo tenga una activa)
     statement_deactivate = (
         select(RoutineAssignment)
         .where(RoutineAssignment.student_id == data.student_id, RoutineAssignment.is_active == True)
@@ -361,7 +361,7 @@ def create_routine_group_and_routines(
         session.add(assignment)
     session.commit()
 
-    # 4b. Crear la nueva asignaci車n (usando la 迆ltima rutina)
+    # 4b. Crear la nueva asignacion (usando la 迆ltima rutina)
     assignment = RoutineAssignment(
         routine_id=last_routine.id,
         student_id=data.student_id,
@@ -372,7 +372,7 @@ def create_routine_group_and_routines(
     session.commit()
     session.refresh(assignment)
     
-    # 5. Cargar la asignaci車n con todas las relaciones para la respuesta
+    # 5. Cargar la asignacion con todas las relaciones para la respuesta
     statement_read = (
         select(RoutineAssignment)
         .where(RoutineAssignment.id == assignment.id)
@@ -585,7 +585,7 @@ def read_routines(
     Obtiene una lista de todas las rutinas maestras creadas por el profesor.
     """
     try:
-        # ?? CORRECCI車N/MEJORA: Forzamos la carga de relaciones anidadas (links + detalles del ejercicio + grupo)
+        # ?? CORRECCIoN/MEJORA: Forzamos la carga de relaciones anidadas (links + detalles del ejercicio + grupo)
         statement = (
             select(Routine)
             .where(Routine.owner_id == current_professor.id)
@@ -616,7 +616,7 @@ def read_routine(
     current_user: Annotated[User, Depends(get_current_user)]
 ):
     """Obtiene una rutina espec赤fica por su ID, incluyendo todos sus ejercicios."""
-    # ?? CORRECCI車N/MEJORA: Forzamos la carga de relaciones anidadas (links + detalles del ejercicio + grupo)
+    # ?? CORRECCIoN/MEJORA: Forzamos la carga de relaciones anidadas (links + detalles del ejercicio + grupo)
     statement = (
         select(Routine)
         .where(Routine.id == routine_id)
@@ -632,11 +632,11 @@ def read_routine(
     
     return routine
 
-# ?? RUTA ACTUALIZADA: EDICI車N COMPLETA (Metadata y Ejercicios)
+# ?? RUTA ACTUALIZADA: EDICIoN COMPLETA (Metadata y Ejercicios)
 @app.patch("/routines/{routine_id}", response_model=RoutineRead, tags=["Rutinas"])
 def update_routine_full(
     routine_id: int,
-    routine_data: RoutineCreateOrUpdate, # ?? Usamos el esquema de actualizaci車n completa
+    routine_data: RoutineCreateOrUpdate, # ?? Usamos el esquema de actualizacion completa
     session: Annotated[Session, Depends(get_session)],
     current_professor: Annotated[User, Depends(get_current_professor)]
 ):
@@ -647,7 +647,7 @@ def update_routine_full(
     if db_routine.owner_id != current_professor.id:
         raise HTTPException(status_code=403, detail="No autorizado para editar esta rutina")
 
-    # 1. Actualizar metadata (Nombre/Descripci車n)
+    # 1. Actualizar metadata (Nombre/Descripcion)
     db_routine.nombre = routine_data.nombre
     db_routine.descripcion = routine_data.descripcion
     
@@ -723,7 +723,7 @@ def delete_routine(
     return
 
 # ----------------------------------------------------------------------
-# Rutas de Asignaci車n (Profesor y Alumno)
+# Rutas de Asignacion (Profesor y Alumno)
 # ----------------------------------------------------------------------
 
 # --- Rutas del Profesor ---
@@ -746,7 +746,7 @@ def assign_routine_to_student(
     if not student or student.rol != UserRole.STUDENT:
         raise HTTPException(status_code=404, detail="Alumno no encontrado")
         
-    # 3. Crear la nueva asignaci車n
+    # 3. Crear la nueva asignacion
     db_assignment = RoutineAssignment(
         student_id=student.id,
         routine_id=routine.id,
@@ -761,15 +761,15 @@ def assign_routine_to_student(
         session.refresh(db_assignment)
     except Exception as e:
         session.rollback()
-        print(f"ERROR DB ASIGNACI車N: {e}")
+        print(f"ERROR DB ASIGNACIoN: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
-            detail=f"Fallo al guardar la asignaci車n en DB. {e}"
+            detail=f"Fallo al guardar la asignacion en DB. {e}"
         )
         
     return db_assignment
 
-# ?? RUTA EXISTENTE: PATCH para cambiar el estado de activaci車n de una asignaci車n
+# ?? RUTA EXISTENTE: PATCH para cambiar el estado de activacion de una asignacion
 @app.patch("/assignments/{assignment_id}/active", response_model=RoutineAssignmentRead, tags=["Asignaciones"])
 def set_assignment_active_status(
     assignment_id: int,
@@ -824,7 +824,7 @@ def get_my_active_routine(
             RoutineAssignment.student_id == current_student.id,
             RoutineAssignment.is_active == True # ?? FILTRO CR赤TICO: Solo rutinas activas
         )
-        # ?? Ordenamos por fecha de asignaci車n descendente.
+        # ?? Ordenamos por fecha de asignacion descendente.
         .order_by(desc(RoutineAssignment.assigned_at)) 
         # Cargamos las relaciones anidadas
         .options(
@@ -840,7 +840,7 @@ def get_my_active_routine(
     
     active_assignments = session.exec(statement).all()
     
-    # ?? CORRECCI車N APLICADA: Devolvemos una lista vac赤a en lugar de un error 404.
+    # ?? CORRECCIoN APLICADA: Devolvemos una lista vac赤a en lugar de un error 404.
     if not active_assignments:
         return []
         
