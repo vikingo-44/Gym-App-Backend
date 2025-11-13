@@ -24,6 +24,7 @@ from models import (
     Routine, RoutineCreate, RoutineRead, RoutineUpdate,
     RoutineExercise, RoutineAssignment, 
     RoutineAssignmentCreate, RoutineAssignmentRead,
+    RoutineAssignmentUpdate,
     ChangePassword,
     RoutineCreateOrUpdate, 
     # ?? Importaciones de Grupo y Transaccional
