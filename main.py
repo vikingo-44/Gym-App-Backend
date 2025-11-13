@@ -659,6 +659,73 @@ def read_routine(
     
     return routine
 
+# --- Ruta para actualizar el estado (Inactivar/Activar) ---
+@app.patch("/assignments/{assignment_id}", tags=["Profesor"], response_model=RoutineAssignmentRead)
+def update_assignment_status(
+    assignment_id: int,
+    assignment_update: RoutineAssignmentUpdate, # Usamos el nuevo esquema simple
+    session: Annotated[Session, Depends(get_session)],
+    current_professor: Annotated[User, Depends(get_current_professor)]
+):
+    """(Profesor) Permite actualizar el estado (is_active) de una asignacion."""
+    assignment = session.get(RoutineAssignment, assignment_id)
+    
+    if not assignment:
+        raise HTTPException(status_code=404, detail="Asignacion no encontrada.")
+
+    # ?? Opcional: Verificar que el profesor sea due?o (basado en el profesor que la asigno)
+    if assignment.professor_id != current_professor.id:
+        raise HTTPException(status_code=403, detail="No tienes permiso para modificar esta asignacion.")
+        
+    # Aplicar solo la actualizacion de is_active
+    update_data = assignment_update.model_dump(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(assignment, key, value)
+    
+    session.add(assignment)
+    session.commit()
+    session.refresh(assignment)
+    return assignment
+    
+# --- Ruta para eliminar un grupo de asignaciones para un alumno especifico ---
+@app.delete("/assignments/group/{routine_group_id}/student/{student_id}", tags=["Profesor"])
+def delete_assignment_group_for_student(
+    routine_group_id: int,
+    student_id: int,
+    session: Annotated[Session, Depends(get_session)],
+    current_professor: Annotated[User, Depends(get_current_professor)]
+):
+    """(Profesor) Elimina todas las asignaciones de rutina de un RoutineGroup ID especifico para un ALUMNO especifico."""
+    
+    # 1. Encontrar todas las rutinas vinculadas a ese grupo
+    routine_statement = select(Routine).where(Routine.routine_group_id == routine_group_id)
+    routines = session.exec(routine_statement).all()
+    
+    if not routines:
+        # Esto no deberia ocurrir si el frontend esta bien, pero es una proteccion
+        raise HTTPException(status_code=404, detail="No hay rutinas vinculadas a este grupo.")
+
+    routine_ids = [r.id for r in routines]
+
+    # 2. Encontrar y eliminar las asignaciones especificas para este alumno y estas rutinas
+    assignment_statement = select(RoutineAssignment).where(
+        RoutineAssignment.routine_id.in_(routine_ids),
+        RoutineAssignment.student_id == student_id,
+        RoutineAssignment.professor_id == current_professor.id # ?? Solo asignaciones creadas por el profesor actual
+    )
+    assignments_to_delete = session.exec(assignment_statement).all()
+
+    if not assignments_to_delete:
+        raise HTTPException(status_code=404, detail="No se encontraron asignaciones para este grupo en el alumno.")
+
+    # 3. Eliminar las asignaciones
+    for assignment in assignments_to_delete:
+        session.delete(assignment)
+        
+    session.commit()
+    
+    return {"message": f"Se eliminaron {len(assignments_to_delete)} asignaciones de grupo para el alumno."}
+
 # ?? RUTA ACTUALIZADA: EDICIoN COMPLETA (Metadata y Ejercicios)
 @app.patch("/routines/{routine_id}", response_model=RoutineRead, tags=["Rutinas"])
 def update_routine_full(
@@ -966,7 +1033,7 @@ def get_assignments_for_student_by_professor(
 
 # --- Rutas del Alumno (Continuacion) ---
 
-# Reemplaza la funci車n en tu main.py con la siguiente versi車n corregida:
+# Reemplaza la funcion en tu main.py con la siguiente version corregida:
 
 @app.get("/students/me/routine", response_model=List[RoutineAssignmentRead], tags=["Alumnos"])
 def get_my_active_routine(
@@ -977,7 +1044,7 @@ def get_my_active_routine(
     (Alumno) Obtiene SOLAMENTE las rutinas asignadas que estan marcadas como activas.
     Si la asignacion es parte de un grupo, devuelve TODAS las rutinas de ese grupo.
     """
-    # 1. Buscar la asignaci車n activa (el "ancla")
+    # 1. Buscar la asignacion activa (el "ancla")
     statement = (
         select(RoutineAssignment)
         .where(
@@ -993,7 +1060,7 @@ def get_my_active_routine(
                 .selectinload(RoutineExercise.exercise)
         )
     )
-    # Solo necesitamos la m芍s reciente
+    # Solo necesitamos la mas reciente
     active_assignment = session.exec(statement).first()
     
     if not active_assignment:
@@ -1003,7 +1070,7 @@ def get_my_active_routine(
     if active_assignment.routine.routine_group_id:
         routine_group_id = active_assignment.routine.routine_group_id
         
-        # 3. Traer TODAS las rutinas de ese grupo (D赤a 1, D赤a 2, etc.)
+        # 3. Traer TODAS las rutinas de ese grupo (Dia 1, Dia 2, etc.)
         routine_statement = (
             select(Routine)
             .where(Routine.routine_group_id == routine_group_id)
@@ -1022,13 +1089,13 @@ def get_my_active_routine(
 
             # Creamos un objeto RoutineAssignmentRead para cada rutina en el grupo
             pseudo_assignment_data = RoutineAssignmentRead(
-                # Usamos el ID de la asignaci車n original para la que es la "ancla"
+                # Usamos el ID de la asignacion original para la que es la "ancla"
                 id=active_assignment.id if is_the_original_assigned_routine else -(routine.id),
                 routine_id=routine.id,
                 student_id=active_assignment.student_id,
                 professor_id=active_assignment.professor_id,
                 assigned_at=active_assignment.assigned_at,
-                is_active=True, # Todas las rutinas del grupo activo se consideran "activas" para visualizaci車n
+                is_active=True, # Todas las rutinas del grupo activo se consideran "activas" para visualizacion
                 routine=routine,
                 student=active_assignment.student,
                 professor=active_assignment.professor
@@ -1037,5 +1104,5 @@ def get_my_active_routine(
             
         return expanded_assignments
         
-    # 5. Si no hay grupo (rutina simple antigua), devuelve la asignaci車n original
+    # 5. Si no hay grupo (rutina simple antigua), devuelve la asignacion original
     return [active_assignment]
