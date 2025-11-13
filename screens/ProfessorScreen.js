@@ -407,7 +407,7 @@ function AssignmentView({ student, routines, onAssignmentComplete, onCancel, nav
     const handleDeleteAssignment = (assignmentId) => {
         Alert.alert(
             "Confirmar Eliminacion",
-            "?Estas seguro de que quieres eliminar esta asignacion de rutina?",
+            "¿Estas seguro de que quieres eliminar esta asignación de rutina?",
             [
                 {
                     text: "Cancelar",
@@ -428,13 +428,13 @@ function AssignmentView({ student, routines, onAssignmentComplete, onCancel, nav
                             
                             await axios.delete(`${API_URL}/assignments/${assignmentId}`, { headers });
                             
-                            Alert.alert("Exito", "Asignacion eliminada correctamente.");
+                            Alert.alert("Éxito", "Asignación eliminada correctamente.");
                             
                             fetchCurrentAssignments();
                             
                         } catch (e) {
-                            console.error("Error eliminando asignacion:", e.response ? e.response.data : e.message);
-                            Alert.alert("Error", "Fallo al eliminar la asignacion.");
+                            console.error("Error eliminando asignación:", e.response ? e.response.data : e.message);
+                            Alert.alert("Error", "Fallo al eliminar la asignación.");
                         }
                     }
                 }
@@ -453,13 +453,13 @@ function AssignmentView({ student, routines, onAssignmentComplete, onCancel, nav
 
             await axios.patch(`${API_URL}/assignments/${assignmentId}/active?is_active=${newStatus}`, null, { headers });
 
-            Alert.alert("Exito", `Rutina ${newStatus ? 'activada' : 'inactivada'} correctamente.`);
+            Alert.alert("Éxito", `Rutina ${newStatus ? 'activada' : 'inactivada'} correctamente.`);
             
             fetchCurrentAssignments();
 
         } catch (e) {
             console.error("Error cambiando estado:", e.response ? e.response.data : e.message);
-            Alert.alert("Error", "Fallo al cambiar el estado de la asignacion.");
+            Alert.alert("Error", "Fallo al cambiar el estado de la asignación.");
         }
     };
 
@@ -487,15 +487,15 @@ function AssignmentView({ student, routines, onAssignmentComplete, onCancel, nav
                 headers: { 'Authorization': `Bearer ${token}` }
             });
 
-            Alert.alert("Exito", `Rutina asignada a ${student.nombre}.`);
+            Alert.alert("Éxito", `Rutina asignada a ${student.nombre}.`);
             fetchCurrentAssignments(); 
         } catch (e) {
             console.error("Error asignando rutina:", e.response ? e.response.data : e.message);
-            let errorMessage = "Fallo al asignar la rutina. Verifica la conexion o backend.";
+            let errorMessage = "Fallo al asignar la rutina. Verifica la conexión o backend.";
             if (e.response && e.response.data && e.response.data.detail) {
                 errorMessage = `Error de API: ${JSON.stringify(e.response.data.detail)}`;
             } else if (e.response && (e.response.status === 401 || e.response.status === 403)) {
-                errorMessage = "Token expirado o no autorizado. Vuelve a iniciar sesion.";
+                errorMessage = "Token expirado o no autorizado. Vuelve a iniciar sesión.";
             }
             Alert.alert("Error", errorMessage);
         } finally {
@@ -508,7 +508,7 @@ function AssignmentView({ student, routines, onAssignmentComplete, onCancel, nav
     // ----------------------------------------------------------------
     const getGroupedAssignments = () => {
         const groups = {};
-        // Expresion regular para encontrar el patron " - Dia X"
+        // Expresión regular para encontrar el patron " - Dia X"
         const dayPattern = / - Dia \d+$/;
 
         for (const assignment of currentAssignments) {
@@ -522,7 +522,7 @@ function AssignmentView({ student, routines, onAssignmentComplete, onCancel, nav
                 groupName = assignment.routine.routine_group.nombre;
                 groupExpiryDate = assignment.routine.routine_group.fecha_vencimiento;
             } else {
-                // Si no hay grupo, usamos la logica de deteccion por sufijo para rutinas antiguas.
+                // Si no hay grupo, usamos la lógica de detección por sufijo para rutinas antiguas.
                 const match = fullName.match(dayPattern);
                 if (match) {
                     groupName = fullName.substring(0, fullName.length - match[0].length).trim();
@@ -704,13 +704,14 @@ const getMainScreenStyles = (colors) => StyleSheet.create({
         backgroundColor: colors.card,
         borderRadius: 10,
         padding: 15,
-        marginHorizontal: 20,
+        marginHorizontal: 0, // Eliminamos el margin horizontal para que se vea bien en FlatList
         marginBottom: 10,
         shadowColor: colors.isDark ? '#000' : '#444',
         shadowOffset: { width: 0, height: 1 },
         shadowOpacity: colors.isDark ? 0.4 : 0.1,
         shadowRadius: 2,
         elevation: 2,
+        width: '100%', // Aseguramos el ancho completo dentro del padding de ScrollView
     },
     studentName: {
         fontSize: 18,
@@ -721,11 +722,25 @@ const getMainScreenStyles = (colors) => StyleSheet.create({
         fontSize: 14,
         color: colors.textSecondary,
     },
-    assignButtonText: {
-        fontSize: 14,
-        fontWeight: 'bold',
-        color: colors.warning, 
+    // 🚨 NUEVOS ESTILOS PARA LOS BOTONES EN LA TARJETA
+    studentCardActions: {
+        flexDirection: 'row',
+        gap: 10,
     },
+    actionButton: {
+        paddingVertical: 8,
+        paddingHorizontal: 12,
+        borderRadius: 8,
+        alignItems: 'center',
+        justifyContent: 'center',
+        minWidth: 80, // Ancho mínimo para que quepa el texto
+    },
+    actionButtonText: {
+        fontSize: 13,
+        fontWeight: 'bold',
+        color: colors.card,
+    },
+    // FIN NUEVOS ESTILOS 🚨
     warningTextCenter: {
         color: colors.warning,
         textAlign: 'center',
@@ -810,7 +825,7 @@ const getMainScreenStyles = (colors) => StyleSheet.create({
         fontWeight: '600',
         padding: 5,
     },
-    // ?? ESTILOS DEL WIZARD
+    // ?? ESTILOS DEL WIZARD (se mantienen)
     wizardContainer: {
         flex: 1,
         padding: 20,
@@ -916,7 +931,7 @@ function CreationWizardSimplified({ students, onCancel, navigation }) {
             case 1:
                 return (
                     <>
-                        <Text style={styles.stepText}>Paso 1 de 3: Nombre Generico de la Agrupacion</Text>
+                        <Text style={styles.stepText}>Paso 1 de 3: Nombre Genérico de la Agrupación</Text>
                         <TextInput
                             style={styles.wizardInput}
                             placeholder="Ej: Rutina Bloque A / Mes 1"
@@ -926,18 +941,18 @@ function CreationWizardSimplified({ students, onCancel, navigation }) {
                             autoFocus
                         />
                         <Text style={styles.warningTextCenter}>
-                            Este nombre agrupara las rutinas (Dia 1, Dia 2, etc.)
+                            Este nombre agrupará las rutinas (Día 1, Día 2, etc.)
                         </Text>
                     </>
                 );
             case 2:
                 return (
                     <>
-                        <Text style={styles.stepText}>Paso 2 de 3: Configuracion de la Agrupacion</Text>
+                        <Text style={styles.stepText}>Paso 2 de 3: Configuración de la Agrupación</Text>
                         
                         <Text style={styles.label}>Cantidad de Rutinas:</Text>
                         <Text style={styles.warningTextCenter}>
-                            (Minimo 1, Maximo 5 rutinas)
+                            (Mínimo 1, Máximo 5 rutinas)
                         </Text>
                         <View style={styles.routineCounter}>
                             <TouchableOpacity 
@@ -973,7 +988,7 @@ function CreationWizardSimplified({ students, onCancel, navigation }) {
                             Formato AAAA-MM-DD requerido por la API. Esta fecha debe ser futura.
                         </Text>
                         
-                        <Text style={styles.studentEmail}>Agrupacion: {routineName.trim()} | Vence: {expirationDate.trim() || '[Fecha Requerida]'}</Text>
+                        <Text style={styles.studentEmail}>Agrupación: {routineName.trim()} | Vence: {expirationDate.trim() || '[Fecha Requerida]'}</Text>
                     </>
                 );
             case 3:
@@ -1006,7 +1021,7 @@ function CreationWizardSimplified({ students, onCancel, navigation }) {
                                 <Text style={styles.warningTextCenter}>No se encontraron alumnos.</Text>
                             )}
                         </ScrollView>
-                        <Text style={styles.studentEmail}>Agrupacion: {routineName.trim()} | Vence: {expirationDate.trim()}</Text>
+                        <Text style={styles.studentEmail}>Agrupación: {routineName.trim()} | Vence: {expirationDate.trim()}</Text>
                     </>
                 );
             default:
@@ -1017,7 +1032,7 @@ function CreationWizardSimplified({ students, onCancel, navigation }) {
     const nextStep = () => {
         if (step === 1) {
             if (!routineName.trim()) {
-                Alert.alert("Error", "Debes ingresar un nombre para la agrupacion.");
+                Alert.alert("Error", "Debes ingresar un nombre para la agrupación.");
                 return;
             }
             setStep(2);
@@ -1029,7 +1044,7 @@ function CreationWizardSimplified({ students, onCancel, navigation }) {
             // ?? NUEVA VALIDACION DE FECHA (Formato AAAA-MM-DD)
             const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
             if (!dateRegex.test(expirationDate.trim())) {
-                 Alert.alert("Error", "Debes ingresar una fecha de vencimiento valida en formato AAAA-MM-DD.");
+                 Alert.alert("Error", "Debes ingresar una fecha de vencimiento válida en formato AAAA-MM-DD.");
                  return;
             }
 
@@ -1064,7 +1079,7 @@ function CreationWizardSimplified({ students, onCancel, navigation }) {
 
                 <View style={styles.wizardActions}>
                     <Button 
-                        title="< Atras" 
+                        title="< Atrás" 
                         onPress={() => setStep(step - 1)} 
                         disabled={step === 1}
                         color={themeColors.textSecondary}
@@ -1121,14 +1136,14 @@ export default function ProfessorScreen({ navigation }) {
             let errorMsg;
             
             if (e.message === 'Network Error') {
-                errorMsg = "Error de Red. Verifica la URL de Render o la conexion del servidor.";
+                errorMsg = "Error de Red. Verifica la URL de Render o la conexión del servidor.";
             } else if (e.response && (e.response.status === 401 || e.response.status === 403)) {
-                errorMsg = "Sesion invalida o expirada. Saliendo...";
+                errorMsg = "Sesión inválida o expirada. Saliendo...";
                 signOut(); 
             } else if (e.response && e.response.status === 500) {
                  errorMsg = "Error interno del servidor (500) al cargar listas. Base de datos inconsistente.";
             } else {
-                errorMsg = "Error al cargar datos. Token invalido o backend.";
+                errorMsg = "Error al cargar datos. Token inválido o backend.";
             }
             
             setDataError(errorMsg); 
@@ -1138,7 +1153,15 @@ export default function ProfessorScreen({ navigation }) {
     };
     
     // ----------------------------------------------------------------
-    // FUNCION: Cierre de Sesion y Contrasena (Modal)
+    // FUNCIÓN: NAVEGAR A EDICIÓN DE DETALLES DEL ALUMNO (NUEVA)
+    // ----------------------------------------------------------------
+    const handleEditStudent = (studentData) => {
+        // 🚨 Navega a la nueva pantalla 'StudentDetails'
+        navigation.navigate('StudentDetails', { student: studentData });
+    };
+
+    // ----------------------------------------------------------------
+    // FUNCIÓN: Cierre de Sesion y Contrasena (Modal)
     // ----------------------------------------------------------------
     const handleChangePassword = () => {
         setIsMenuVisible(false); // Cierra el modal
@@ -1181,12 +1204,12 @@ export default function ProfessorScreen({ navigation }) {
         return (
              <SafeAreaView style={styles.container}>
                  <View style={styles.errorView}>
-                     <Text style={styles.errorTitle}>!Error de Conexion!</Text>
+                     <Text style={styles.errorTitle}>!Error de Conexión!</Text>
                      <Text style={styles.errorDetail}>{dataError}</Text>
                      <View style={{marginTop: 20}}>
                          <Button title="Intentar de Nuevo" onPress={fetchData} color={themeColors.primary} />
                      </View>
-                     {dataError !== "Sesion invalida o expirada. Saliendo..." && (
+                     {dataError !== "Sesión inválida o expirada. Saliendo..." && (
                          <View style={{marginTop: 10}}>
                              <Button title="Salir" onPress={signOut} color={themeColors.danger} />
                          </View>
@@ -1200,7 +1223,7 @@ export default function ProfessorScreen({ navigation }) {
         return (
             <SafeAreaView style={styles.loadingContainer}>
                 <ActivityIndicator size="large" color={themeColors.primary} />
-                <Text style={{ color: themeColors.textSecondary, marginTop: 10 }}>Cargando panel de gestion...</Text>
+                <Text style={{ color: themeColors.textSecondary, marginTop: 10 }}>Cargando panel de gestión...</Text>
             </SafeAreaView>
         );
     }
@@ -1283,17 +1306,35 @@ export default function ProfessorScreen({ navigation }) {
                 <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 20, paddingTop: 10 }}>
                     {filteredStudents.length > 0 ? (
                         filteredStudents.map((item) => (
-                            <TouchableOpacity 
+                            <View 
                                 key={item.id.toString()}
                                 style={styles.studentCard}
-                                onPress={() => setSelectedStudent(item)} // Clic para GESTIONAR ASIGNACION
                             >
                                 <View>
                                     <Text style={styles.studentName}>{item.nombre}</Text>
                                     <Text style={styles.studentEmail}>{item.email}</Text>
                                 </View>
-                                <Text style={styles.assignButtonText}>GESTIONAR {'>>'}</Text>
-                            </TouchableOpacity>
+                                
+                                {/* 🚨 NUEVOS BOTONES DE ACCIÓN */}
+                                <View style={styles.studentCardActions}>
+                                    {/* Botón 1: Gestionar Rutina */}
+                                    <TouchableOpacity 
+                                        style={[styles.actionButton, {backgroundColor: themeColors.warning}]}
+                                        onPress={() => setSelectedStudent(item)} // Va a AssignmentView
+                                    >
+                                        <Text style={styles.actionButtonText}>Rutina</Text>
+                                    </TouchableOpacity>
+
+                                    {/* Botón 2: Editar Datos */}
+                                    <TouchableOpacity 
+                                        style={[styles.actionButton, {backgroundColor: themeColors.primary}]}
+                                        onPress={() => handleEditStudent(item)} // Va a la nueva pantalla de edición
+                                    >
+                                        <Text style={styles.actionButtonText}>Editar</Text>
+                                    </TouchableOpacity>
+                                </View>
+                                
+                            </View>
                         ))
                     ) : (
                         <View style={{ padding: 20, alignItems: 'center' }}>
@@ -1321,17 +1362,17 @@ export default function ProfessorScreen({ navigation }) {
                         {/* Opcion 1: Cambiar Contrasena */}
                         <TouchableOpacity style={styles.menuItem} onPress={handleChangePassword}>
                             <Key size={18} color={themeColors.textPrimary} /> 
-                            <Text style={styles.menuItemText}>Cambiar Contrasena</Text>
+                            <Text style={styles.menuItemText}>Cambiar Contraseña</Text>
                         </TouchableOpacity>
                         
                         {/* Opcion 2: Cerrar Sesion */}
                         <TouchableOpacity style={styles.menuItem} onPress={handleLogout}>
                             <LogOut size={18} color={themeColors.danger} />
-                            <Text style={styles.menuItemTextLogout}>Cerrar Sesion</Text>
+                            <Text style={styles.menuItemTextLogout}>Cerrar Sesión</Text>
                         </TouchableOpacity>
                         
                         <TouchableOpacity style={[styles.menuItem, styles.menuItemClose]} onPress={() => setIsMenuVisible(false)}>
-                            <Text style={styles.menuItemTextClose}>Cerrar Menu</Text>
+                            <Text style={styles.menuItemTextClose}>Cerrar Menú</Text>
                         </TouchableOpacity>
 
                     </View>

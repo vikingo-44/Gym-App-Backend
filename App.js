@@ -14,6 +14,7 @@ import ProfessorScreen from './screens/ProfessorScreen';
 import CustomLoginScreen from './screens/CustomLoginScreen';
 import RoutineCreationScreen from './screens/RoutineCreationScreen';
 import ChangePasswordScreen from './screens/ChangePasswordScreen'; 
+import StudentDetailsScreen from './screens/StudentDetailsScreen';
 // ?? IMPORTACI¨®N CLAVE: Importamos el ThemeProvider y el hook (Asumiendo ThemeContext.js est¨¢ al mismo nivel)
 import { ThemeProvider, useTheme } from './ThemeContext'; 
 
@@ -617,6 +618,11 @@ export default function App() {
                                     component={RoutineCreationScreen} 
                                     options={{ title: 'Crear Rutina' }}
                                 />
+								<Stack.Screen 
+									name="StudentDetails" 
+									component={StudentDetailsScreen} 
+									options={{ title: 'Detalles del Alumno' }}
+								/>
                                 <Stack.Screen 
                                     name="ChangePassword" 
                                     component={ChangePasswordScreen} 
