@@ -318,6 +318,11 @@ class RoutineRead(BaseModel):
     class Config: 
         from_attributes = True
 
+# --- Esquemas de Actualizacion de Usuario (Profesor) ---
+class UserUpdateByProfessor(BaseModel):
+    nombre: Optional[str] = None
+    email: Optional[str] = None
+    dni: Optional[str] = None
 
 # --- Esquemas de Asignacion ---
 class RoutineAssignmentCreate(BaseModel):

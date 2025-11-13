@@ -291,7 +291,6 @@ def change_password(
     
     return {"message": "Contrase?a actualizada exitosamente."}
 
-
 @app.get("/users/students", response_model=List[UserReadSimple], tags=["Usuarios"])
 def read_students_list(
     session: Annotated[Session, Depends(get_session)],
@@ -300,6 +299,46 @@ def read_students_list(
     """Obtiene una lista de todos los usuarios con rol 'Alumno' (para asignar rutinas)."""
     students = session.exec(select(User).where(User.rol == UserRole.STUDENT)).all()
     return students
+
+@app.patch("/users/student/{student_id}", response_model=UserRead, tags=["Usuarios"])
+def update_student_data(
+    student_id: int,
+    user_data: UserUpdateByProfessor, # Usamos el nuevo esquema
+    session: Annotated[Session, Depends(get_session)],
+    current_professor: Annotated[User, Depends(get_current_professor)]
+):
+    """(Profesor) Permite actualizar el nombre, email o DNI de un alumno especifico."""
+    
+    # 1. Buscar al alumno
+    student_to_update = session.get(User, student_id)
+    
+    if not student_to_update or student_to_update.rol != UserRole.STUDENT:
+        raise HTTPException(status_code=404, detail="Alumno no encontrado.")
+        
+    # 2. Convertir el esquema a diccionario, excluyendo campos no seteados (omitidos)
+    update_data = user_data.model_dump(exclude_unset=True)
+    
+    # 3. Aplicar los cambios al objeto de la DB
+    for key, value in update_data.items():
+        # Validar si el DNI o Email ya existen en OTRO usuario
+        if key == 'email' and value is not None and value.lower() != student_to_update.email.lower():
+            existing_user = session.exec(select(User).where(func.lower(User.email) == value.lower())).first()
+            if existing_user:
+                raise HTTPException(status_code=400, detail="El nuevo email ya esta en uso.")
+        
+        if key == 'dni' and value is not None and value != student_to_update.dni:
+            existing_user = session.exec(select(User).where(User.dni == value)).first()
+            if existing_user:
+                raise HTTPException(status_code=400, detail="El nuevo DNI ya esta en uso.")
+                
+        setattr(student_to_update, key, value)
+        
+    # 4. Guardar los cambios
+    session.add(student_to_update)
+    session.commit()
+    session.refresh(student_to_update)
+    
+    return student_to_update
 
 # ----------------------------------------------------------------------
 # ?? Rutas de Ejercicios (CRUD - RESTAURADAS)
