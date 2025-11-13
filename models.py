@@ -1,4 +1,3 @@
-
 from typing import Optional, List
 from sqlmodel import Field, SQLModel, Relationship
 # ?? AGREGADO: Importamos date para la fecha de vencimiento
@@ -41,6 +40,8 @@ class RoutineExercise(SQLModel, table=True):
     
     sets: int
     repetitions: str
+    # ?? NUEVO CAMPO: Almacena el peso o tipo de resistencia (ej: "10 kg", "Peso corporal", "Banda")
+    peso: str = Field(default="N/A", max_length=50) 
     order: int
     
     routine: "Routine" = Relationship(back_populates="exercise_links")
@@ -264,6 +265,8 @@ class RoutineExerciseRead(BaseModel):
     # Campos del enlace (series, repeticiones, orden)
     sets: int
     repetitions: str
+    # ?? NUEVO: Campo para el peso
+    peso: str 
     order: int
     
     # El ejercicio real al que enlaza (anidado)
@@ -278,6 +281,8 @@ class RoutineExerciseCreate(BaseModel):
     exercise_id: int
     sets: int
     repetitions: str
+    # ?? NUEVO: Campo para el peso (Input)
+    peso: str
     order: int
 
 class RoutineCreate(BaseModel):
