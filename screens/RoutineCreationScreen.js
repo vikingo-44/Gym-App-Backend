@@ -17,7 +17,7 @@ const API_URL = "https://gym-app-backend-e9bn.onrender.com";
 // Componente para un solo ejercicio
 const ExerciseItem = ({ index, exercise, updateExercise, removeExercise, toggleSelector }) => {
     
-    // 🚨 Función centralizada de cambio para Series/Repeticiones
+    // 🚨 Función centralizada de cambio para Series/Repeticiones/Peso
     const handleChange = (field, value) => {
         updateExercise(index, field, value);
     };
@@ -61,6 +61,16 @@ const ExerciseItem = ({ index, exercise, updateExercise, removeExercise, toggleS
                     onChangeText={(text) => handleChange('repetitions', text)}
                 />
             </View>
+            
+            {/* 🚨 NUEVO: Input de Peso/Resistencia (Full Width) */}
+            <TextInput
+                style={[exerciseStyles.input, { width: '100%', marginBottom: 10 }]}
+                placeholder="Peso/Resistencia (ej: 20 kg, N/A, Bandas)"
+                placeholderTextColor="#A0A0A0"
+                keyboardType="default" 
+                value={exercise.peso}
+                onChangeText={(text) => handleChange('peso', text)}
+            />
         </View>
     );
 };
@@ -165,6 +175,8 @@ export default function RoutineCreationScreen({ navigation }) {
                         name: link.exercise?.nombre || 'Ejercicio Desconocido',
                         series: String(link.sets),
                         repetitions: link.repetitions,
+                        // 🚨 NUEVO: Cargar el campo peso desde la API
+                        peso: link.peso || 'N/A', 
                     }));
                 
                 // Cargar la rutina de edición en la posición 0
@@ -201,6 +213,8 @@ export default function RoutineCreationScreen({ navigation }) {
             name: '', 
             series: '', 
             repetitions: '', 
+            // 🚨 NUEVO: Inicializar campo peso
+            peso: 'N/A', 
         }];
         setRoutineData('exercises', newExercises);
     };
@@ -248,6 +262,7 @@ export default function RoutineCreationScreen({ navigation }) {
             !ex.exercise_id || !ex.series.trim() || !ex.repetitions.trim() || 
             isNaN(parseInt(ex.series)) || parseInt(ex.series) <= 0
         );
+        // NOTA: El campo 'peso' no se hace obligatorio ya que puede ser 'N/A'
 
         if (invalidExercise) {
             Alert.alert("Error de Validación", `En "${currentRoutine.name}": Todos los ejercicios deben estar seleccionados y tener Series (entero positivo) y Repeticiones válidas.`);
@@ -293,6 +308,8 @@ export default function RoutineCreationScreen({ navigation }) {
                     exercise_id: ex.exercise_id,
                     sets: parseInt(ex.series),
                     repetitions: ex.repetitions.trim(),
+                    // 🚨 INCLUIR PESO EN EL PAYLOAD
+                    peso: ex.peso.trim() || 'N/A', 
                     order: exIndex + 1
                 }))
             }))
@@ -344,7 +361,9 @@ export default function RoutineCreationScreen({ navigation }) {
                 exercises: currentRoutine.exercises.map((ex, index) => ({ 
                     exercise_id: ex.exercise_id, 
                     sets: parseInt(ex.series), 
-                    repetitions: currentRoutine.repetitions.trim(), 
+                    repetitions: ex.repetitions.trim(), 
+                    // 🚨 INCLUIR PESO EN EL PAYLOAD
+                    peso: ex.peso.trim() || 'N/A', 
                     order: index + 1 
                 }))
             };
@@ -752,7 +771,6 @@ const exerciseStyles = StyleSheet.create({
         paddingHorizontal: 10,
         fontSize: 14,
         color: '#1F2937',
-        width: '48%', 
     },
     smallInput: {
         width: '48%', 
