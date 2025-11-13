@@ -37,7 +37,7 @@ load_dotenv()
 pwd_context = CryptContext(schemes=["sha256_crypt"], deprecated="auto")
 SECRET_KEY = os.environ.get("SECRET_KEY", "CLAVE_SECRETA_DEFAULT_DEBES_CAMBIARLA")
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 # Token de 1 d¨ªa
+ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 # Token de 1 dia
 
 http_bearer = HTTPBearer()
 
@@ -97,7 +97,7 @@ def get_current_user(
     )
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        # El DNI est¨¢ en el campo 'sub'
+        # El DNI esta en el campo 'sub'
         dni: str = payload.get("sub")
         if dni is None:
             raise credentials_exception
@@ -130,7 +130,7 @@ def get_current_student(current_user: Annotated[User, Depends(get_current_user)]
     return current_user
 
 # ----------------------------------------------------------------------
-# Rutas P¨²blicas (Health Check y Autenticacion)
+# Rutas Publicas (Health Check y Autenticacion)
 # ----------------------------------------------------------------------
 
 @app.get("/", tags=["General"])
@@ -149,7 +149,7 @@ def register_student(
     if existing_dni:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="El DNI ya est¨¢ registrado."
+            detail="El DNI ya esta registrado."
         )
     
     # 2. Verificar si Email ya existe
@@ -157,10 +157,10 @@ def register_student(
     if existing_email:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="El email ya est¨¢ registrado."
+            detail="El email ya esta registrado."
         )
 
-    # ?? NOTA: Se asume que el backend maneja el l¨ªmite de 72 bytes para el password hash
+    # ?? NOTA: Se asume que el backend maneja el limite de 72 bytes para el password hash
     hashed_password = get_password_hash(user_data.password)
     new_user = User(
         email=user_data.email,
@@ -185,7 +185,7 @@ def register_user(
     if existing_dni:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="El DNI ya est¨¢ registrado."
+            detail="El DNI ya esta registrado."
         )
         
     # 2. Verificar si Email ya existe
@@ -193,10 +193,10 @@ def register_user(
     if existing_user:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="El email ya est¨¢ registrado."
+            detail="El email ya esta registrado."
         )
 
-    # ?? NOTA: Se asume que el backend maneja el l¨ªmite de 72 bytes para el password hash
+    # ?? NOTA: Se asume que el backend maneja el limite de 72 bytes para el password hash
     hashed_password = get_password_hash(user_data.password)
     new_user = User(
         email=user_data.email,
@@ -216,10 +216,10 @@ def login_for_access_token(
     session: Annotated[Session, Depends(get_session)]
 ):
     
-    # ?? B¨²squeda por EMAIL (asumiendo que el campo 'dni' en el payload del frontend es el Email)
+    # ?? Busqueda por EMAIL (asumiendo que el campo 'dni' en el payload del frontend es el Email)
     user = session.exec(select(User).where(User.email == form_data.dni)).first()
     
-    # Si la b¨²squeda por email falla, intentar por DNI (fallback)
+    # Si la busqueda por email falla, intentar por DNI (fallback)
     if not user:
         user = session.exec(select(User).where(User.dni == form_data.dni)).first()
     
@@ -264,7 +264,7 @@ def change_password(
             detail="Contrase?a antigua incorrecta."
         )
 
-    # 2. Verificar la longitud de la nueva contrase?a (buena pr¨¢ctica)
+    # 2. Verificar la longitud de la nueva contrase?a (buena practica)
     if len(password_data.new_password) < 6:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -318,7 +318,7 @@ def create_routine_group_and_routines(
     # 3. Crear las Rutinas individuales y asociarlas al grupo
     last_routine = None
     if not data.routines:
-        raise HTTPException(status_code=400, detail="La lista de rutinas no puede estar vac¨ªa.")
+        raise HTTPException(status_code=400, detail="La lista de rutinas no puede estar vacia.")
 
     for routine_data in data.routines:
         
@@ -348,7 +348,7 @@ def create_routine_group_and_routines(
 
         last_routine = routine_model
     
-    # 4. Asignar la ¨²LTIMA rutina creada al alumno
+    # 4. Asignar la uLTIMA rutina creada al alumno
         
     # 4a. Desactivar cualquier asignacion activa anterior del alumno (para que solo tenga una activa)
     statement_deactivate = (
@@ -361,12 +361,12 @@ def create_routine_group_and_routines(
         session.add(assignment)
     session.commit()
 
-    # 4b. Crear la nueva asignacion (usando la ¨²ltima rutina)
+    # 4b. Crear la nueva asignacion (usando la ultima rutina)
     assignment = RoutineAssignment(
         routine_id=last_routine.id,
         student_id=data.student_id,
         professor_id=current_professor.id,
-        is_active=True # Se activa autom¨¢ticamente
+        is_active=True # Se activa automaticamente
     )
     session.add(assignment)
     session.commit()
@@ -615,7 +615,7 @@ def read_routine(
     session: Annotated[Session, Depends(get_session)],
     current_user: Annotated[User, Depends(get_current_user)]
 ):
-    """Obtiene una rutina espec¨ªfica por su ID, incluyendo todos sus ejercicios."""
+    """Obtiene una rutina especifica por su ID, incluyendo todos sus ejercicios."""
     # ?? CORRECCIoN/MEJORA: Forzamos la carga de relaciones anidadas (links + detalles del ejercicio + grupo)
     statement = (
         select(Routine)
@@ -706,7 +706,7 @@ def delete_routine(
     session: Annotated[Session, Depends(get_session)],
     current_professor: Annotated[User, Depends(get_current_professor)]
 ):
-    """Elimina una rutina maestra. Esto tambi¨¦n eliminar¨¢ los enlaces en RoutineExercise y asignaciones."""
+    """Elimina una rutina maestra. Esto tambien eliminara los enlaces en RoutineExercise y asignaciones."""
     db_routine = session.get(Routine, routine_id)
     if not db_routine:
         raise HTTPException(status_code=404, detail="Rutina no encontrada")
@@ -734,7 +734,7 @@ def assign_routine_to_student(
     session: Annotated[Session, Depends(get_session)],
     current_professor: Annotated[User, Depends(get_current_professor)]
 ):
-    """(Profesor) Asigna una rutina a un alumno. Permite m¨²ltiples asignaciones (no desactiva las antiguas)."""
+    """(Profesor) Asigna una rutina a un alumno. Permite multiples asignaciones (no desactiva las antiguas)."""
     
     # 1. Verificar que la rutina exista
     routine = session.get(Routine, assignment_data.routine_id)
@@ -773,7 +773,7 @@ def assign_routine_to_student(
 @app.patch("/assignments/{assignment_id}/active", response_model=RoutineAssignmentRead, tags=["Asignaciones"])
 def set_assignment_active_status(
     assignment_id: int,
-    is_active: bool, # Nuevo par¨¢metro booleano para el estado
+    is_active: bool, # Nuevo parametro booleano para el estado
     session: Annotated[Session, Depends(get_session)],
     current_professor: Annotated[User, Depends(get_current_professor)]
 ):
@@ -816,13 +816,13 @@ def get_my_active_routine(
     current_student: Annotated[User, Depends(get_current_student)]
 ):
     """
-    (Alumno) Obtiene SOLAMENTE las rutinas asignadas que est¨¢n marcadas como activas (is_active=True).
+    (Alumno) Obtiene SOLAMENTE las rutinas asignadas que estan marcadas como activas (is_active=True).
     """
     statement = (
         select(RoutineAssignment)
         .where(
             RoutineAssignment.student_id == current_student.id,
-            RoutineAssignment.is_active == True # ?? FILTRO CR¨ªTICO: Solo rutinas activas
+            RoutineAssignment.is_active == True # ?? FILTRO CRiTICO: Solo rutinas activas
         )
         # ?? Ordenamos por fecha de asignacion descendente.
         .order_by(desc(RoutineAssignment.assigned_at)) 
@@ -840,7 +840,7 @@ def get_my_active_routine(
     
     active_assignments = session.exec(statement).all()
     
-    # ?? CORRECCIoN APLICADA: Devolvemos una lista vac¨ªa en lugar de un error 404.
+    # ?? CORRECCIoN APLICADA: Devolvemos una lista vacia en lugar de un error 404.
     if not active_assignments:
         return []
         
