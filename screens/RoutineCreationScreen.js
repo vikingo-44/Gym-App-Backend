@@ -239,15 +239,6 @@ export default function RoutineCreationScreen({ navigation }) {
             return false;
         }
         
-        // La descripción se deja opcional aquí, asumiendo que el campo 'descripcion' del grupo se usa como base
-        // Si el cliente quiere que sea obligatoria, se debe añadir:
-        /*
-        if (!currentRoutine.description.trim()) {
-            Alert.alert("Error", `La descripción de la rutina es obligatoria.`);
-            return false;
-        }
-        */
-
         if (currentRoutine.exercises.length === 0) {
             Alert.alert("Error", `La rutina "${currentRoutine.name}" debe tener al menos un ejercicio.`);
             return false;
@@ -296,7 +287,7 @@ export default function RoutineCreationScreen({ navigation }) {
             fecha_vencimiento: expirationDate,
             student_id: studentId,
             routines: allRoutinesData.map((routine, index) => ({
-                nombre: routine.name, // Nombre de la rutina (Bloque A - Día X)
+                nombre: routine.name, // Nombre de la rutina (Bloque A - Día X o el nombre personalizado)
                 descripcion: routine.description.trim() || null,
                 exercises: routine.exercises.map((ex, exIndex) => ({
                     exercise_id: ex.exercise_id,
@@ -311,6 +302,7 @@ export default function RoutineCreationScreen({ navigation }) {
             const token = await getToken();
             const headers = { 'Authorization': `Bearer ${token}` };
 
+            // 🚨 Llamada al nuevo endpoint transaccional
             await axios.post(`${API_URL}/routines-group/create-transactional`, payload, { headers });
             
             Alert.alert(
@@ -352,7 +344,7 @@ export default function RoutineCreationScreen({ navigation }) {
                 exercises: currentRoutine.exercises.map((ex, index) => ({ 
                     exercise_id: ex.exercise_id, 
                     sets: parseInt(ex.series), 
-                    repetitions: ex.repetitions.trim(), 
+                    repetitions: currentRoutine.repetitions.trim(), 
                     order: index + 1 
                 }))
             };
@@ -464,13 +456,13 @@ export default function RoutineCreationScreen({ navigation }) {
                     {/* INPUT NOMBRE RUTINA */}
                     <Text style={styles.label}>Nombre de la Rutina (Día {currentDay}):</Text>
                     <TextInput
-                        // Solo es editable si es Edición o si es una creación de 1 solo día
-                        style={[styles.input, !isEditMode && totalDays > 1 && styles.inputDisabled]}
+                        // 🚨 MODIFICACIÓN CLAVE: Quitamos la restricción de estilo y editable para multi-días
+                        style={styles.input} 
                         placeholder="e.g., Rutina Hipertrofia Día A"
                         placeholderTextColor="#A0A0A0"
                         value={currentRoutine.name}
                         onChangeText={(text) => setRoutineData('name', text)}
-                        editable={isEditMode || totalDays === 1} 
+                        editable={true} // Siempre editable en esta vista (a menos que sea modo edición y necesite ser forzado a read-only, pero aquí queremos que sea editable)
                     />
                     
                     {/* INPUT DESCRIPCIÓN */}
@@ -602,7 +594,7 @@ const styles = StyleSheet.create({
         marginBottom: 15,
         color: '#1F2937',
     },
-    inputDisabled: { // Estilo para el nombre no editable en multi-días
+    inputDisabled: { // ESTO YA NO SE USA EN EL NOMBRE DE RUTINA
         backgroundColor: '#E5E7EB',
         color: '#9CA3AF',
     },
