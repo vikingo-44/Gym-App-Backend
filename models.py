@@ -54,6 +54,11 @@ class RoutineAssignment(SQLModel, table=True):
     
     id: Optional[int] = Field(default=None, primary_key=True)
     
+    # --- Esquemas de Asignacion (Actualizacion) ---
+    # ?? NUEVO ESQUEMA: Solo para actualizar el estado activo/inactivo
+class RoutineAssignmentUpdate(BaseModel):
+        is_active: Optional[bool] = None
+
     # --- Relaciones (Claves Foraneas) ---
     student_id: int = Field(foreign_key="USERS.id", index=True)
     routine_id: int = Field(foreign_key="ROUTINES.id", index=True)
