@@ -1,13 +1,13 @@
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useState, useEffect, useContext, useMemo } from 'react';
 import { 
-    StyleSheet, Text, View, ScrollView, SafeAreaView, TouchableOpacity, 
-    ActivityIndicator, Alert
+    StyleSheet, Text, View, ScrollView, SafeAreaView, Button, 
+    ActivityIndicator, FlatList, TouchableOpacity, Alert, Modal,
+    TextInput 
 } from 'react-native';
 import axios from 'axios';
-import { AuthContext } from '../App';
-import { useTheme } from '../ThemeContext';
-// 🚨 ICONOS NECESARIOS (Deben estar instalados: npm install lucide-react-native)
-import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
+import { AuthContext } from '../App'; 
+import { useTheme } from '../ThemeContext'; 
+// ?? Importamos ChevronDown/Up para el efecto colapsable
 import { Trash2, Edit, RefreshCcw, Settings, Key, LogOut, Minus, Plus, ChevronDown, ChevronUp } from 'lucide-react-native'; 
 
 // URL de la API (Asegúrate que esta URL coincida con la de tu App.js/Backend)
