@@ -7,7 +7,8 @@ import axios from 'axios';
 import { AuthContext } from '../App';
 import { useTheme } from '../ThemeContext';
 // 🚨 ICONOS NECESARIOS (Deben estar instalados: npm install lucide-react-native)
-import { RefreshCcw, LogOut, ChevronDown, ChevronUp } from 'lucide-react-native'; 
+import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
+import { Trash2, Edit, RefreshCcw, Settings, Key, LogOut, Minus, Plus, ChevronDown, ChevronUp } from 'lucide-react-native'; 
 
 // URL de la API (Asegúrate que esta URL coincida con la de tu App.js/Backend)
 const API_URL = "https://gym-app-backend-e9bn.onrender.com"; 
