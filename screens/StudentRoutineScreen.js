@@ -1,17 +1,293 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { 
     StyleSheet, Text, View, ScrollView, SafeAreaView, TouchableOpacity, 
-    ActivityIndicator, Button 
+    ActivityIndicator, Button, Alert
 } from 'react-native';
 import axios from 'axios';
-// Asegúrate de que estas importaciones están disponibles
-import { RefreshCcw, LogOut } from 'lucide-react-native'; 
+import { AuthContext } from '../App';
+import { useTheme } from '../ThemeContext';
+// 🚨 ICONOS NECESARIOS: RefreshCcw, LogOut, ChevronDown, ChevronUp
+import { RefreshCcw, LogOut, ChevronDown, ChevronUp } from 'lucide-react-native'; 
 
-// NOTA: Reemplaza con tu URL de Ngrok
 const API_URL = "https://gym-app-backend-e9bn.onrender.com"; 
 
+// ----------------------------------------------------------------------
+// GENERADOR DE ESTILOS DINÁMICOS (Basado en ProfessorScreen)
+// ----------------------------------------------------------------------
+const getStudentStyles = (colors) => StyleSheet.create({
+    container: {
+        flex: 1,
+        backgroundColor: colors.background,
+    },
+    loadingContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: colors.background,
+    },
+    header: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        padding: 15,
+        backgroundColor: colors.card,
+        borderBottomWidth: 1,
+        borderBottomColor: colors.divider,
+        elevation: 2,
+    },
+    headerTitle: {
+        fontSize: 22,
+        fontWeight: 'bold',
+        color: colors.primary,
+    },
+    headerButtons: {
+        flexDirection: 'row',
+        gap: 15,
+    },
+    iconButton: {
+        padding: 8,
+        borderRadius: 8,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    content: {
+        flex: 1,
+        padding: 20,
+    },
+    mainTitle: {
+        fontSize: 24,
+        fontWeight: 'bold',
+        color: colors.textPrimary,
+        marginBottom: 20,
+    },
+    errorText: {
+        color: colors.danger,
+        fontWeight: '600',
+        marginTop: 10,
+        textAlign: 'center',
+        backgroundColor: colors.isDark ? colors.danger + '30' : '#FFEBEE',
+        padding: 10,
+        borderRadius: 8,
+        marginBottom: 20,
+    },
+    noRoutineContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 40,
+        backgroundColor: colors.card,
+        borderRadius: 12,
+        marginTop: 50,
+        borderWidth: 1,
+        borderColor: colors.warning,
+    },
+    noRoutineText: {
+        fontSize: 22,
+        fontWeight: 'bold',
+        color: colors.warning,
+        marginBottom: 10,
+        textAlign: 'center',
+    },
+    noRoutineSubText: {
+        fontSize: 16,
+        color: colors.textSecondary,
+        textAlign: 'center',
+    },
+    // --- ESTILOS DE LA TARJETA COLAPSABLE ---
+    routineMainCard: {
+        backgroundColor: colors.card,
+        borderRadius: 12,
+        marginBottom: 15,
+        shadowColor: colors.isDark ? '#000' : '#444',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: colors.isDark ? 0.3 : 0.1,
+        shadowRadius: 3,
+        elevation: 3,
+        borderLeftWidth: 6,
+        borderLeftColor: colors.primary,
+        overflow: 'hidden',
+    },
+    cardHeader: {
+        padding: 15,
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+    },
+    routineTitle: {
+        fontSize: 18,
+        fontWeight: '700',
+        color: colors.textPrimary,
+        marginBottom: 5,
+    },
+    routineGroup: {
+        fontSize: 14,
+        color: colors.textSecondary,
+        marginBottom: 2,
+    },
+    assignedBy: {
+        fontSize: 12,
+        color: colors.textSecondary,
+        fontStyle: 'italic',
+        marginBottom: 10,
+    },
+    toggleIndicator: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginTop: 5,
+    },
+    // Estilos del contenido expandido
+    exerciseListContainer: {
+        paddingTop: 15,
+        paddingHorizontal: 15,
+        paddingBottom: 15,
+        borderTopWidth: 1,
+        borderTopColor: colors.divider,
+        backgroundColor: colors.isDark ? colors.background : '#F7F7F7',
+    },
+    exerciseItem: {
+        paddingLeft: 10,
+        paddingVertical: 8,
+        borderLeftWidth: 2,
+        borderLeftColor: colors.highlight,
+        marginBottom: 8,
+    },
+    exerciseName: {
+        fontSize: 16,
+        fontWeight: '700',
+        color: colors.textPrimary,
+        marginBottom: 5,
+    },
+    detailsRow: {
+        flexDirection: 'row',
+        justifyContent: 'flex-start',
+        gap: 15,
+        marginTop: 5,
+    },
+    detailItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: colors.highlight,
+        borderRadius: 6,
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+    },
+    detailLabel: {
+        fontSize: 12,
+        color: colors.textSecondary,
+        marginRight: 4,
+        fontWeight: '500',
+    },
+    detailValue: {
+        fontSize: 14,
+        fontWeight: 'bold',
+        color: colors.primaryDark,
+    },
+});
+
+// ----------------------------------------------------------------------
+// COMPONENTE: Tarjeta Colapsable de Rutina (Alumno)
+// ----------------------------------------------------------------------
+const CollapsibleRoutineCard = ({ assignment, styles, themeColors }) => {
+    
+    const [isExpanded, setIsExpanded] = useState(false);
+    const routine = assignment.routine;
+    const linkCount = routine?.exercise_links ? routine.exercise_links.length : 0;
+    
+    // Formateo de fecha (si existe)
+    const formattedExpiryDate = routine?.routine_group?.fecha_vencimiento 
+        ? `Vence: ${routine.routine_group.fecha_vencimiento}` 
+        : 'Vencimiento: N/A';
+
+    // Renderiza la lista de ejercicios (solo cuando se expande)
+    const renderExercises = () => (
+        <View style={styles.exerciseListContainer}>
+            <Text style={{ fontSize: 13, fontWeight: 'bold', color: themeColors.textPrimary, marginBottom: 10 }}>Detalle de Ejercicios:</Text>
+            {routine.exercise_links
+                .sort((a, b) => a.order - b.order)
+                .map((link, exIndex) => (
+                    <View key={link.id || exIndex} style={styles.exerciseItem}>
+                        <Text style={styles.exerciseName}>
+                            {link.order}. {link.exercise?.nombre ?? 'Ejercicio Desconocido'}
+                        </Text>
+                        
+                        <View style={styles.detailsRow}>
+                            {/* Sets */}
+                            <View style={styles.detailItem}>
+                                <Text style={styles.detailLabel}>Sets:</Text>
+                                <Text style={styles.detailValue}>{link.sets}</Text>
+                            </View>
+
+                            {/* Reps */}
+                            <View style={styles.detailItem}>
+                                <Text style={styles.detailLabel}>Reps:</Text>
+                                <Text style={styles.detailValue}>{link.repetitions}</Text>
+                            </View>
+
+                            {/* Peso (usando '-' si es nulo) */}
+                            <View style={styles.detailItem}>
+                                <Text style={styles.detailLabel}>Peso:</Text>
+                                <Text style={styles.detailValue}>{link.peso || '-'}</Text>
+                            </View>
+                        </View>
+                    </View>
+                ))}
+        </View>
+    );
+
+    return (
+        <View style={styles.routineMainCard}>
+            
+            <TouchableOpacity 
+                style={styles.cardHeader}
+                onPress={() => setIsExpanded(!isExpanded)}
+                activeOpacity={0.8}
+            >
+                <View style={{flex: 1}}>
+                    <Text style={styles.routineTitle}>
+                        {routine?.nombre ?? 'Rutina Sin Título'}
+                    </Text>
+                    {routine?.routine_group?.nombre && (
+                         <Text style={styles.routineGroup}>
+                            Grupo: {routine.routine_group.nombre}
+                        </Text>
+                    )}
+                    <Text style={styles.routineGroup}>{formattedExpiryDate}</Text>
+                    
+                    <View style={styles.toggleIndicator}>
+                        {isExpanded ? 
+                            <ChevronUp size={16} color={themeColors.primary} /> : 
+                            <ChevronDown size={16} color={themeColors.primary} />
+                        }
+                        <Text style={{marginLeft: 5, color: themeColors.primary, fontSize: 13, fontWeight: '500'}}>
+                            {isExpanded ? 'COLAPSAR' : `VER ${linkCount} EJERCICIOS`}
+                        </Text>
+                    </View>
+                </View>
+
+                <View style={{alignItems: 'flex-end'}}>
+                     <Text style={[styles.detailValue, {color: themeColors.success}]}>
+                         {assignment.is_active ? 'ACTIVA' : 'INACTIVA'}
+                    </Text>
+                    <Text style={styles.assignedBy}>
+                        Profesor: {assignment.professor?.nombre ?? 'Desconocido'}
+                    </Text>
+                </View>
+                
+            </TouchableOpacity>
+
+            {/* Contenido Colapsable */}
+            {isExpanded && renderExercises()}
+        </View>
+    );
+}
+
 // --- PANTALLA DE RUTINA (ALUMNO) ---
-function StudentRoutineScreen() {
+export default function StudentRoutineScreen() {
+    
+    // 🚨 Usamos useTheme
+    const { colors: themeColors } = useTheme();
+    const styles = getStudentStyles(themeColors);
+
     const [activeAssignments, setActiveAssignments] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -36,7 +312,6 @@ function StudentRoutineScreen() {
             const assignments = response.data; 
 
             if (assignments && assignments.length > 0) {
-                // Filtro extra en caso de que existan asignaciones con routine=null
                 const validAssignments = assignments.filter(a => a.routine !== null);
                 setActiveAssignments(validAssignments);
                 if (validAssignments.length === 0) {
@@ -53,7 +328,9 @@ function StudentRoutineScreen() {
             if (e.response && (e.response.status === 404 || e.response.data?.detail === "No tienes ninguna rutina activa asignada.")) {
                 setError("No tienes ninguna rutina activa asignada.");
             } else {
-                setError("Error al cargar la rutina. Verifica la conexión o backend.");
+                // Usamos Alert para errores críticos (ej: red o token)
+                Alert.alert("Error de Conexión", "Fallo al cargar la rutina. Verifica tu conexión o token.");
+                setError("Error al cargar la rutina. Revisa tu conexión.");
             }
         } finally {
             // Un pequeño retraso para que la UX se sienta mejor
@@ -69,57 +346,43 @@ function StudentRoutineScreen() {
         fetchRoutine();
     };
 
+
     if (isLoading) {
         return (
             <SafeAreaView style={styles.loadingContainer}>
-                <ActivityIndicator size="large" color="#007AFF" />
-                <Text style={{ marginTop: 10, color: '#555' }}>Cargando tus rutinas...</Text>
+                <ActivityIndicator size="large" color={themeColors.primary} />
+                <Text style={{ marginTop: 10, color: themeColors.textSecondary }}>Cargando tus rutinas...</Text>
             </SafeAreaView>
         );
     }
 
-    // --- Componente de Tarjeta de Ejercicio ---
-    const ExerciseCard = ({ link }) => (
-        <View style={styles.exerciseCard}>
-            <Text style={styles.exerciseOrder}>{link.order?.toString()}</Text>
-            <View style={styles.exerciseContent}>
-                <Text style={styles.exerciseName}>{link.exercise?.nombre ?? 'Ejercicio Desconocido'}</Text>
-                <View style={styles.exerciseDetails}>
-                    <Text style={styles.exerciseReps}>{link.sets?.toString()} series de {link.repetitions} reps</Text>
-                    <Text style={styles.exerciseGroup}>{link.exercise?.grupo_muscular ?? 'N/A'}</Text>
-                </View>
-            </View>
-        </View>
-    );
-
     return (
         <SafeAreaView style={styles.container}>
             
-            {/* 🚨 CABECERA ESTILIZADA con botones */}
+            {/* CABECERA ESTILIZADA con botones */}
             <View style={styles.header}>
-                <Text style={styles.headerTitle}>Tu Panel de Rutinas</Text>
+                <Text style={styles.headerTitle}>Mi Plan de Entrenamiento</Text>
                 <View style={styles.headerButtons}>
                     {/* Botón Refrescar */}
                     <TouchableOpacity 
                         onPress={handleRefresh} 
-                        style={styles.refreshButton}
+                        style={styles.iconButton}
                         disabled={isLoading}
                     >
-                        <RefreshCcw size={24} color="#007AFF" />
+                        <RefreshCcw size={24} color={themeColors.primaryDark} />
                     </TouchableOpacity>
                     {/* Botón Cerrar Sesión */}
                     <TouchableOpacity 
                         onPress={signOut} 
-                        style={styles.logoutButton}
+                        style={styles.iconButton}
                     >
-                        <LogOut size={24} color="#FF3B30" />
+                        <LogOut size={24} color={themeColors.danger} />
                     </TouchableOpacity>
                 </View>
             </View>
             
-            <ScrollView style={styles.content}>
+            <ScrollView contentContainerStyle={styles.content}>
                 
-                {/* Título y Mensaje de Error/Vacío */}
                 <View style={styles.mainContentHeader}>
                     <Text style={styles.mainTitle}>Tus Rutinas Activas ({activeAssignments.length})</Text>
                     {error && error !== "No tienes ninguna rutina activa asignada." && <Text style={styles.errorText}>{error}</Text>}
@@ -127,27 +390,13 @@ function StudentRoutineScreen() {
 
                 {activeAssignments.length > 0 ? (
                     activeAssignments.map((assignment, assignmentIndex) => (
-                        // Tarjeta Principal de Rutina
-                        <View key={assignment.id?.toString() ?? assignmentIndex.toString()} style={styles.routineMainCard}>
-                            
-                            <Text style={styles.routineTitle}>
-                                {assignment.routine?.nombre ?? 'Rutina Sin Título'}
-                            </Text>
-                            <Text style={styles.routineDescription}>
-                                {assignment.routine?.descripcion ?? 'Sin descripción.'}
-                            </Text>
-                            <Text style={styles.assignedBy}>
-                                Asignada por: {assignment.professor?.nombre ?? 'Profesor Desconocido'}
-                            </Text>
-                            
-                            {/* Lista de Ejercicios */}
-                            <View style={styles.exerciseListContainer}>
-                                <Text style={styles.sectionTitle}>Ejercicios:</Text>
-                                {assignment.routine?.exercise_links?.map((link, index) => (
-                                    <ExerciseCard key={link.exercise?.id?.toString() ?? index.toString()} link={link} />
-                                ))}
-                            </View>
-                        </View>
+                        // 🚨 USAMOS EL NUEVO COMPONENTE COLAPSABLE
+                        <CollapsibleRoutineCard 
+                            key={assignment.id?.toString() ?? assignmentIndex.toString()} 
+                            assignment={assignment}
+                            styles={styles}
+                            themeColors={themeColors}
+                        />
                     ))
                 ) : (
                     // Mensaje cuando no hay rutina activa
@@ -160,185 +409,3 @@ function StudentRoutineScreen() {
         </SafeAreaView>
     );
 }
-
-// --- ESTILOS MEJORADOS ---
-const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: '#F0F4F8', // Fondo azul claro/grisáceo
-    },
-    loadingContainer: {
-        flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-        backgroundColor: '#F0F4F8',
-    },
-    // Estilos de la nueva cabecera
-    header: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        padding: 15,
-        backgroundColor: '#FFFFFF',
-        borderBottomWidth: 1,
-        borderBottomColor: '#E0E0E0',
-        elevation: 2, // Sombra suave
-    },
-    headerTitle: {
-        fontSize: 18,
-        fontWeight: '700',
-        color: '#1F2937',
-    },
-    headerButtons: {
-        flexDirection: 'row',
-        gap: 15, // Espacio entre botones de la cabecera
-    },
-    refreshButton: {
-        padding: 5,
-        borderRadius: 5,
-    },
-    logoutButton: {
-        padding: 5,
-        borderRadius: 5,
-    },
-    // Contenido principal
-    content: {
-        flex: 1,
-        padding: 15,
-    },
-    mainContentHeader: {
-        marginBottom: 20,
-    },
-    mainTitle: {
-        fontSize: 24,
-        fontWeight: 'bold',
-        color: '#1F2937',
-        marginBottom: 5,
-    },
-    errorText: {
-        color: '#FF3B30',
-        fontWeight: '600',
-        marginTop: 10,
-        textAlign: 'center',
-        backgroundColor: '#FFEBEE',
-        padding: 10,
-        borderRadius: 8,
-    },
-    // Tarjeta de Rutina Maestra
-    routineMainCard: {
-        backgroundColor: '#FFFFFF',
-        borderRadius: 12,
-        padding: 20,
-        marginBottom: 25,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.1,
-        shadowRadius: 5,
-        elevation: 5,
-        borderLeftWidth: 6,
-        borderLeftColor: '#007AFF', // Azul primario
-    },
-    routineTitle: {
-        fontSize: 22,
-        fontWeight: '800',
-        color: '#1F2937',
-        marginBottom: 5,
-    },
-    routineDescription: {
-        fontSize: 14,
-        color: '#6B7280',
-        marginBottom: 10,
-    },
-    assignedBy: {
-        fontSize: 12,
-        color: '#9CA3AF',
-        marginBottom: 15,
-        fontStyle: 'italic',
-    },
-    statusText: {
-        fontSize: 14,
-        fontWeight: 'bold',
-        color: '#10B981', // Verde
-        marginBottom: 15,
-    },
-    exerciseListContainer: {
-        borderTopWidth: 1,
-        borderTopColor: '#E5E7EB',
-        paddingTop: 15,
-    },
-    sectionTitle: {
-        fontSize: 18,
-        fontWeight: '700',
-        color: '#1F2937',
-        marginBottom: 10,
-    },
-    // Tarjeta de Ejercicio
-    exerciseCard: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: '#F9FAFB',
-        borderRadius: 8,
-        padding: 12,
-        marginBottom: 8,
-        borderLeftWidth: 3,
-        borderLeftColor: '#007AFF', // Azul
-    },
-    exerciseOrder: {
-        fontSize: 18,
-        fontWeight: 'bold',
-        color: '#007AFF',
-        marginRight: 15,
-        width: 25,
-        textAlign: 'center',
-    },
-    exerciseContent: {
-        flex: 1,
-    },
-    exerciseName: {
-        fontSize: 16,
-        fontWeight: '600',
-        color: '#1F2937',
-    },
-    exerciseDetails: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        marginTop: 4,
-    },
-    exerciseReps: {
-        fontSize: 13,
-        color: '#4B5563',
-        fontWeight: '500',
-    },
-    exerciseGroup: {
-        fontSize: 12,
-        color: '#9CA3AF',
-        backgroundColor: '#E5E7EB',
-        paddingHorizontal: 6,
-        paddingVertical: 2,
-        borderRadius: 4,
-    },
-    // Contenedor sin rutinas
-    noRoutineContainer: {
-        flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-        padding: 40,
-        backgroundColor: '#FFFFFF',
-        borderRadius: 12,
-        marginTop: 50,
-        borderWidth: 1,
-        borderColor: '#FFD700',
-    },
-    noRoutineText: {
-        fontSize: 22,
-        fontWeight: 'bold',
-        color: '#FF9500', // Naranja/Dorado
-        marginBottom: 10,
-        textAlign: 'center',
-    },
-    noRoutineSubText: {
-        fontSize: 16,
-        color: '#666',
-        textAlign: 'center',
-    }
-});
