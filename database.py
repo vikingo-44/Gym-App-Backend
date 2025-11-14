@@ -17,7 +17,13 @@ if not DATABASE_URL:
 
 
 # Configuración del motor de conexión.
-engine = create_engine(DATABASE_URL, echo=True)
+engine = create_engine(
+    DATABASE_URL, 
+    pool_recycle=300, 
+    echo=True, # Puedes quitar esto en producción
+    connect_args={"options": "-c timezone=utc"},
+    encoding="utf8" 
+)
 
 # ----------------------------------------------------------------------
 # Funciones de Utilidad
