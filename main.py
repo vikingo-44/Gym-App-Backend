@@ -1,5 +1,5 @@
 import os
-from datetime import datetime, timedelta, timezone, date # ?? AGREGADO: Importamos 'date'
+from datetime import datetime, timedelta, timezone, date # ?? CRiTICO: Importar 'date'
 from typing import Annotated, List, Optional
 from contextlib import asynccontextmanager
 
@@ -19,16 +19,16 @@ from dotenv import load_dotenv
 from database import create_db_and_tables, get_session
 from models import (
     User, UserCreate, UserRead, UserReadSimple, UserRole, UserLogin, Token,
-    # ?? Importaciones de EJERCICIOS
+    # Importaciones de EJERCICIOS
     Exercise, ExerciseCreate, ExerciseRead, ExerciseUpdate, MuscleGroup,
     Routine, RoutineCreate, RoutineRead, RoutineUpdate,
     RoutineExercise, RoutineAssignment, 
     RoutineAssignmentCreate, RoutineAssignmentRead,
-    # ?? SOLUCIoN: Importamos el esquema que faltaba para corregir el NameError
+    # Esquemas necesarios
     RoutineAssignmentUpdate, 
     ChangePassword,
     RoutineCreateOrUpdate, 
-    # ?? Importaciones de Grupo y Transaccional
+    # CRiTICO: Importaciones de Grupo y Transaccional
     RoutineGroup, RoutineGroupCreate, RoutineGroupRead, RoutineGroupCreateAndRoutines,
     UserUpdateByProfessor 
 )
@@ -168,7 +168,7 @@ def register_student(
             detail="El email ya esta registrado."
         )
 
-    # ?? NOTA: Se asume que el backend maneja el limite de 72 bytes para el password hash
+    # NOTA: Se asume que el backend maneja el limite de 72 bytes para el password hash
     hashed_password = get_password_hash(user_data.password)
     new_user = User(
         email=user_data.email,
@@ -205,7 +205,7 @@ def register_user(
             detail="El email ya esta registrado."
         )
 
-    # ?? NOTA: Se asume que el backend maneja el limite de 72 bytes para el password hash
+    # NOTA: Se asume que el backend maneja el limite de 72 bytes para el password hash
     hashed_password = get_password_hash(user_data.password)
     new_user = User(
         email=user_data.email,
@@ -226,7 +226,7 @@ def login_for_access_token(
 ):
     """Verifica credenciales (Email/DNI y Password) y devuelve un JWT para la sesion."""
     
-    # ?? Busqueda por EMAIL (asumiendo que el campo 'dni' en el payload del frontend es el Email)
+    # Busqueda por EMAIL (asumiendo que el campo 'dni' en el payload del frontend es el Email)
     user = session.exec(select(User).where(User.email == form_data.dni)).first()
     
     # Si la busqueda por email falla, intentar por DNI (fallback)
@@ -241,7 +241,7 @@ def login_for_access_token(
         )
     
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    # ?? CORRECCIoN CLAVE: Incluimos el nombre del usuario en el token.
+    # CORRECCIoN CLAVE: Incluimos el nombre del usuario en el token.
     access_token = create_access_token(
         data={"dni": user.dni, "rol": user.rol.value, "nombre": user.nombre}, 
         expires_delta=access_token_expires
@@ -259,7 +259,7 @@ def read_users_me(
     """Obtiene la informacion del usuario actualmente autenticado."""
     return current_user
 
-# ?? RUTA: CAMBIO DE CONTRASE?A
+# RUTA: CAMBIO DE CONTRASE?A
 @app.post("/users/change-password", tags=["Usuarios"])
 def change_password(
     password_data: ChangePassword, # Usamos el nuevo esquema ChangePassword
@@ -306,7 +306,7 @@ def read_students_list(
     students = session.exec(select(User).where(User.rol == UserRole.STUDENT)).all()
     return students
 
-# ?? NUEVA RUTA: Actualizar Datos del Alumno por el Profesor
+# RUTA: Actualizar Datos del Alumno por el Profesor
 @app.patch("/users/student/{student_id}", response_model=UserRead, tags=["Usuarios"])
 def update_student_data(
     student_id: int,
@@ -348,7 +348,7 @@ def update_student_data(
     return student_to_update
 
 # ----------------------------------------------------------------------
-# ?? Rutas de Ejercicios (CRUD - RESTAURADAS)
+# Rutas de Ejercicios (CRUD - RESTAURADAS)
 # ----------------------------------------------------------------------
 
 @app.post("/exercises/", response_model=List[ExerciseRead], status_code=status.HTTP_201_CREATED, tags=["Ejercicios"])
@@ -437,10 +437,10 @@ def delete_exercise(
 
 
 # ----------------------------------------------------------------------
-# ?? NUEVA RUTA TRANSACCIONAL DE CREACIoN DE GRUPO Y RUTINAS
+# ?? RUTA TRANSACCIONAL DE CREACIoN DE GRUPO Y RUTINAS (CORREGIDA)
 # ----------------------------------------------------------------------
 
-@app.post("/routines-group/create-transactional", response_model=List[RoutineAssignmentRead], tags=["Rutinas"]) # ?? MODIFICADO: Retorna lista para ProfessorScreen
+@app.post("/routines-group/create-transactional", response_model=List[RoutineAssignmentRead], tags=["Rutinas"])
 def create_routine_group_and_routines(
     data: RoutineGroupCreateAndRoutines,
     session: Annotated[Session, Depends(get_session)],
@@ -450,60 +450,64 @@ def create_routine_group_and_routines(
     (Profesor) Crea un nuevo grupo de rutinas, crea N rutinas individuales
     asociadas a ese grupo, y asigna CADA UNA al alumno.
     """
-    # 1. Validar Alumno
-    student = session.get(User, data.student_id)
-    if not student or student.rol != UserRole.STUDENT:
-        raise HTTPException(status_code=404, detail="Alumno no encontrado o rol incorrecto para la asignacion.")
+    try:
+        # 1. Validar Alumno y Dias
+        student = session.get(User, data.student_id)
+        if not student or student.rol != UserRole.STUDENT:
+            raise HTTPException(status_code=404, detail="Alumno no encontrado o rol incorrecto para la asignacion.")
 
-    # 2. Crear el Grupo de Rutinas (RoutineGroup)
-    routine_group = RoutineGroup(
-        nombre=data.nombre,
-        fecha_vencimiento=data.fecha_vencimiento,
-        professor_id=current_professor.id
-    )
-    session.add(routine_group)
-    session.commit()
-    session.refresh(routine_group)
-
-    # 3. Crear las Rutinas individuales y asociarlas al grupo y asignarlas
-    created_assignments = []
-    
-    # El frontend de ProfessorScreen.js ahora envia la cantidad de dias (days), no la lista de rutinas vacias
-    # Debemos generar N rutinas con nombres "Dia 1", "Dia 2", etc.
-    if data.days < 1:
-        raise HTTPException(status_code=400, detail="Debe crear al menos una rutina (dia).")
-
-    for day_number in range(1, data.days + 1):
-        
-        # 3a. Crear el modelo de Rutina, asociando al profesor y al nuevo grupo
-        routine_model = Routine(
-            nombre=f"{data.nombre} - Dia {day_number}",
-            descripcion=f"Rutina del Dia {day_number} para el grupo '{data.nombre}'.",
-            owner_id=current_professor.id,
-            routine_group_id=routine_group.id # ASOCIAR AL GRUPO
+        if data.days < 1:
+            raise HTTPException(status_code=400, detail="Debe crear al menos una rutina (dia).")
+            
+        # 2. Crear el Grupo de Rutinas (RoutineGroup)
+        # CRiTICO: data.fecha_vencimiento es el objeto date validado por Pydantic.
+        routine_group = RoutineGroup(
+            nombre=data.nombre,
+            # Aseguramos que la descripcion se use si existe en el esquema
+            descripcion=getattr(data, 'descripcion', None),
+            fecha_vencimiento=data.fecha_vencimiento, 
+            professor_id=current_professor.id
         )
-        session.add(routine_model)
-        session.commit()
-        session.refresh(routine_model)
-        
-        # 3b. Crear la asignacion (Activamos solo la primera o todas, por ahora, todas)
-        assignment = RoutineAssignment(
-            routine_id=routine_model.id,
-            student_id=data.student_id,
-            professor_id=current_professor.id,
-            is_active=True # Activamos todas por defecto.
-        )
-        session.add(assignment)
-        session.commit()
-        session.refresh(assignment)
+        session.add(routine_group)
+        session.flush() # ?? Flush 1: Obtiene ID del grupo
 
-        # Cargar la asignacion con las relaciones para devolver la lista completa
+        # 3. Crear las Rutinas individuales y asociarlas al grupo y asignarlas
+        created_assignment_ids = []
+        
+        for day_number in range(1, data.days + 1):
+            
+            # 3a. Crear el modelo de Rutina
+            routine_model = Routine(
+                nombre=f"{data.nombre} - Dia {day_number}",
+                descripcion=f"Rutina del Dia {day_number} para el grupo '{data.nombre}'.",
+                owner_id=current_professor.id,
+                routine_group_id=routine_group.id # ASOCIAR AL GRUPO
+            )
+            session.add(routine_model)
+            session.flush() # ?? Flush 2: Obtiene ID de la rutina
+            
+            # 3b. Crear la asignacion
+            assignment = RoutineAssignment(
+                routine_id=routine_model.id,
+                student_id=data.student_id,
+                professor_id=current_professor.id,
+                is_active=True 
+            )
+            session.add(assignment)
+            session.flush() # ?? Flush 3: Obtiene ID de la asignacion
+
+            created_assignment_ids.append(assignment.id) 
+
+        # 4. COMMIT uNICO: Si todo lo anterior funciono, confirmamos la transaccion.
+        session.commit()
+
+        # 5. Fetch todas las asignaciones recien creadas con las relaciones anidadas
         statement_read = (
             select(RoutineAssignment)
-            .where(RoutineAssignment.id == assignment.id)
+            .where(RoutineAssignment.id.in_(created_assignment_ids))
             .options(
                 selectinload(RoutineAssignment.routine)
-                    .selectinload(Routine.routine_group), # Cargar el grupo
+                    .selectinload(Routine.routine_group),
                 selectinload(RoutineAssignment.routine)
                     .selectinload(Routine.exercise_links)
                     .selectinload(RoutineExercise.exercise),
@@ -511,11 +515,18 @@ def create_routine_group_and_routines(
                 selectinload(RoutineAssignment.professor)
             )
         )
-        new_assignment = session.exec(statement_read).one()
-        created_assignments.append(new_assignment)
+        
+        final_assignments = session.exec(statement_read).all()
+        return final_assignments
 
-    # 4. Devolver la lista de asignaciones creadas (para que el frontend navegue al editor de la primera)
-    return created_assignments
+    except Exception as e:
+        session.rollback() # Si algo falla, se deshace todo
+        # Logging mejorado para ver el error real del backend (si no es 422)
+        print(f"ERROR: Fallo transaccional al crear grupo de rutinas: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
+            detail=f"Error transaccional en el servidor al crear grupo. Por favor, revisa el log del servidor."
+        )
 
 
 # ----------------------------------------------------------------------
@@ -530,7 +541,7 @@ def create_routine(
 ):
     """Crea una nueva rutina (plantilla) y la asocia con ejercicios."""
     
-    # ?? NOTA: Esta ruta no se utiliza con el nuevo flujo de creacion agrupada. 
+    # NOTA: Esta ruta no se utiliza con el nuevo flujo de creacion agrupada. 
     # Mantenemos la logica de asignacion que estaba para rutinas individuales.
     
     db_routine = Routine(
@@ -559,7 +570,7 @@ def create_routine(
             exercise_id=exercise.id,
             sets=exercise_link_data.sets,
             repetitions=exercise_link_data.repetitions,
-            peso=exercise_link_data.peso, # ?? AGREGADO: Campo peso
+            peso=exercise_link_data.peso, # AGREGADO: Campo peso
             order=exercise_link_data.order
         )
         session.add(link)
@@ -594,7 +605,7 @@ def read_routines(
     Obtiene una lista de todas las rutinas maestras creadas por el profesor.
     """
     try:
-        # ?? CORRECCIoN/MEJORA: Forzamos la carga de relaciones anidadas (links + detalles del ejercicio + grupo)
+        # CORRECCIoN/MEJORA: Forzamos la carga de relaciones anidadas (links + detalles del ejercicio + grupo)
         statement = (
             select(Routine)
             .where(Routine.owner_id == current_professor.id)
@@ -625,12 +636,12 @@ def read_routine(
     current_user: Annotated[User, Depends(get_current_user)]
 ):
     """Obtiene una rutina especifica por su ID, incluyendo todos sus ejercicios."""
-    # ?? CORRECCIoN/MEJORA: Forzamos la carga de relaciones anidadas (links + detalles del ejercicio + grupo)
+    # CORRECCIoN/MEJORA: Forzamos la carga de relaciones anidadas (links + detalles del ejercicio + grupo)
     statement = (
         select(Routine)
         .where(Routine.id == routine_id)
         .options(
-            selectinload(Routine.routine_group), # ?? Cargar el grupo
+            selectinload(Routine.routine_group), # Cargar el grupo
             selectinload(Routine.exercise_links).selectinload(RoutineExercise.exercise)
         )
     )
@@ -641,11 +652,11 @@ def read_routine(
     
     return routine
 
-# ?? RUTA CRiTICA CORREGIDA: PATCH para cambiar el estado de activacion de una asignacion
+# RUTA CRiTICA CORREGIDA: PATCH para cambiar el estado de activacion de una asignacion
 @app.patch("/assignments/{assignment_id}", response_model=RoutineAssignmentRead, tags=["Asignaciones"])
 def set_assignment_active_status(
     assignment_id: int,
-    assignment_update: RoutineAssignmentUpdate, # ?? Ahora recibe el modelo Pydantic del cuerpo JSON
+    assignment_update: RoutineAssignmentUpdate, # Ahora recibe el modelo Pydantic del cuerpo JSON
     session: Annotated[Session, Depends(get_session)],
     current_professor: Annotated[User, Depends(get_current_professor)]
 ):
@@ -655,14 +666,13 @@ def set_assignment_active_status(
     if not assignment:
         raise HTTPException(status_code=404, detail="Asignacion no encontrada.")
 
-    # ?? Opcional: Verificar que el profesor sea due?o (basado en el profesor que la asigno)
+    # Opcional: Verificar que el profesor sea due?o (basado en el profesor que la asigno)
     if assignment.professor_id != current_professor.id:
         raise HTTPException(status_code=403, detail="No tienes permiso para modificar esta asignacion.")
         
     # Aplicar solo la actualizacion de is_active
     update_data = assignment_update.model_dump(exclude_unset=True)
     
-    # ?? NOTA: Usaremos sqlmodel_update si solo actualizamos el modelo base, o loop para mayor control
     for key, value in update_data.items():
         setattr(assignment, key, value)
     
@@ -678,7 +688,7 @@ def set_assignment_active_status(
             detail="Fallo al confirmar el cambio de estado en la base de datos."
         )
 
-    # ?? CORRECCIoN CLAVE: Recargar la asignacion con todas las relaciones anidadas
+    # CORRECCIoN CLAVE: Recargar la asignacion con todas las relaciones anidadas
     statement_read = (
         select(RoutineAssignment)
         .where(RoutineAssignment.id == assignment_id)
@@ -723,7 +733,7 @@ def delete_assignment_group_for_student(
     assignment_statement = select(RoutineAssignment).where(
         RoutineAssignment.routine_id.in_(routine_ids),
         RoutineAssignment.student_id == student_id,
-        RoutineAssignment.professor_id == current_professor.id # ?? Solo asignaciones creadas por el profesor actual
+        RoutineAssignment.professor_id == current_professor.id # Solo asignaciones creadas por el profesor actual
     )
     assignments_to_delete = session.exec(assignment_statement).all()
 
@@ -738,11 +748,11 @@ def delete_assignment_group_for_student(
     
     return {"message": f"Se eliminaron {len(assignments_to_delete)} asignaciones de grupo para el alumno."}
 
-# ?? RUTA ACTUALIZADA: EDICIoN COMPLETA (Metadata y Ejercicios)
+# RUTA ACTUALIZADA: EDICIoN COMPLETA (Metadata y Ejercicios)
 @app.patch("/routines/{routine_id}", response_model=RoutineRead, tags=["Rutinas"])
 def update_routine_full(
     routine_id: int,
-    routine_data: RoutineCreateOrUpdate, # ?? Usamos el esquema de actualizacion completa
+    routine_data: RoutineCreateOrUpdate, # Usamos el esquema de actualizacion completa
     session: Annotated[Session, Depends(get_session)],
     current_professor: Annotated[User, Depends(get_current_professor)]
 ):
@@ -777,7 +787,7 @@ def update_routine_full(
             exercise_id=exercise.id,
             sets=exercise_link_data.sets,
             repetitions=exercise_link_data.repetitions,
-            peso=exercise_link_data.peso, # ?? AGREGADO: Campo peso
+            peso=exercise_link_data.peso, # AGREGADO: Campo peso
             order=exercise_link_data.order
         )
         session.add(link)
@@ -792,7 +802,7 @@ def update_routine_full(
             select(Routine)
             .where(Routine.id == routine_id)
             .options(
-                selectinload(Routine.routine_group), # ?? Cargar el grupo
+                selectinload(Routine.routine_group), # Cargar el grupo
                 selectinload(Routine.exercise_links).selectinload(RoutineExercise.exercise)
             )
         )
@@ -908,6 +918,7 @@ def get_assignments_for_student_by_professor(
         )
         .order_by(desc(RoutineAssignment.assigned_at)) 
         .options(
+            # ?? CRiTICO: Asegura la carga del grupo para la logica de agrupamiento del frontend
             selectinload(RoutineAssignment.routine).selectinload(Routine.routine_group),
             selectinload(RoutineAssignment.routine).selectinload(Routine.exercise_links).selectinload(RoutineExercise.exercise),
             selectinload(RoutineAssignment.student),

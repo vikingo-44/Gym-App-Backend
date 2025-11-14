@@ -40,7 +40,7 @@ class RoutineExercise(SQLModel, table=True):
     
     sets: int
     repetitions: str
-    # ?? NUEVO CAMPO: Almacena el peso o tipo de resistencia (ej: "10 kg", "Peso corporal", "Banda")
+    # NUEVO CAMPO: Almacena el peso o tipo de resistencia 
     peso: str = Field(default="N/A", max_length=50) 
     order: int
     
@@ -75,14 +75,15 @@ class RoutineAssignment(SQLModel, table=True):
     )
 
 
-# --- TABLA DE AGRUPACION DE RUTINAS (ROUTINES_GROUP) ?? NUEVA TABLA ---
+# --- TABLA DE AGRUPACION DE RUTINAS (ROUTINES_GROUP) ?? CORREGIDA ---
 class RoutineGroup(SQLModel, table=True):
     __tablename__ = "ROUTINES_GROUP"
     
     id: Optional[int] = Field(default=None, primary_key=True)
     nombre: str = Field(index=True, max_length=100)
     fecha_creacion: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), nullable=False)
-    fecha_vencimiento: date # ?? Usamos el tipo date
+    # ?? CRITICO: Debe ser Optional en la DB si el valor puede ser nulo, aunque el esquema de creacion lo requiera
+    fecha_vencimiento: Optional[date] # Usamos el tipo date, pero lo hacemos Optional en la DB
     professor_id: int = Field(foreign_key="USERS.id")
     
     # Relacion inversa: Un grupo tiene muchas rutinas
@@ -118,7 +119,7 @@ class User(SQLModel, table=True):
         back_populates="professor",
         sa_relationship_kwargs={"foreign_keys": "[RoutineAssignment.professor_id]"}
     )
-    # ?? NUEVA RELACION: Grupos de Rutinas creados por el profesor
+    # NUEVA RELACION: Grupos de Rutinas creados por el profesor
     routine_groups: List[RoutineGroup] = Relationship(back_populates="professor")
 
 
@@ -149,7 +150,7 @@ class Routine(SQLModel, table=True):
     owner_id: int = Field(foreign_key="USERS.id")
     owner: User = Relationship(back_populates="created_routines")
     
-    # ?? NUEVO CAMPO: Foreign Key a RoutineGroup (opcional para rutinas antiguas)
+    # NUEVO CAMPO: Foreign Key a RoutineGroup (opcional para rutinas antiguas)
     routine_group_id: Optional[int] = Field(default=None, foreign_key="ROUTINES_GROUP.id", index=True) 
 
     # Relaciones con cascada para limpieza automatica
@@ -162,7 +163,7 @@ class Routine(SQLModel, table=True):
         back_populates="routine",
         sa_relationship_kwargs={"cascade": "all, delete-orphan"}
     )
-    # ?? NUEVA RELACION: Relacion inversa con RoutineGroup
+    # NUEVA RELACION: Relacion inversa con RoutineGroup
     routine_group: Optional[RoutineGroup] = Relationship(back_populates="routines")
 
 
@@ -170,30 +171,31 @@ class Routine(SQLModel, table=True):
 # Esquemas Pydantic (Para la API)
 # ----------------------------------------------------------------------
 
-# --- Esquemas de RoutineGroup ?? NUEVOS ---
+# --- Esquemas de RoutineGroup ?? CORREGIDOS ---
 class RoutineGroupCreate(BaseModel):
     nombre: str
-    fecha_vencimiento: date
+    descripcion: Optional[str] = None # Anadido 'descripcion' para ser completo
+    fecha_vencimiento: date # ?? CRITICO: Requerido y de tipo date (YYYY-MM-DD)
 
 class RoutineGroupRead(BaseModel):
     id: int
     nombre: str
     fecha_creacion: datetime
-    fecha_vencimiento: date
+    # ?? CRITICO: Debe ser Optional en la lectura, aunque en la DB sea requerido
+    fecha_vencimiento: Optional[date] 
     professor_id: int
     
     class Config:
         from_attributes = True
 
-# --- Esquema Transaccional ?? NUEVO ---
+# --- Esquema Transaccional ?? CORREGIDO ---
 class RoutineGroupCreateAndRoutines(RoutineGroupCreate):
     """Esquema para crear el grupo y todas sus rutinas asociadas."""
-    student_id: int # A quien se le asignara (se usara la ultima rutina creada)
-    # **NOTA**: Se asume que en el frontend solo se envia la cantidad de dias
+    student_id: int # A quien se le asignara
     days: int # Cantidad de dias/rutinas a crear (del frontend)
 
 
-# --- Esquemas de Usuario ---
+# --- Esquemas de Usuario (Se mantienen) ---
 class UserCreate(BaseModel):
     dni: str 
     email: str
@@ -237,8 +239,14 @@ class ChangePassword(BaseModel):
     old_password: str
     new_password: str
 
+# --- Esquemas de Actualizacion de Usuario (Profesor) ---
+class UserUpdateByProfessor(BaseModel):
+    nombre: Optional[str] = None
+    email: Optional[str] = None
+    dni: Optional[str] = None
 
-# --- Esquemas de Ejercicio ---
+
+# --- Esquemas de Ejercicio (Se mantienen) ---
 class ExerciseCreate(BaseModel):
     nombre: str
     descripcion: Optional[str] = None
@@ -266,7 +274,7 @@ class RoutineExerciseRead(BaseModel):
     # Campos del enlace (series, repeticiones, orden)
     sets: int
     repetitions: str
-    # ?? NUEVO: Campo para el peso
+    # NUEVO: Campo para el peso
     peso: str 
     order: int
     
@@ -282,7 +290,7 @@ class RoutineExerciseCreate(BaseModel):
     exercise_id: int
     sets: int
     repetitions: str
-    # ?? NUEVO: Campo para el peso (Input)
+    # NUEVO: Campo para el peso (Input)
     peso: str
     order: int
 
@@ -309,7 +317,7 @@ class RoutineRead(BaseModel):
     created_at: datetime
     owner_id: int
     
-    # ?? AGREGADO: Incluir el grupo de rutina
+    # ?? AGREGADO: Incluir el grupo de rutina (CRITICO)
     routine_group: Optional[RoutineGroupRead] = None
     
     # CRITICO: Incluir los links de ejercicio para la serializacion de la asignacion
@@ -319,20 +327,14 @@ class RoutineRead(BaseModel):
     class Config: 
         from_attributes = True
 
-# --- Esquemas de Actualizacion de Usuario (Profesor) ---
-class UserUpdateByProfessor(BaseModel):
-    nombre: Optional[str] = None
-    email: Optional[str] = None
-    dni: Optional[str] = None
-
-# --- Esquemas de Asignacion ---
+# --- Esquemas de Asignacion (Se mantienen) ---
 class RoutineAssignmentCreate(BaseModel):
     """Esquema para ASIGNAR una rutina a un alumno."""
     routine_id: int
     student_id: int
     is_active: bool = True
 
-# ?? SOLUCION AL ERROR: Esquema de ACTUALIZACION de Asignacion (Ahora definido correctamente)
+# ?? SOLUCION: Esquema de ACTUALIZACION de Asignacion 
 class RoutineAssignmentUpdate(BaseModel):
     """Esquema para ACTUALIZAR el estado activo/inactivo de una asignacion."""
     is_active: Optional[bool] = None
