@@ -81,6 +81,7 @@ class RoutineGroup(SQLModel, table=True):
     
     id: Optional[int] = Field(default=None, primary_key=True)
     nombre: str = Field(index=True, max_length=100)
+    descripcion: Optional[str] = Field(default=None, max_length=500) # AGREGADO: Descripcion para el grupo
     fecha_creacion: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), nullable=False)
     # CRITICO: Optional en la DB para manejar NULL si no se requiere, aunque el esquema de creacion lo requiera.
     fecha_vencimiento: Optional[date] 
@@ -180,6 +181,7 @@ class RoutineGroupCreate(BaseModel):
 class RoutineGroupRead(BaseModel):
     id: int
     nombre: str
+    descripcion: Optional[str] = None # AGREGADO: Descripcion para la lectura del grupo
     fecha_creacion: datetime
     # CRITICO: Debe ser Optional en la lectura para manejar el valor NULL de la DB
     fecha_vencimiento: Optional[date] 
@@ -188,11 +190,18 @@ class RoutineGroupRead(BaseModel):
     class Config:
         from_attributes = True
 
-# --- Esquema Transaccional ?? ESTADO CORRECTO ---
-class RoutineGroupCreateAndRoutines(RoutineGroupCreate): # ?? Correcta herencia de 'nombre', 'descripcion', 'fecha_vencimiento'
+# --- Esquema Transaccional ?? ESTADO CORRECTO (Ahora incluye el array de rutinas) ---
+class RoutineCreateForTransactional(BaseModel):
+    """Esquema para una rutina individual dentro de la transaccion grupal."""
+    nombre: str
+    descripcion: Optional[str] = None
+    exercises: List["RoutineExerciseCreate"] # Reusa el esquema de creacion de enlaces
+
+class RoutineGroupCreateAndRoutines(RoutineGroupCreate): 
     """Esquema para crear el grupo y todas sus rutinas asociadas."""
     student_id: int # A quien se le asignara
-    days: int # Cantidad de dias/rutinas a crear (del frontend)
+    days: int # Cantidad de dias/rutinas a crear (del frontend, solo para validacion de esquema)
+    routines: List[RoutineCreateForTransactional] # Lista de rutinas con ejercicios (del frontend)
 
 
 # --- Esquemas de Usuario (Se mantienen) ---
@@ -358,3 +367,6 @@ class RoutineAssignmentRead(BaseModel):
     
     class Config: 
         from_attributes = True
+
+# Necesario para que la relacion recursiva funcione en RoutineGroupCreateAndRoutines
+RoutineGroupCreateAndRoutines.model_rebuild()

@@ -30,7 +30,8 @@ from models import (
     RoutineCreateOrUpdate, 
     # CRiTICO: Importaciones de Grupo y Transaccional
     RoutineGroup, RoutineGroupCreate, RoutineGroupRead, RoutineGroupCreateAndRoutines,
-    UserUpdateByProfessor 
+    UserUpdateByProfessor,
+    RoutineCreateForTransactional # Nuevo esquema para usar en la transaccion
 )
 
 
@@ -437,7 +438,7 @@ def delete_exercise(
 
 
 # ----------------------------------------------------------------------
-# ?? RUTA TRANSACCIONAL DE CREACIoN DE GRUPO Y RUTINAS (CORREGIDA)
+# ?? RUTA TRANSACCIONAL DE CREACIoN DE GRUPO Y RUTINAS (CORREGIDA PARA USAR PAYLOAD DEL FRONTEND)
 # ----------------------------------------------------------------------
 
 @app.post("/routines-group/create-transactional", response_model=List[RoutineAssignmentRead], tags=["Rutinas"])
@@ -447,22 +448,21 @@ def create_routine_group_and_routines(
     current_professor: Annotated[User, Depends(get_current_professor)]
 ):
     """
-    (Profesor) Crea un nuevo grupo de rutinas, crea N rutinas individuales
-    asociadas a ese grupo, y asigna CADA UNA al alumno.
+    (Profesor) Crea un nuevo grupo de rutinas, crea las N rutinas individuales
+    enviadas por el frontend (con ejercicios), y asigna CADA UNA al alumno.
     """
     try:
-        # 1. Validar Alumno y Dias
+        # 1. Validar Alumno y Rutinas
         student = session.get(User, data.student_id)
         if not student or student.rol != UserRole.STUDENT:
             raise HTTPException(status_code=404, detail="Alumno no encontrado o rol incorrecto para la asignacion.")
 
-        if data.days < 1:
-            raise HTTPException(status_code=400, detail="Debe crear al menos una rutina (dia).")
+        if not data.routines or len(data.routines) == 0:
+            raise HTTPException(status_code=400, detail="Debe enviar al menos una rutina para crear.")
             
         # 2. Crear el Grupo de Rutinas (RoutineGroup)
         routine_group = RoutineGroup(
             nombre=data.nombre,
-            # ?? CORRECCIoN CRiTICA: Acceso directo a data.descripcion para evitar AttributeError
             descripcion=data.descripcion, 
             fecha_vencimiento=data.fecha_vencimiento, 
             professor_id=current_professor.id
@@ -470,37 +470,59 @@ def create_routine_group_and_routines(
         session.add(routine_group)
         session.flush() # Flush 1: Obtiene ID del grupo
 
-        # 3. Crear las Rutinas individuales y asociarlas al grupo y asignarlas
+        # 3. Crear las Rutinas individuales, asociarlas al grupo y asignarlas
         created_assignment_ids = []
+        is_first_routine = True # Para marcar solo la primera asignacion como activa
         
-        for day_number in range(1, data.days + 1):
+        for routine_data in data.routines: # Itera sobre la lista de rutinas enviada por el frontend
             
             # 3a. Crear el modelo de Rutina
             routine_model = Routine(
-                nombre=f"{data.nombre} - Dia {day_number}",
-                descripcion=f"Rutina del Dia {day_number} para el grupo '{data.nombre}'.",
+                nombre=routine_data.nombre,
+                descripcion=routine_data.descripcion,
                 owner_id=current_professor.id,
                 routine_group_id=routine_group.id # ASOCIAR AL GRUPO
             )
             session.add(routine_model)
             session.flush() # Flush 2: Obtiene ID de la rutina
             
-            # 3b. Crear la asignacion
+            # 3b. Crear los enlaces de ejercicios (RoutineExercise)
+            for index, exercise_link_data in enumerate(routine_data.exercises):
+                exercise = session.get(Exercise, exercise_link_data.exercise_id)
+                if not exercise:
+                    session.rollback() 
+                    raise HTTPException(
+                        status_code=404, 
+                        detail=f"Ejercicio con id {exercise_link_data.exercise_id} no encontrado en la rutina '{routine_model.nombre}'. Creacion cancelada."
+                    )
+                    
+                link = RoutineExercise(
+                    routine_id=routine_model.id, 
+                    exercise_id=exercise.id,
+                    sets=exercise_link_data.sets,
+                    repetitions=exercise_link_data.repetitions,
+                    peso=exercise_link_data.peso, 
+                    order=index + 1 # Usar el indice para el orden, asegurando que sea un entero
+                )
+                session.add(link)
+
+            # 3c. Crear la asignacion
             assignment = RoutineAssignment(
                 routine_id=routine_model.id,
                 student_id=data.student_id,
                 professor_id=current_professor.id,
-                is_active=True 
+                is_active=is_first_routine # Solo la primera rutina del grupo es activa
             )
             session.add(assignment)
             session.flush() # Flush 3: Obtiene ID de la asignacion
 
             created_assignment_ids.append(assignment.id) 
+            is_first_routine = False # El resto de las asignaciones son inactivas por defecto
 
-        # 4. COMMIT uNICO: Si todo lo anterior funciono, confirmamos la transaccion.
+        # 4. COMMIT uNICO
         session.commit()
 
-        # 5. Fetch todas las asignaciones recien creadas con las relaciones anidadas
+        # 5. Fetch todas las asignaciones recien creadas con las relaciones anidadas (codigo de lectura existente)
         statement_read = (
             select(RoutineAssignment)
             .where(RoutineAssignment.id.in_(created_assignment_ids))
@@ -518,13 +540,17 @@ def create_routine_group_and_routines(
         final_assignments = session.exec(statement_read).all()
         return final_assignments
 
+    except HTTPException:
+        # Re-lanza HTTPExceptions para que FastAPI las maneje correctamente
+        session.rollback() 
+        raise
     except Exception as e:
-        session.rollback() # Si algo falla, se deshace todo
-        # Logging mejorado para ver el error real del backend (si no es 422)
+        session.rollback() 
         print(f"ERROR: Fallo transaccional al crear grupo de rutinas: {e}")
+        # Muestra el error real para depuracion
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
-            detail=f"Error transaccional en el servidor al crear grupo. Por favor, revisa el log del servidor."
+            detail=f"Error transaccional al crear grupo: {str(e)}"
         )
 
 
@@ -832,7 +858,7 @@ def delete_routine(
     if db_routine.owner_id != current_professor.id:
         raise HTTPException(status_code=403, detail="No autorizado para eliminar esta rutina")
 
-    # Eliminamos enlaces y asignaciones antes de eliminar la rutina
+    # Eliminamos enlaces y asignaciones antes de eliminar la rutina (CRiTICO para evitar errores de Foreign Key)
     session.exec(select(RoutineExercise).where(RoutineExercise.routine_id == routine_id)).delete()
     session.exec(select(RoutineAssignment).where(RoutineAssignment.routine_id == routine_id)).delete()
         
@@ -955,17 +981,23 @@ def get_assignments_for_student_by_professor(
         
         for routine in grouped_routines:
             
-            is_the_original_assigned_routine = (routine.id == active_anchor_assignment.routine_id)
+            # Buscamos la asignacion real para esta rutina especifica. 
+            # Si no la encontramos, usamos los datos del ancla (is_the_original_assigned_routine)
+            real_assignment = next((a for a in all_assignments if a.routine_id == routine.id), None)
 
+            # Para garantizar que siempre tengamos un ID de asignacion real o pseudo-ID.
+            assignment_id_to_use = real_assignment.id if real_assignment else active_anchor_assignment.id
+            
             # Construimos el objeto de respuesta, asegurando que todos los campos del Assignment Read Model esten presentes.
-            # Usamos el ID negativo para las "pseudo-asignaciones"
+            # CRiTICO: Usamos el assigned_at del ancla si la asignacion real no existe, pero marcamos 'is_active' siempre como True 
+            # para que el frontend sepa que es la rutina que esta en curso.
             pseudo_assignment_data = RoutineAssignmentRead(
-                id=active_anchor_assignment.id if is_the_original_assigned_routine else -(routine.id),
+                id=assignment_id_to_use, 
                 routine_id=routine.id,
                 student_id=active_anchor_assignment.student_id,
                 professor_id=active_anchor_assignment.professor_id,
                 assigned_at=active_anchor_assignment.assigned_at,
-                is_active=True, # Marcamos todas las rutinas del grupo como activas (es la rutina en curso)
+                is_active=real_assignment.is_active if real_assignment else True, # Usa el estado real o True por defecto si es parte del grupo
                 routine=routine, # La rutina individual (Dia 1, Dia 2...)
                 student=active_anchor_assignment.student, # Cargado desde el ancla
                 professor=active_anchor_assignment.professor # Cargado desde el ancla
@@ -1038,20 +1070,33 @@ def get_my_active_routine(
         )
         grouped_routines = session.exec(routine_statement).all()
         
-        # 4. Crear "pseudo-asignaciones" para devolver todas las rutinas del grupo
+        # 4. Obtener las asignaciones reales para cada rutina del grupo
+        routine_ids = [r.id for r in grouped_routines]
+        real_assignments_statement = (
+            select(RoutineAssignment)
+            .where(RoutineAssignment.routine_id.in_(routine_ids))
+        )
+        real_assignments = session.exec(real_assignments_statement).all()
+        real_assignments_map = {a.routine_id: a for a in real_assignments}
+
+        # 5. Crear "pseudo-asignaciones" para devolver todas las rutinas del grupo
         expanded_assignments = []
         for routine in grouped_routines:
-            is_the_original_assigned_routine = (routine.id == active_anchor_assignment.routine_id)
+            
+            real_assignment = real_assignments_map.get(routine.id)
+            
+            # Usamos los datos de la asignacion real o del ancla como fallback
+            assignment_id_to_use = real_assignment.id if real_assignment else active_anchor_assignment.id
+            is_active_status = real_assignment.is_active if real_assignment else True
 
             # Creamos un objeto RoutineAssignmentRead para cada rutina en el grupo
             pseudo_assignment_data = RoutineAssignmentRead(
-                # Usamos el ID de la asignacion original para la que es la "ancla"
-                id=active_anchor_assignment.id if is_the_original_assigned_routine else -(routine.id),
+                id=assignment_id_to_use,
                 routine_id=routine.id,
                 student_id=active_anchor_assignment.student_id,
                 professor_id=active_anchor_assignment.professor_id,
                 assigned_at=active_anchor_assignment.assigned_at,
-                is_active=True, # Todas las rutinas del grupo activo se consideran "activas" para visualizacion
+                is_active=is_active_status, # Usamos el estado real si existe
                 routine=routine,
                 student=active_anchor_assignment.student,
                 professor=active_anchor_assignment.professor
