@@ -75,15 +75,15 @@ class RoutineAssignment(SQLModel, table=True):
     )
 
 
-# --- TABLA DE AGRUPACION DE RUTINAS (ROUTINES_GROUP) ?? CORREGIDA ---
+# --- TABLA DE AGRUPACION DE RUTINAS (ROUTINES_GROUP) ?? ESTADO CORRECTO ---
 class RoutineGroup(SQLModel, table=True):
     __tablename__ = "ROUTINES_GROUP"
     
     id: Optional[int] = Field(default=None, primary_key=True)
     nombre: str = Field(index=True, max_length=100)
     fecha_creacion: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), nullable=False)
-    # ?? CRITICO: Debe ser Optional en la DB si el valor puede ser nulo, aunque el esquema de creacion lo requiera
-    fecha_vencimiento: Optional[date] # Usamos el tipo date, pero lo hacemos Optional en la DB
+    # CRITICO: Optional en la DB para manejar NULL si no se requiere, aunque el esquema de creacion lo requiera.
+    fecha_vencimiento: Optional[date] 
     professor_id: int = Field(foreign_key="USERS.id")
     
     # Relacion inversa: Un grupo tiene muchas rutinas
@@ -137,7 +137,7 @@ class Exercise(SQLModel, table=True):
     routine_links: List[RoutineExercise] = Relationship(back_populates="exercise")
 
 
-# --- TABLA DE RUTINAS ?? MODIFICADA ---
+# --- TABLA DE RUTINAS ?? ESTADO CORRECTO ---
 class Routine(SQLModel, table=True):
     """Representa la tabla 'ROUTINES' (Rutina Maestra)."""
     __tablename__ = "ROUTINES"
@@ -171,25 +171,25 @@ class Routine(SQLModel, table=True):
 # Esquemas Pydantic (Para la API)
 # ----------------------------------------------------------------------
 
-# --- Esquemas de RoutineGroup ?? CORREGIDOS ---
+# --- Esquemas de RoutineGroup ?? ESTADO CORRECTO ---
 class RoutineGroupCreate(BaseModel):
     nombre: str
-    descripcion: Optional[str] = None # Anadido 'descripcion' para ser completo
-    fecha_vencimiento: date # ?? CRITICO: Requerido y de tipo date (YYYY-MM-DD)
+    descripcion: Optional[str] = None # ?? CRITICO: Correcto para manejar el campo opcional
+    fecha_vencimiento: date 
 
 class RoutineGroupRead(BaseModel):
     id: int
     nombre: str
     fecha_creacion: datetime
-    # ?? CRITICO: Debe ser Optional en la lectura, aunque en la DB sea requerido
+    # CRITICO: Debe ser Optional en la lectura para manejar el valor NULL de la DB
     fecha_vencimiento: Optional[date] 
     professor_id: int
     
     class Config:
         from_attributes = True
 
-# --- Esquema Transaccional ?? CORREGIDO ---
-class RoutineGroupCreateAndRoutines(RoutineGroupCreate):
+# --- Esquema Transaccional ?? ESTADO CORRECTO ---
+class RoutineGroupCreateAndRoutines(RoutineGroupCreate): # ?? Correcta herencia de 'nombre', 'descripcion', 'fecha_vencimiento'
     """Esquema para crear el grupo y todas sus rutinas asociadas."""
     student_id: int # A quien se le asignara
     days: int # Cantidad de dias/rutinas a crear (del frontend)
@@ -317,7 +317,7 @@ class RoutineRead(BaseModel):
     created_at: datetime
     owner_id: int
     
-    # ?? AGREGADO: Incluir el grupo de rutina (CRITICO)
+    # ?? AGREGADO: Incluir el grupo de rutina (CRITICO para la visualizacion en el profesor)
     routine_group: Optional[RoutineGroupRead] = None
     
     # CRITICO: Incluir los links de ejercicio para la serializacion de la asignacion
@@ -334,7 +334,7 @@ class RoutineAssignmentCreate(BaseModel):
     student_id: int
     is_active: bool = True
 
-# ?? SOLUCION: Esquema de ACTUALIZACION de Asignacion 
+# SOLUCION: Esquema de ACTUALIZACION de Asignacion 
 class RoutineAssignmentUpdate(BaseModel):
     """Esquema para ACTUALIZAR el estado activo/inactivo de una asignacion."""
     is_active: Optional[bool] = None
