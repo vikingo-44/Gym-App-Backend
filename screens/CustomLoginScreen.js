@@ -2,16 +2,23 @@ import React, { useState, useContext } from 'react';
 import { 
     StyleSheet, Text, View, TextInput, Button, SafeAreaView, 
     ScrollView, ActivityIndicator, TouchableOpacity, Modal, Alert,
-    KeyboardAvoidingView, Platform
+    KeyboardAvoidingView, Platform, 
+    ImageBackground, Image 
 } from 'react-native';
 import axios from 'axios';
-// Importamos AuthContext desde el archivo App principal (App.js)
 import { AuthContext } from '../App'; 
-// 🚨 Importamos el hook de tema para usar los colores globales y la función de toggle
 import { useTheme } from '../ThemeContext'; 
 
 // ----------------------------------------------------------------------
+// URIs de Imágenes del Gimnasio
+// ----------------------------------------------------------------------
+const LOGO_SOURCE = require('../assets/logoND.jpg'); 
+const BACKGROUND_SOURCE = require('../assets/wallpaper.jpg'); 
+
+
+// ----------------------------------------------------------------------
 // Componente de Registro de Alumno (Modal)
+// (Sin cambios, el foco está en CustomLoginScreen)
 // ----------------------------------------------------------------------
 function RegisterModal({ isVisible, onClose, API_URL, themeColors }) {
     const [nombre, setNombre] = useState('');
@@ -22,7 +29,6 @@ function RegisterModal({ isVisible, onClose, API_URL, themeColors }) {
     const [error, setError] = useState(null);
     const [success, setSuccess] = useState(false);
 
-    // Reutilizamos getStyles para obtener estilos consistentes
     const styles = getStyles(themeColors); 
 
     const handleRegister = async () => {
@@ -52,9 +58,9 @@ function RegisterModal({ isVisible, onClose, API_URL, themeColors }) {
             if (msg.includes("DNI ya está registrado")) {
                 msg = "El DNI proporcionado ya se encuentra registrado.";
             } else if (msg.includes("El email ya está registrado")) {
-                 msg = "El Email proporcionado ya se encuentra registrado.";
+                msg = "El Email proporcionado ya se encuentra registrado.";
             } else if (e.message === 'Network Error') {
-                 msg = `Error de Conexión. Asegúrate de que el servidor de FastAPI y Ngrok están activos y que la URL (${API_URL}) es la correcta.`;
+                msg = `Error de Conexión. Asegúrate de que el servidor de FastAPI y Ngrok están activos y que la URL (${API_URL}) es la correcta.`;
             }
 
             setError(`Error en el registro: ${msg}`);
@@ -150,10 +156,9 @@ function RegisterModal({ isVisible, onClose, API_URL, themeColors }) {
 }
 
 // ----------------------------------------------------------------------
-// Función de Login Personalizada (Ahora usa DNI en lugar de Email)
+// Función de Login Personalizada 
 // ----------------------------------------------------------------------
 export default function CustomLoginScreen({ signIn, API_URL }) {
-    // 🔑 USAMOS EL HOOK GLOBAL DE TEMA, incluyendo toggleTheme
     const { colors: themeColors, isDark, toggleTheme } = useTheme(); 
 
     const [dni, setDni] = useState(''); 
@@ -173,7 +178,6 @@ export default function CustomLoginScreen({ signIn, API_URL }) {
         setError(null);
 
         try {
-            // La llamada ahora usa DNI para el login
             const response = await axios.post(`${API_URL}/login`, {
                 dni: dni, 
                 password: password
@@ -187,7 +191,7 @@ export default function CustomLoginScreen({ signIn, API_URL }) {
             
             let errorMessage = "DNI o contraseña incorrectos.";
             if (e.message === 'Network Error') {
-                 errorMessage = `Error de Conexión. Asegúrate de que el servidor de FastAPI y Ngrok están activos y que la URL (${API_URL}) es la correcta.`;
+                errorMessage = `Error de Conexión. Asegúrate de que el servidor de FastAPI y Ngrok están activos y que la URL (${API_URL}) es la correcta.`;
             } else if (e.response && e.response.status !== 401) {
                 errorMessage = `Error del Servidor (${e.response.status}). Intenta más tarde.`;
             }
@@ -198,116 +202,128 @@ export default function CustomLoginScreen({ signIn, API_URL }) {
         }
     };
     
-    // Obtenemos los estilos dinámicamente
     const styles = getStyles(themeColors);
 
-    // Nuevo estado para el modal de registro
     const [isRegisterVisible, setIsRegisterVisible] = useState(false); 
 
     return (
-        <SafeAreaView style={[styles.container, {backgroundColor: themeColors.background}]}>
-            <KeyboardAvoidingView 
-                style={{ flex: 1 }} 
-                behavior={Platform.OS === "ios" ? "padding" : "height"}
-            >
-            
-                {/* Modal de Registro, le pasamos los colores del tema */}
-                <RegisterModal 
-                    isVisible={isRegisterVisible} 
-                    onClose={() => setIsRegisterVisible(false)} 
-                    API_URL={API_URL} 
-                    themeColors={themeColors}
-                />
-
-                <ScrollView contentContainerStyle={styles.content}>
-                    
-                    {/* 🚨 SELECTOR DE MODO (REINCORPORADO) */}
-                    <View style={styles.themeToggleContainer}>
-                        <TouchableOpacity onPress={toggleTheme}>
-                            <Text style={[styles.themeToggleText, {color: themeColors.primary}]}>
-                                {isDark ? '🌞 Modo Claro' : '🌙 Modo Oscuro'}
-                            </Text>
-                        </TouchableOpacity>
-                    </View>
-
-                    {/* Encabezado solicitado */}
-                    <View style={styles.header}>
-                        <Text style={[styles.title, {color: themeColors.textPrimary}]}>ND Training</Text>
-                        <Text style={[styles.slogan, {color: themeColors.textSecondary}]}>Es hora de llegar muy lejos</Text>
-                    </View>
-
-                    {error && <Text style={[styles.errorText, {color: themeColors.danger, backgroundColor: themeColors.isDark ? '#330000' : '#FFEBEE'}]}>{error}</Text>}
-                    
-                    {/* Inputs de Login */}
-                    <TextInput
-                        style={[styles.input, {
-                            backgroundColor: themeColors.inputBackground, 
-                            color: themeColors.textPrimary,
-                            borderColor: themeColors.inputBorder,
-                        }]}
-                        placeholder="Número de Documento (DNI)"
-                        placeholderTextColor={themeColors.textSecondary}
-                        value={dni}
-                        onChangeText={setDni}
-                        keyboardType="numeric" 
-                        autoCapitalize="none"
+        <ImageBackground 
+            source={BACKGROUND_SOURCE} 
+            style={styles.container}
+            resizeMode="cover" 
+        >
+            <SafeAreaView style={{ flex: 1, backgroundColor: 'transparent' }}>
+                <KeyboardAvoidingView 
+                    style={{ flex: 1 }} 
+                    behavior={Platform.OS === "ios" ? "padding" : "height"}
+                >
+                
+                    <RegisterModal 
+                        isVisible={isRegisterVisible} 
+                        onClose={() => setIsRegisterVisible(false)} 
+                        API_URL={API_URL} 
+                        themeColors={themeColors}
                     />
-                    <TextInput
-                        style={[styles.input, {
-                            backgroundColor: themeColors.inputBackground, 
-                            color: themeColors.textPrimary,
-                            borderColor: themeColors.inputBorder,
-                        }]}
-                        placeholder="Contraseña"
-                        placeholderTextColor={themeColors.textSecondary}
-                        value={password}
-                        onChangeText={setPassword}
-                        secureTextEntry 
-                    />
-                    
-                    {isLoading ? (
-                        <ActivityIndicator size="large" color={themeColors.primary} />
-                    ) : (
-                        <>
-                            <Button 
-                                title="Ingresar" 
-                                onPress={handleLogin} 
-                                color={themeColors.primary}
+
+                    <ScrollView contentContainerStyle={styles.content}>
+                        
+                        <View style={styles.themeToggleContainer}>
+                            <TouchableOpacity onPress={toggleTheme}>
+                                <Text style={[styles.themeToggleText, {color: themeColors.primary}]}>
+                                    {isDark ? '🌞 Modo Claro' : '🌙 Modo Oscuro'}
+                                </Text>
+                            </TouchableOpacity>
+                        </View>
+
+                        <View style={styles.header}>
+                            {/* 🚨 CAMBIO: Se remueve el título de texto "ND Training" */}
+                            <Image 
+                                source={LOGO_SOURCE} 
+                                style={styles.logo} // Estilo 'logo' modificado
+                                resizeMode="contain"
                             />
-                            {/* Botón para abrir el Modal de Registro */}
-                            <View style={{marginTop: 20}}>
-                                <Button
-                                    title="Registrarse como Alumno"
-                                    onPress={() => setIsRegisterVisible(true)}
-                                    color={themeColors.warning} 
+                            {/* El slogan se mantiene, pero con un margen superior */}
+                            <Text style={[styles.slogan, {color: '#4B5563', marginTop: 15}]}>Es hora de llegar muy lejos</Text>
+                        </View>
+
+                        {error && <Text style={[styles.errorText, {color: themeColors.danger, backgroundColor: '#FFEBEEAA'}]}>{error}</Text>}
+                        
+                        <TextInput
+                            style={[styles.input, {
+                                backgroundColor: themeColors.inputBackground, 
+                                color: themeColors.textPrimary,
+                                borderColor: themeColors.inputBorder,
+                            }]}
+                            placeholder="Número de Documento (DNI)"
+                            placeholderTextColor={themeColors.textSecondary}
+                            value={dni}
+                            onChangeText={setDni}
+                            keyboardType="numeric" 
+                            autoCapitalize="none"
+                        />
+                        <TextInput
+                            style={[styles.input, {
+                                backgroundColor: themeColors.inputBackground, 
+                                color: themeColors.textPrimary,
+                                borderColor: themeColors.inputBorder,
+                            }]}
+                            placeholder="Contraseña"
+                            placeholderTextColor={themeColors.textSecondary}
+                            value={password}
+                            onChangeText={setPassword}
+                            secureTextEntry 
+                        />
+                        
+                        {isLoading ? (
+                            <ActivityIndicator size="large" color={themeColors.primary} />
+                        ) : (
+                            <>
+                                <Button 
+                                    title="Ingresar" 
+                                    onPress={handleLogin} 
+                                    color={themeColors.primary}
                                 />
-                            </View>
-                        </>
-                    )}
-                </ScrollView>
-            </KeyboardAvoidingView>
-        </SafeAreaView>
+                                <View style={{marginTop: 20}}>
+                                    <Button
+                                        title="Registrarse como Alumno"
+                                        onPress={() => setIsRegisterVisible(true)}
+                                        color={themeColors.warning} 
+                                    />
+                                </View>
+                            </>
+                        )}
+                    </ScrollView>
+                </KeyboardAvoidingView>
+            </SafeAreaView>
+        </ImageBackground>
     );
 }
 
 // ----------------------------------------------------------------------
-// Función que genera los estilos básicos estáticos (los colores sensibles se aplican inline)
+// Función que genera los estilos básicos estáticos
 // ----------------------------------------------------------------------
 const getStyles = (colors) => StyleSheet.create({
     container: {
         flex: 1,
-        // El color de fondo se aplica inline en el componente principal
     },
     content: {
         padding: 30,
         flexGrow: 1,
-        justifyContent: 'center',
+        justifyContent: 'center', 
+        backgroundColor: 'rgba(255, 255, 255, 0.85)', 
+        borderRadius: 20, 
+        marginHorizontal: 20,
+        paddingVertical: 50,
+        alignSelf: 'center',
+        width: Platform.OS === 'web' ? '40%' : '100%', 
+        maxWidth: 400,
     },
     themeToggleContainer: {
         position: 'absolute',
-        top: 40,
+        top: 20,
         right: 20,
         padding: 10,
+        zIndex: 10, 
     },
     themeToggleText: {
         fontSize: 14,
@@ -315,9 +331,20 @@ const getStyles = (colors) => StyleSheet.create({
     },
     header: {
         alignItems: 'center',
-        marginBottom: 50,
+        marginBottom: 30, 
+    },
+    logo: {
+        width: '80%', // El logo ocupará el 80% del ancho del contenedor.
+        height: 100,  // Altura fija, puedes ajustarla.
+        borderRadius: 15, // Borde redondeado suave para el logo.
+        // borderWidth: 0, // No necesitamos un borde explícito.
+        // borderColor: 'transparent', // No necesitamos color de borde.
+        marginBottom: 10,
+        alignSelf: 'center', // Asegurarse de que esté centrado.
     },
     title: {
+        // Este estilo ya no se usa para el título principal, pero lo mantenemos
+        // por si acaso para otros textos.
         fontSize: 38,
         fontWeight: '900',
         marginBottom: 5,
@@ -344,7 +371,6 @@ const getStyles = (colors) => StyleSheet.create({
     // Estilos del Modal de Registro
     modalContainer: {
         flex: 1,
-        // El color de fondo se aplica inline
         paddingTop: 40,
     },
     modalContent: {
@@ -355,12 +381,10 @@ const getStyles = (colors) => StyleSheet.create({
     modalTitle: {
         fontSize: 28,
         fontWeight: 'bold',
-        // El color del título se aplica inline
         textAlign: 'center',
         marginBottom: 30,
     },
     successText: {
-        // El color de éxito se aplica inline
         marginBottom: 15,
         textAlign: 'center',
         fontWeight: 'bold',
