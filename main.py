@@ -1038,6 +1038,7 @@ def get_my_active_routine(
         )
         .order_by(desc(RoutineAssignment.assigned_at)) 
         .options(
+            # ?? FIX L¨®GICO: Cargar la Rutina y su Grupo (CR¨ªTICO) ??
             selectinload(RoutineAssignment.routine)
                 .selectinload(Routine.routine_group),
             selectinload(RoutineAssignment.routine)
@@ -1095,7 +1096,7 @@ def get_my_active_routine(
                 student_id=active_anchor_assignment.student_id,
                 professor_id=active_anchor_assignment.professor_id,
                 assigned_at=active_anchor_assignment.assigned_at,
-                is_active=is_active_status, # Usamos el estado real si existe
+                is_active=True, # Usamos TRUE para que el cliente sepa que esta rutina pertenece al grupo activo.
                 routine=routine,
                 student=active_anchor_assignment.student,
                 professor=active_anchor_assignment.professor
