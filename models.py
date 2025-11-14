@@ -81,15 +81,12 @@ class RoutineGroup(SQLModel, table=True):
     
     id: Optional[int] = Field(default=None, primary_key=True)
     nombre: str = Field(index=True, max_length=100)
-    descripcion: Optional[str] = Field(default=None, max_length=500) # AGREGADO: Descripcion para el grupo
+    # ELIMINA: descripcion: Optional[str] = Field(default=None, max_length=500) 
     fecha_creacion: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), nullable=False)
-    # CRITICO: Optional en la DB para manejar NULL si no se requiere, aunque el esquema de creacion lo requiera.
     fecha_vencimiento: Optional[date] 
     professor_id: int = Field(foreign_key="USERS.id")
     
-    # Relacion inversa: Un grupo tiene muchas rutinas
     routines: List["Routine"] = Relationship(back_populates="routine_group")
-    # Relacion: El profesor que crea el grupo
     professor: "User" = Relationship(back_populates="routine_groups")
 
 
@@ -175,13 +172,11 @@ class Routine(SQLModel, table=True):
 # --- Esquemas de RoutineGroup ?? ESTADO CORRECTO ---
 class RoutineGroupCreate(BaseModel):
     nombre: str
-    descripcion: Optional[str] = None # ?? CRITICO: Correcto para manejar el campo opcional
     fecha_vencimiento: date 
 
 class RoutineGroupRead(BaseModel):
     id: int
     nombre: str
-    descripcion: Optional[str] = None # AGREGADO: Descripcion para la lectura del grupo
     fecha_creacion: datetime
     # CRITICO: Debe ser Optional en la lectura para manejar el valor NULL de la DB
     fecha_vencimiento: Optional[date] 

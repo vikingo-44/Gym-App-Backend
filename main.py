@@ -463,7 +463,6 @@ def create_routine_group_and_routines(
         # 2. Crear el Grupo de Rutinas (RoutineGroup)
         routine_group = RoutineGroup(
             nombre=data.nombre,
-            descripcion=data.descripcion, 
             fecha_vencimiento=data.fecha_vencimiento, 
             professor_id=current_professor.id
         )
