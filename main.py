@@ -1,5 +1,5 @@
 import os
-from datetime import datetime, timedelta, timezone, date # ?? CR赤TICO: Importar 'date'
+from datetime import datetime, timedelta, timezone, date # ?? CRiTICO: Importar 'date'
 from typing import Annotated, List, Optional
 from contextlib import asynccontextmanager
 
@@ -28,7 +28,7 @@ from models import (
     RoutineAssignmentUpdate, 
     ChangePassword,
     RoutineCreateOrUpdate, 
-    # CR赤TICO: Importaciones de Grupo y Transaccional
+    # CRiTICO: Importaciones de Grupo y Transaccional
     RoutineGroup, RoutineGroupCreate, RoutineGroupRead, RoutineGroupCreateAndRoutines,
     UserUpdateByProfessor 
 )
@@ -37,7 +37,7 @@ from models import (
 load_dotenv()
 
 # ----------------------------------------------------------------------
-# Configuraci車n de Seguridad y JWT
+# Configuracion de Seguridad y JWT
 # ----------------------------------------------------------------------
 pwd_context = CryptContext(schemes=["sha256_crypt"], deprecated="auto")
 SECRET_KEY = os.environ.get("SECRET_KEY", "CLAVE_SECRETA_DEFAULT_DEBES_CAMBIARLA")
@@ -65,7 +65,7 @@ def create_access_token(data: dict, expires_delta: timedelta | None = None) -> s
     return encoded_jwt
 
 # ----------------------------------------------------------------------
-# Eventos de la Aplicaci車n (Startup/Shutdown)
+# Eventos de la Aplicacion (Startup/Shutdown)
 # ----------------------------------------------------------------------
 
 @asynccontextmanager
@@ -77,7 +77,7 @@ async def lifespan(app: FastAPI):
     print("Apagando la aplicacion...")
 
 # ----------------------------------------------------------------------
-# Inicializaci車n de la Aplicaci車n
+# Inicializacion de la Aplicacion
 # ----------------------------------------------------------------------
 
 app = FastAPI(
@@ -87,7 +87,7 @@ app = FastAPI(
 )
 
 # ----------------------------------------------------------------------
-# Dependencias de Autenticaci車n y Autorizaci車n
+# Dependencias de Autenticacion y Autorizacion
 # ----------------------------------------------------------------------
 
 def get_current_user(
@@ -136,12 +136,12 @@ def get_current_student(current_user: Annotated[User, Depends(get_current_user)]
     return current_user
 
 # ----------------------------------------------------------------------
-# Rutas P迆blicas (Health Check y Autenticaci車n)
+# Rutas Publicas (Health Check y Autenticacion)
 # ----------------------------------------------------------------------
 
 @app.get("/", tags=["General"])
 def read_root():
-    """Endpoint de bienvenida y verificaci車n de salud de la API."""
+    """Endpoint de bienvenida y verificacion de salud de la API."""
     return {"message": "API del Gestor de Rutinas de Gimnasio activa."}
 
 # NUEVA RUTA: Registro solo de Alumnos
@@ -241,7 +241,7 @@ def login_for_access_token(
         )
     
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    # CORRECCI車N CLAVE: Incluimos el nombre del usuario en el token.
+    # CORRECCIoN CLAVE: Incluimos el nombre del usuario en el token.
     access_token = create_access_token(
         data={"dni": user.dni, "rol": user.rol.value, "nombre": user.nombre}, 
         expires_delta=access_token_expires
@@ -256,7 +256,7 @@ def login_for_access_token(
 def read_users_me(
     current_user: Annotated[User, Depends(get_current_user)]
 ):
-    """Obtiene la informaci車n del usuario actualmente autenticado."""
+    """Obtiene la informacion del usuario actualmente autenticado."""
     return current_user
 
 # RUTA: CAMBIO DE CONTRASE?A
@@ -269,7 +269,7 @@ def change_password(
 ):
     """
     Permite a un usuario (Profesor o Alumno) cambiar su contrase?a.
-    Requiere la contrase?a antigua para la verificaci車n.
+    Requiere la contrase?a antigua para la verificacion.
     """
     
     # 1. Verificar la contrase?a antigua
@@ -279,7 +279,7 @@ def change_password(
             detail="Contrase?a antigua incorrecta."
         )
 
-    # 2. Verificar la longitud de la nueva contrase?a (buena pr芍ctica)
+    # 2. Verificar la longitud de la nueva contrase?a (buena practica)
     if len(password_data.new_password) < 6:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -314,7 +314,7 @@ def update_student_data(
     session: Annotated[Session, Depends(get_session)],
     current_professor: Annotated[User, Depends(get_current_professor)]
 ):
-    """(Profesor) Permite actualizar el nombre, email o DNI de un alumno espec赤fico."""
+    """(Profesor) Permite actualizar el nombre, email o DNI de un alumno especifico."""
     
     # 1. Buscar al alumno
     student_to_update = session.get(User, student_id)
@@ -357,11 +357,11 @@ def create_exercise_batch(
     session: Annotated[Session, Depends(get_session)],
     current_professor: Annotated[User, Depends(get_current_professor)]
 ):
-    """Crea m迆ltiples ejercicios a la vez. Solo accesible para Profesores."""
+    """Crea multiples ejercicios a la vez. Solo accesible para Profesores."""
     
     created_exercises = []
     for exercise_data in exercises:
-        # Prevenci車n de duplicados basada en el nombre
+        # Prevencion de duplicados basada en el nombre
         existing_exercise = session.exec(select(Exercise).where(Exercise.nombre == exercise_data.nombre)).first()
         if existing_exercise:
             print(f"Advertencia: Ejercicio '{exercise_data.nombre}' ya existe, omitiendo.")
@@ -437,7 +437,7 @@ def delete_exercise(
 
 
 # ----------------------------------------------------------------------
-# ?? RUTA TRANSACCIONAL DE CREACI車N DE GRUPO Y RUTINAS (CORREGIDA)
+# ?? RUTA TRANSACCIONAL DE CREACIoN DE GRUPO Y RUTINAS (CORREGIDA)
 # ----------------------------------------------------------------------
 
 @app.post("/routines-group/create-transactional", response_model=List[RoutineAssignmentRead], tags=["Rutinas"])
@@ -451,7 +451,7 @@ def create_routine_group_and_routines(
     asociadas a ese grupo, y asigna CADA UNA al alumno.
     """
     try:
-        # 1. Validar Alumno y D赤as
+        # 1. Validar Alumno y Dias
         student = session.get(User, data.student_id)
         if not student or student.rol != UserRole.STUDENT:
             raise HTTPException(status_code=404, detail="Alumno no encontrado o rol incorrecto para la asignacion.")
@@ -462,7 +462,7 @@ def create_routine_group_and_routines(
         # 2. Crear el Grupo de Rutinas (RoutineGroup)
         routine_group = RoutineGroup(
             nombre=data.nombre,
-            # ?? CORRECCI車N CR赤TICA: Acceso directo a data.descripcion para evitar AttributeError
+            # ?? CORRECCIoN CRiTICA: Acceso directo a data.descripcion para evitar AttributeError
             descripcion=data.descripcion, 
             fecha_vencimiento=data.fecha_vencimiento, 
             professor_id=current_professor.id
@@ -497,10 +497,10 @@ def create_routine_group_and_routines(
 
             created_assignment_ids.append(assignment.id) 
 
-        # 4. COMMIT 迆NICO: Si todo lo anterior funcion車, confirmamos la transacci車n.
+        # 4. COMMIT uNICO: Si todo lo anterior funciono, confirmamos la transaccion.
         session.commit()
 
-        # 5. Fetch todas las asignaciones reci谷n creadas con las relaciones anidadas
+        # 5. Fetch todas las asignaciones recien creadas con las relaciones anidadas
         statement_read = (
             select(RoutineAssignment)
             .where(RoutineAssignment.id.in_(created_assignment_ids))
@@ -529,7 +529,7 @@ def create_routine_group_and_routines(
 
 
 # ----------------------------------------------------------------------
-# Rutas de Rutinas (CRUD - Continuaci車n)
+# Rutas de Rutinas (CRUD - Continuacion)
 # ----------------------------------------------------------------------
 
 @app.post("/routines/", response_model=RoutineRead, status_code=status.HTTP_201_CREATED, tags=["Rutinas"])
@@ -540,8 +540,8 @@ def create_routine(
 ):
     """Crea una nueva rutina (plantilla) y la asocia con ejercicios."""
     
-    # NOTA: Esta ruta no se utiliza con el nuevo flujo de creaci車n agrupada. 
-    # Mantenemos la l車gica de asignaci車n que estaba para rutinas individuales.
+    # NOTA: Esta ruta no se utiliza con el nuevo flujo de creacion agrupada. 
+    # Mantenemos la logica de asignacion que estaba para rutinas individuales.
     
     db_routine = Routine(
         nombre=routine_data.nombre,
@@ -604,7 +604,7 @@ def read_routines(
     Obtiene una lista de todas las rutinas maestras creadas por el profesor.
     """
     try:
-        # CORRECCI車N/MEJORA: Forzamos la carga de relaciones anidadas (links + detalles del ejercicio + grupo)
+        # CORRECCIoN/MEJORA: Forzamos la carga de relaciones anidadas (links + detalles del ejercicio + grupo)
         statement = (
             select(Routine)
             .where(Routine.owner_id == current_professor.id)
@@ -634,8 +634,8 @@ def read_routine(
     session: Annotated[Session, Depends(get_session)],
     current_user: Annotated[User, Depends(get_current_user)]
 ):
-    """Obtiene una rutina espec赤fica por su ID, incluyendo todos sus ejercicios."""
-    # CORRECCI車N/MEJORA: Forzamos la carga de relaciones anidadas (links + detalles del ejercicio + grupo)
+    """Obtiene una rutina especifica por su ID, incluyendo todos sus ejercicios."""
+    # CORRECCIoN/MEJORA: Forzamos la carga de relaciones anidadas (links + detalles del ejercicio + grupo)
     statement = (
         select(Routine)
         .where(Routine.id == routine_id)
@@ -651,7 +651,7 @@ def read_routine(
     
     return routine
 
-# RUTA CR赤TICA CORREGIDA: PATCH para cambiar el estado de activaci車n de una asignaci車n
+# RUTA CRiTICA CORREGIDA: PATCH para cambiar el estado de activacion de una asignacion
 @app.patch("/assignments/{assignment_id}", response_model=RoutineAssignmentRead, tags=["Asignaciones"])
 def set_assignment_active_status(
     assignment_id: int,
@@ -659,17 +659,17 @@ def set_assignment_active_status(
     session: Annotated[Session, Depends(get_session)],
     current_professor: Annotated[User, Depends(get_current_professor)]
 ):
-    """(Profesor) Permite actualizar el estado (is_active) de una asignaci車n."""
+    """(Profesor) Permite actualizar el estado (is_active) de una asignacion."""
     assignment = session.get(RoutineAssignment, assignment_id)
     
     if not assignment:
         raise HTTPException(status_code=404, detail="Asignacion no encontrada.")
 
-    # Opcional: Verificar que el profesor sea due?o (basado en el profesor que la asign車)
+    # Opcional: Verificar que el profesor sea due?o (basado en el profesor que la asigno)
     if assignment.professor_id != current_professor.id:
         raise HTTPException(status_code=403, detail="No tienes permiso para modificar esta asignacion.")
         
-    # Aplicar solo la actualizaci車n de is_active
+    # Aplicar solo la actualizacion de is_active
     update_data = assignment_update.model_dump(exclude_unset=True)
     
     for key, value in update_data.items():
@@ -687,7 +687,7 @@ def set_assignment_active_status(
             detail="Fallo al confirmar el cambio de estado en la base de datos."
         )
 
-    # CORRECCI車N CLAVE: Recargar la asignaci車n con todas las relaciones anidadas
+    # CORRECCIoN CLAVE: Recargar la asignacion con todas las relaciones anidadas
     statement_read = (
         select(RoutineAssignment)
         .where(RoutineAssignment.id == assignment_id)
@@ -708,7 +708,7 @@ def set_assignment_active_status(
           
     return updated_assignment
     
-# --- Ruta para eliminar un grupo de asignaciones para un alumno espec赤fico ---
+# --- Ruta para eliminar un grupo de asignaciones para un alumno especifico ---
 @app.delete("/assignments/group/{routine_group_id}/student/{student_id}", tags=["Profesor"])
 def delete_assignment_group_for_student(
     routine_group_id: int,
@@ -716,19 +716,19 @@ def delete_assignment_group_for_student(
     session: Annotated[Session, Depends(get_session)],
     current_professor: Annotated[User, Depends(get_current_professor)]
 ):
-    """(Profesor) Elimina todas las asignaciones de rutina de un RoutineGroup ID espec赤fico para un ALUMNO espec赤fico."""
+    """(Profesor) Elimina todas las asignaciones de rutina de un RoutineGroup ID especifico para un ALUMNO especifico."""
     
     # 1. Encontrar todas las rutinas vinculadas a ese grupo
     routine_statement = select(Routine).where(Routine.routine_group_id == routine_group_id)
     routines = session.exec(routine_statement).all()
     
     if not routines:
-        # Esto no deber赤a ocurrir si el frontend est芍 bien, pero es una protecci車n
+        # Esto no deberia ocurrir si el frontend esta bien, pero es una proteccion
         raise HTTPException(status_code=404, detail="No hay rutinas vinculadas a este grupo.")
 
     routine_ids = [r.id for r in routines]
 
-    # 2. Encontrar y eliminar las asignaciones espec赤ficas para este alumno y estas rutinas
+    # 2. Encontrar y eliminar las asignaciones especificas para este alumno y estas rutinas
     assignment_statement = select(RoutineAssignment).where(
         RoutineAssignment.routine_id.in_(routine_ids),
         RoutineAssignment.student_id == student_id,
@@ -747,15 +747,15 @@ def delete_assignment_group_for_student(
     
     return {"message": f"Se eliminaron {len(assignments_to_delete)} asignaciones de grupo para el alumno."}
 
-# RUTA ACTUALIZADA: EDICI車N COMPLETA (Metadata y Ejercicios)
+# RUTA ACTUALIZADA: EDICIoN COMPLETA (Metadata y Ejercicios)
 @app.patch("/routines/{routine_id}", response_model=RoutineRead, tags=["Rutinas"])
 def update_routine_full(
     routine_id: int,
-    routine_data: RoutineCreateOrUpdate, # Usamos el esquema de actualizaci車n completa
+    routine_data: RoutineCreateOrUpdate, # Usamos el esquema de actualizacion completa
     session: Annotated[Session, Depends(get_session)],
     current_professor: Annotated[User, Depends(get_current_professor)]
 ):
-    """Actualiza completamente una rutina maestra (nombre, descripci車n y REEMPLAZA la lista de ejercicios)."""
+    """Actualiza completamente una rutina maestra (nombre, descripcion y REEMPLAZA la lista de ejercicios)."""
     db_routine = session.get(Routine, routine_id)
     if not db_routine:
         raise HTTPException(status_code=404, detail="Rutina no encontrada")
@@ -824,7 +824,7 @@ def delete_routine(
     session: Annotated[Session, Depends(get_session)],
     current_professor: Annotated[User, Depends(get_current_professor)]
 ):
-    """Elimina una rutina maestra. Esto tambien eliminar芍 los enlaces en RoutineExercise y asignaciones."""
+    """Elimina una rutina maestra. Esto tambien eliminara los enlaces en RoutineExercise y asignaciones."""
     db_routine = session.get(Routine, routine_id)
     if not db_routine:
         raise HTTPException(status_code=404, detail="Rutina no encontrada")
@@ -841,7 +841,7 @@ def delete_routine(
     return
 
 # ----------------------------------------------------------------------
-# Rutas de Asignaci車n (Profesor y Alumno)
+# Rutas de Asignacion (Profesor y Alumno)
 # ----------------------------------------------------------------------
 
 # --- Rutas del Profesor ---
@@ -917,7 +917,7 @@ def get_assignments_for_student_by_professor(
         )
         .order_by(desc(RoutineAssignment.assigned_at)) 
         .options(
-            # CR赤TICO: Asegura la carga del grupo para la l車gica de agrupamiento del frontend
+            # CRiTICO: Asegura la carga del grupo para la logica de agrupamiento del frontend
             selectinload(RoutineAssignment.routine).selectinload(Routine.routine_group),
             selectinload(RoutineAssignment.routine).selectinload(Routine.exercise_links).selectinload(RoutineExercise.exercise),
             selectinload(RoutineAssignment.student),
@@ -930,7 +930,7 @@ def get_assignments_for_student_by_professor(
         return []
     
     # 3. Identificar la asignacion activa mas reciente (el 'ancla')
-    # NOTA: En el caso de grupos, solo una de las rutinas del grupo est芍 marcada como is_active=True.
+    # NOTA: En el caso de grupos, solo una de las rutinas del grupo esta marcada como is_active=True.
     active_anchor_assignment = next((a for a in all_assignments if a.is_active), None)
 
     if active_anchor_assignment and active_anchor_assignment.routine.routine_group_id:
@@ -987,7 +987,7 @@ def get_assignments_for_student_by_professor(
     # 8. Si no hay grupo activo, o no hay asignaciones, retornar la lista original/vacia.
     return all_assignments
 
-# --- Rutas del Alumno (Continuaci車n) ---
+# --- Rutas del Alumno (Continuacion) ---
 
 @app.get("/students/me/routine", response_model=List[RoutineAssignmentRead], tags=["Alumnos"])
 def get_my_active_routine(
@@ -995,8 +995,8 @@ def get_my_active_routine(
     current_student: Annotated[User, Depends(get_current_student)]
 ):
     """
-    (Alumno) Obtiene SOLAMENTE las rutinas asignadas que est芍n marcadas como activas.
-    Si la asignaci車n es parte de un grupo, devuelve TODAS las rutinas de ese grupo.
+    (Alumno) Obtiene SOLAMENTE las rutinas asignadas que estan marcadas como activas.
+    Si la asignacion es parte de un grupo, devuelve TODAS las rutinas de ese grupo.
     """
     # 1. Buscar la asignacion activa (el "ancla")
     statement = (
