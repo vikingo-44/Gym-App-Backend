@@ -8,7 +8,7 @@ import axios from 'axios';
 import { AuthContext } from '../App'; 
 import { useTheme } from '../ThemeContext'; 
 // Importamos TODOS los iconos necesarios (Lucide)
-import { Trash2, Edit, RefreshCcw, Settings, Key, LogOut, Minus, Plus, ChevronDown, ChevronUp } from 'lucide-react-native'; 
+import { Trash2, Edit, RefreshCcw, Menu, User, Key, LogOut, Minus, Plus, ChevronDown, ChevronUp, UserPlus, CheckCircle, Weight } from 'lucide-react-native'; 
 
 // ----------------------------------------------------------------------
 // URL de la API (DEBE COINCIDIR con la de App.js)
@@ -17,17 +17,72 @@ const API_URL = "https://gym-app-backend-e9bn.onrender.com";
 // ----------------------------------------------------------------------
 
 // ----------------------------------------------------------------------
+// FUNCIONES DE FECHA (Ajustadas para DD/MM/YYYY)
+// ----------------------------------------------------------------------
+
+// Convierte DD/MM/YYYY o YYYY-MM-DD a un objeto Date (CRÍTICO para validación y formato)
+const parseDateToJS = (dateString) => {
+    if (!dateString) return null;
+    const parts = dateString.split(/[-\/]/); // Soporta tanto - como /
+    if (parts.length === 3) {
+        // Asumimos DD/MM/YYYY o YYYY-MM-DD
+        let year, month, day;
+        if (parts[0].length === 4) { // Asume YYYY-MM-DD (API format)
+            [year, month, day] = parts;
+        } else { // Asume DD/MM/YYYY (Display format)
+            [day, month, year] = parts;
+        }
+        // Usamos UTC para evitar problemas de zona horaria con la fecha local
+        const date = new Date(Date.UTC(parseInt(year), parseInt(month) - 1, parseInt(day)));
+        return date;
+    }
+    return null;
+};
+
+// Formatea un objeto Date (o una cadena ISO) a DD/MM/YYYY para la UI.
+const formatDisplayDate = (dateInput) => {
+    if (!dateInput) return 'N/A';
+    
+    let date = dateInput instanceof Date ? dateInput : parseDateToJS(dateInput);
+
+    if (date && !isNaN(date.getTime())) {
+        // Usamos Intl.DateTimeFormat para el formato local DD/MM/YYYY
+        return new Intl.DateTimeFormat('es-AR', {
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+        }).format(date);
+    }
+    return 'Inválida';
+};
+
+// Convierte DD/MM/YYYY o DD-MM-YYYY a YYYY-MM-DD (Formato requerido por la API)
+const formatAPIDate = (dateString) => {
+    const date = parseDateToJS(dateString);
+    if (date && !isNaN(date.getTime())) {
+        // Convertir a YYYY-MM-DD
+        const year = date.getUTCFullYear();
+        const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+        const day = String(date.getUTCDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    }
+    return '';
+};
+// ----------------------------------------------------------------------
+
+
+// ----------------------------------------------------------------------
 // GENERADOR DE ESTILOS PARA ASIGNACION (AssignmentView)
 // ----------------------------------------------------------------------
 const getAssignmentStyles = (colors) => StyleSheet.create({
     scrollContainer: {
         flex: 1, 
-        backgroundColor: colors.background,
+        backgroundColor: colors.background, // Usa el fondo del tema
     },
     container: {
         flex: 1,
         padding: 20,
-        backgroundColor: colors.background,
+        backgroundColor: colors.background, // Usa el fondo del tema
         alignItems: 'center',
     },
     title: {
@@ -88,18 +143,22 @@ const getAssignmentStyles = (colors) => StyleSheet.create({
         color: colors.textPrimary,
         marginBottom: 5,
     },
+    groupDetails: { // Nuevo estilo para detalles adicionales del grupo
+        fontSize: 14, 
+        fontWeight: 'normal', 
+        color: colors.textSecondary, 
+        marginBottom: 2,
+    },
     groupActions: { 
         flexDirection: 'row',
         justifyContent: 'flex-start',
         gap: 10,
         marginTop: 10,
-        flexWrap: 'wrap',
     },
     groupActionButtonText: { 
         color: colors.card, 
         fontWeight: 'bold', 
         fontSize: 12,
-        marginLeft: 5,
     },
     toggleGroupButton: {
         flexDirection: 'row',
@@ -116,9 +175,9 @@ const getAssignmentStyles = (colors) => StyleSheet.create({
         marginBottom: 10,
         shadowColor: colors.isDark ? '#000' : '#444',
         shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: colors.isDark ? 0.3 : 0.1,
-        shadowRadius: 2,
-        elevation: 2,
+        shadowOpacity: colors.isDark ? 0.4 : 0.1, // Sombra más visible en modo oscuro
+        shadowRadius: 3,
+        elevation: 3,
         overflow: 'hidden', 
     },
     // Barra lateral de estado
@@ -132,8 +191,8 @@ const getAssignmentStyles = (colors) => StyleSheet.create({
         fontSize: 10,
         fontWeight: 'bold',
         color: 'white',
-        transform: [{ rotate: '-90deg' }], // Texto vertical
-        width: 100, // Asegura que el texto quepa girado
+        transform: [{ rotate: '-90deg' }], 
+        width: 100, 
         textAlign: 'center',
     },
     // Contenido del header y acciones
@@ -148,18 +207,14 @@ const getAssignmentStyles = (colors) => StyleSheet.create({
         flex: 1,
     },
     assignmentDetails: {
-        flex: 1,
+        flex: 1, // Permite que ocupe el espacio
         paddingRight: 10,
     },
     assignmentActions: { 
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 5,
-    },
-    assignmentDate: {
-        fontSize: 14,
-        color: colors.textSecondary,
-        marginBottom: 5,
+        // Asegura que los botones estén pegados al borde derecho si es necesario.
+        justifyContent: 'flex-end', 
     },
     deleteButton: {
         padding: 8, 
@@ -175,11 +230,6 @@ const getAssignmentStyles = (colors) => StyleSheet.create({
         flexDirection: 'row', 
         alignItems: 'center',
     },
-    toggleButton: {
-        paddingVertical: 8,
-        paddingHorizontal: 8,
-        borderRadius: 8,
-    },
     routineName: {
         fontSize: 18,
         fontWeight: '600',
@@ -193,7 +243,8 @@ const getAssignmentStyles = (colors) => StyleSheet.create({
         paddingBottom: 5,
         borderTopWidth: 1,
         borderTopColor: colors.divider,
-        backgroundColor: colors.isDark ? colors.background : '#F7F7F7',
+        // CORRECCIÓN DE CONTRASTE: Usamos colors.card (#1F2937) en Dark Mode.
+        backgroundColor: colors.isDark ? colors.card : '#1F2937', 
     },
     exerciseItem: {
         paddingLeft: 10,
@@ -201,6 +252,8 @@ const getAssignmentStyles = (colors) => StyleSheet.create({
         borderLeftWidth: 2,
         borderLeftColor: colors.highlight,
         marginBottom: 8,
+        backgroundColor: colors.isDark ? colors.card : '#1F2937', // Fondo para el item del ejercicio
+        borderRadius: 5,
     },
     exerciseName: {
         fontSize: 15,
@@ -217,14 +270,14 @@ const getAssignmentStyles = (colors) => StyleSheet.create({
     detailItem: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: colors.isDark ? colors.highlight : colors.divider, 
+        backgroundColor: colors.isDark ? colors.highlight : colors.divider, // Ajuste para dark mode
         borderRadius: 6,
         paddingHorizontal: 8,
         paddingVertical: 4,
     },
     detailLabel: {
         fontSize: 12,
-        color: colors.textSecondary,
+        color: colors.textPrimary, 
         marginRight: 4,
         fontWeight: '500',
     },
@@ -233,16 +286,50 @@ const getAssignmentStyles = (colors) => StyleSheet.create({
         fontWeight: 'bold',
         color: colors.primaryDark,
     },
+    // --- Estilos de Botones Personalizados (AssignmentView) ---
+    customButton: {
+        paddingVertical: 12,
+        paddingHorizontal: 20,
+        borderRadius: 10, // Bordes redondeados
+        alignItems: 'center',
+        justifyContent: 'center',
+        minWidth: 100,
+        // Sombra para darle un toque 3D
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.2,
+        shadowRadius: 3,
+        elevation: 4,
+    },
+    buttonPrimary: {
+        backgroundColor: colors.primary, // Color principal para avanzar/guardar
+    },
+    buttonSecondary: {
+        backgroundColor: colors.card, // Fondo claro o de tarjeta
+        borderColor: colors.divider,
+        borderWidth: 1,
+    },
+    buttonDanger: {
+        backgroundColor: colors.danger, // Color para cancelar
+    },
+    buttonText: {
+        fontSize: 16,
+        fontWeight: 'bold',
+        color: colors.card, // Texto blanco/color de tarjeta para botones de colores
+    },
+    buttonTextSecondary: {
+        fontSize: 16,
+        fontWeight: 'bold',
+        color: colors.textPrimary, // Texto principal para botones secundarios
+    },
 });
 
 // ----------------------------------------------------------------------
-// COMPONENTE: Tarjeta Colapsable de Asignacion (Modificado para barra lateral)
+// COMPONENTE: Tarjeta Colapsable de Asignacion
 // ----------------------------------------------------------------------
 const CollapsibleAssignmentCard = ({ 
     assignment, assignmentStyles, themeColors, 
     handleEditAssignment, 
-    handleDeleteRoutineAssignment, 
-    handleToggleRoutineActive 
 }) => {
     
     const [isExpanded, setIsExpanded] = useState(false);
@@ -299,65 +386,233 @@ const CollapsibleAssignmentCard = ({
             {/* CONTENEDOR PRINCIPAL DEL CONTENIDO */}
             <View style={assignmentStyles.assignmentContent}>
                 
-                {/* 2. CABECERA: Area Colapsable (El area de clic) */}
-                <TouchableOpacity 
-                    style={assignmentStyles.assignmentHeader} 
-                    onPress={() => setIsExpanded(!isExpanded)}
-                    activeOpacity={0.8}
-                >
+                {/* 2. CABECERA: Rutina Name Area (Ahora es una View) */}
+                <View style={assignmentStyles.assignmentHeader}>
                     <View style={assignmentStyles.assignmentDetails}>
                         <Text style={assignmentStyles.routineName}>{assignment.routine.nombre}</Text>
-                        <Text style={assignmentStyles.assignmentDate}>
-                            Vencimiento: {assignment.routine?.routine_group?.fecha_vencimiento || 'N/A'}
+                        
+                        {/* Indicador de cantidad de ejercicios, separado del botón */}
+                        <Text style={{ marginTop: 5, color: themeColors.textSecondary, fontSize: 13, fontWeight: '500'}}>
+                            {linkCount} EJERCICIOS
                         </Text>
-                        {/* Indicador de expansion */}
-                        <View style={{flexDirection: 'row', alignItems: 'center', marginTop: 5}}>
-                            {isExpanded ? 
-                                <ChevronUp size={18} color={themeColors.primary} /> : 
-                                <ChevronDown size={18} color={themeColors.primary} />
-                            }
-                            <Text style={{marginLeft: 5, color: themeColors.primary, fontSize: 13, fontWeight: '500'}}>
-                                {isExpanded ? 'TOCAR PARA COLAPSAR' : `VER ${linkCount} EJERCICIOS`}
-                            </Text>
-                        </View>
                     </View>
 
-                    {/* 3. ACCIONES DE LA RUTINA INDIVIDUAL */}
+                    {/* 3. ACCIONES DE LA RUTINA INDIVIDUAL Y BOTÓN DE EXPANSIÓN (Touch Area) */}
                     <View style={assignmentStyles.assignmentActions}>
+                        
+                        {/* Botón para Editar Rutina Individual */}
                         <TouchableOpacity 
-                            style={assignmentStyles.editButton} 
-                            onPress={() => handleEditAssignment(assignment.routine_id)} // Edita solo esta rutina
+                            style={[assignmentStyles.editButton, { marginRight: 8 }]} 
+                            onPress={() => handleEditAssignment(assignment.routine_id)} 
                         >
                             <Edit size={20} color={themeColors.card} />
                         </TouchableOpacity>
-
-                        <TouchableOpacity 
+                        
+                        {/* NUEVO BOTÓN DEDICADO: Expansión/Colapso */}
+                        <TouchableOpacity
                             style={[
-                                assignmentStyles.toggleButton, 
-                                { backgroundColor: assignment.is_active ? themeColors.warning : themeColors.success } 
-                            ]} 
-                            // Toggle solo esta asignación
-                            onPress={() => handleToggleRoutineActive(assignment.id, assignment.is_active)}
+                                assignmentStyles.editButton, 
+                                { backgroundColor: isExpanded ? themeColors.textSecondary : themeColors.primary }
+                            ]}
+                            onPress={() => setIsExpanded(!isExpanded)}
                         >
-                            <Text style={{ color: themeColors.card, fontWeight: 'bold', fontSize: 12 }}>
-                                {assignment.is_active ? 'INACTIVAR' : 'ACTIVAR'}
-                            </Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity 
-                            style={assignmentStyles.deleteButton} 
-                            // Elimina solo esta asignación
-                            onPress={() => handleDeleteRoutineAssignment(assignment.id, assignment.routine.nombre)} 
-                        >
-                            <Trash2 size={20} color={themeColors.card} />
+                            {isExpanded ? 
+                                <ChevronUp size={20} color={themeColors.card} /> : 
+                                <ChevronDown size={20} color={themeColors.card} />
+                            }
                         </TouchableOpacity>
                     </View>
-                </TouchableOpacity>
+                </View>
 
                 {/* 4. CONTENIDO COLAPSABLE (Ejercicios) */}
                 {isExpanded && renderExercises()}
             </View>
         </View>
+    );
+}
+
+
+// --- COMPONENTE: MODAL DE EDICIÓN DE GRUPO (NUEVO) ---
+function EditGroupWizard({ groupData, onComplete, onCancel, fetchCurrentAssignments }) {
+    const { colors: themeColors } = useTheme();
+    const styles = getMainScreenStyles(themeColors); 
+    const { getToken } = useContext(AuthContext);
+
+    const firstRoutine = groupData.assignments[0];
+    const group = firstRoutine.routine?.routine_group;
+    
+    // Inicializar la fecha de vencimiento en formato DD/MM/YYYY para la edición
+    const initialExpiryDate = groupData.expiryDate ? formatDisplayDate(groupData.expiryDate) : '';
+
+    const [groupName, setGroupName] = useState(groupData.groupName || '');
+    const [routinesCount, setRoutinesCount] = useState(groupData.assignments.length);
+    const [expirationDate, setExpirationDate] = useState(initialExpiryDate); // Formato DD/MM/YYYY
+    const [isLoading, setIsLoading] = useState(false);
+
+    const handleUpdateGroup = async () => {
+        if (!groupName.trim() || !expirationDate.trim()) {
+             Alert.alert("Error", "El nombre y la fecha de vencimiento son obligatorios.");
+             return;
+        }
+
+        // Validar el formato DD/MM/YYYY para el usuario
+        const displayDateRegex = /^\d{2}[-/]\d{2}[-/]\d{4}$/;
+        if (!displayDateRegex.test(expirationDate.trim())) {
+            Alert.alert("Error", "Debes ingresar una fecha de vencimiento válida en formato DD/MM/AAAA.");
+            return;
+        }
+        
+        // Convertir la fecha al formato YYYY-MM-DD para la API
+        const apiFormattedDate = formatAPIDate(expirationDate.trim());
+        if (!apiFormattedDate) {
+             Alert.alert("Error", "No se pudo convertir la fecha a un formato válido para la API.");
+             return;
+        }
+        
+        setIsLoading(true);
+        try {
+            const token = await getToken();
+            const headers = { 'Authorization': `Bearer ${token}` };
+            const routineGroupId = groupData.routineGroupId;
+            const currentCount = groupData.assignments.length;
+            
+            // 1. PATCH: Actualizar el grupo de rutinas (Nombre y Fecha)
+            await axios.patch(
+                `${API_URL}/routine_groups/${routineGroupId}`, 
+                { 
+                    nombre: groupName.trim(), 
+                    fecha_vencimiento: apiFormattedDate, // Usamos el formato YYYY-MM-DD
+                },
+                { headers }
+            );
+
+            // 2. Manejar la lógica de cambio de días (rutinas)
+            if (routinesCount > currentCount) {
+                // Agregar nuevas rutinas (Día N)
+                const routinesToAdd = routinesCount - currentCount;
+                
+                for (let i = 1; i <= routinesToAdd; i++) {
+                    const newDayNumber = currentCount + i;
+                    
+                    // Llamada al endpoint para crear una nueva rutina en el grupo
+                    await axios.post(
+                        `${API_URL}/routines/group/${routineGroupId}/day/${newDayNumber}/student/${firstRoutine.student_id}`, 
+                        { 
+                            nombre: `${groupName.trim()} - Dia ${newDayNumber}`,
+                            descripcion: `Rutina Dia ${newDayNumber} generada por edición.`,
+                        },
+                        { headers }
+                    );
+                }
+                
+            } else if (routinesCount < currentCount) {
+                // Eliminar rutinas (Día N)
+                const routinesToDelete = currentCount - routinesCount;
+                
+                const routinesSortedByDay = groupData.assignments.sort((a, b) => {
+                    const aDayMatch = a.routine.nombre.match(/ - Dia (\d+)$/);
+                    const bDayMatch = b.routine.nombre.match(/ - Dia (\d+)$/);
+                    const aDay = aDayMatch ? parseInt(aDayMatch[1]) : 0;
+                    const bDay = bDayMatch ? parseInt(bDayMatch[1]) : 0;
+                    return bDay - aDay; // Orden descendente para eliminar las últimas
+                });
+
+                const deletionPromises = [];
+                for (let i = 0; i < routinesToDelete; i++) {
+                    const routineToDelete = routinesSortedByDay[i];
+                    if (routineToDelete) {
+                        // Elimina la rutina maestra (que a su vez elimina la asignación)
+                        deletionPromises.push(
+                            axios.delete(`${API_URL}/routines/${routineToDelete.routine_id}`, { headers })
+                        );
+                    }
+                }
+                await Promise.all(deletionPromises);
+            }
+
+            Alert.alert("Éxito", "Grupo actualizado correctamente. ¡Recuerda recargar si editaste las rutinas individuales!");
+            fetchCurrentAssignments(); // Refresca los datos en la vista de asignaciones
+            onComplete();
+
+        } catch (e) {
+            console.error("Error actualizando grupo:", e.response ? e.response.data : e.message);
+            Alert.alert("Error", `Fallo al actualizar el grupo. Detalle: ${e.response?.data?.detail || "Error de red/servidor."}`);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    return (
+        <SafeAreaView style={[styles.container, {backgroundColor: themeColors.background}]}>
+            <View style={styles.headerSelection}>
+                <Text style={styles.wizardTitle}>Editar Grupo: {groupData.groupName}</Text>
+                {/* BOTÓN CANCELAR */}
+                <TouchableOpacity 
+                    style={[styles.customButton, styles.buttonDanger, {minWidth: 80}]} 
+                    onPress={onCancel}
+                >
+                    <Text style={styles.buttonText}>Cancelar</Text>
+                </TouchableOpacity>
+            </View>
+            
+            <ScrollView contentContainerStyle={styles.wizardContainer}>
+                <Text style={styles.stepText}>Detalles del Grupo</Text>
+                
+                <Text style={styles.label}>Nombre de la Agrupación:</Text>
+                <TextInput
+                    style={styles.wizardInput}
+                    placeholder="Ej: Rutina Bloque B"
+                    placeholderTextColor={themeColors.textSecondary}
+                    value={groupName}
+                    onChangeText={setGroupName}
+                />
+                
+                <Text style={[styles.label, {marginTop: 20}]}>Cantidad de Rutinas (Días):</Text>
+                <Text style={styles.warningTextCenter}>
+                    Si se aumenta, se crearán rutinas vacías. Si se reduce, se eliminarán las rutinas con el día más alto.
+                </Text>
+                <View style={styles.routineCounter}>
+                    <TouchableOpacity 
+                        style={[styles.counterButton, { backgroundColor: themeColors.danger }]}
+                        onPress={() => setRoutinesCount(prev => Math.max(1, prev - 1))}
+                        disabled={routinesCount <= 1}
+                    >
+                        <Minus size={24} color={themeColors.card} />
+                    </TouchableOpacity>
+
+                    <Text style={styles.counterCountText}>{routinesCount}</Text>
+
+                    <TouchableOpacity 
+                        style={[styles.counterButton, { backgroundColor: themeColors.success }]}
+                        onPress={() => setRoutinesCount(prev => Math.min(5, prev + 1))} // Maximo 5
+                        disabled={routinesCount >= 5}
+                    >
+                        <Plus size={24} color={themeColors.card} />
+                    </TouchableOpacity>
+                </View>
+                
+                <Text style={[styles.label, {marginTop: 20}]}>Fecha de Vencimiento:</Text>
+                <TextInput
+                    style={styles.wizardInput}
+                    placeholder="DD/MM/AAAA" // placeholder en nuevo formato
+                    placeholderTextColor={themeColors.textSecondary}
+                    value={expirationDate}
+                    onChangeText={setExpirationDate}
+                    keyboardType="default"
+                />
+                
+                <View style={[styles.wizardActions, {justifyContent: 'center'}]}>
+                    {/* BOTÓN GUARDAR CAMBIOS */}
+                    <TouchableOpacity 
+                        style={[styles.customButton, styles.buttonPrimary, { opacity: isLoading ? 0.5 : 1, minWidth: 160 }]} 
+                        onPress={handleUpdateGroup} 
+                        disabled={isLoading}
+                    >
+                        <Text style={styles.buttonText}>{isLoading ? "Guardando..." : "Guardar Cambios"}</Text>
+                    </TouchableOpacity>
+                </View>
+            </ScrollView>
+        </SafeAreaView>
     );
 }
 
@@ -367,10 +622,8 @@ function AssignmentView({ student, routines, onAssignmentComplete, onCancel, nav
     const { colors: themeColors, isDark } = useTheme(); 
     const assignmentStyles = getAssignmentStyles(themeColors);
 
-    const availableRoutines = Array.isArray(routines) ? routines : []; 
-    
-    const [selectedRoutine, setSelectedRoutine] = useState(availableRoutines.length > 0 ? availableRoutines[0].id : null); 
-    const [isAssigning, setIsAssigning] = useState(false);
+    // Estado para editar grupo (Nuevo)
+    const [editingGroup, setEditingGroup] = useState(null); 
     
     const [currentAssignments, setCurrentAssignments] = useState([]);
     const [isAssignmentsLoading, setIsAssignmentsLoading] = useState(true);
@@ -391,13 +644,7 @@ function AssignmentView({ student, routines, onAssignmentComplete, onCancel, nav
                 { headers }
             );
             
-            // Sorteamos las asignaciones para que el orden de los grupos sea consistente
-            const sortedAssignments = Array.isArray(response.data) ? response.data.sort((a, b) => {
-                const aGroup = a.routine.routine_group?.id || a.routine_id;
-                const bGroup = b.routine.routine_group?.id || b.routine_id;
-                return aGroup - bGroup;
-            }) : [];
-            
+            const sortedAssignments = Array.isArray(response.data) ? response.data : [];
             setCurrentAssignments(sortedAssignments); 
 
         } catch (e) {
@@ -425,35 +672,10 @@ function AssignmentView({ student, routines, onAssignmentComplete, onCancel, nav
     };
 
     // ----------------------------------------------------------------
-    // FUNCION 2A: ELIMINAR ASIGNACION DE RUTINA INDIVIDUAL
+    // NUEVA FUNCION: Iniciar Edición de Grupo
     // ----------------------------------------------------------------
-    const handleDeleteRoutineAssignment = (assignmentId, routineName) => {
-        Alert.alert(
-            "Confirmar Eliminación",
-            `¿Estás seguro de que quieres eliminar la rutina: ${routineName}? Esto solo elimina la asignación individual, no el grupo completo.`,
-            [
-                { text: "Cancelar", style: "cancel" },
-                {
-                    text: "Eliminar Rutina",
-                    style: "destructive",
-                    onPress: async () => {
-                        try {
-                            const token = await getToken();
-                            const headers = { 'Authorization': `Bearer ${token}` };
-                            
-                            await axios.delete(`${API_URL}/assignments/${assignmentId}`, { headers });
-                            
-                            Alert.alert("Éxito", "Asignación de rutina individual eliminada correctamente.");
-                            fetchCurrentAssignments();
-                            
-                        } catch (e) {
-                            console.error("Error eliminando asignación:", e.response ? e.response.data : e.message);
-                            Alert.alert("Error", `Fallo al eliminar: ${e.response?.data?.detail || "Error de red/servidor."}`);
-                        }
-                    }
-                }
-            ]
-        );
+    const handleEditGroup = (groupData) => {
+        setEditingGroup(groupData);
     };
 
     // ----------------------------------------------------------------
@@ -463,17 +685,17 @@ function AssignmentView({ student, routines, onAssignmentComplete, onCancel, nav
         if (!routineGroupId) return; // Prevencion extra
         
         Alert.alert(
-            "ELIMINAR GRUPO COMPLETO",
-            `¿Estás seguro de que quieres eliminar el grupo de rutinas: ${groupName} para ESTE ALUMNO? Se eliminarán todas las asignaciones asociadas (Día 1, Día 2, etc.)`,
+            "ELIMINAR ASIGNACIONES DE GRUPO", // Texto ajustado
+            `¿Estás seguro de que quieres eliminar TODAS las asignaciones (Día 1, Día 2, etc.) del grupo: ${groupName} para ESTE ALUMNO?`,
             [
                 { text: "Cancelar", style: "cancel" },
                 {
-                    text: "Eliminar Grupo",
+                    text: "Eliminar Asignaciones", // Texto ajustado
                     style: "destructive",
                     onPress: async () => {
                         try {
                             const token = await getToken();
-                            // Endpoint hipotético/ideal para eliminar el grupo para un alumno
+                            // Endpoint de eliminacion de grupo de asignaciones para un alumno
                             await axios.delete(`${API_URL}/assignments/group/${routineGroupId}/student/${student.id}`, { 
                                 headers: { 'Authorization': `Bearer ${token}` } 
                             });
@@ -490,55 +712,37 @@ function AssignmentView({ student, routines, onAssignmentComplete, onCancel, nav
     };
 
     // ----------------------------------------------------------------
-    // FUNCION 3A: CAMBIAR ESTADO ACTIVO/INACTIVO DE RUTINA INDIVIDUAL
+    // FUNCION 3B: CAMBIAR ESTADO ACTIVO/INACTIVO DE GRUPO COMPLETO (CORREGIDO)
     // ----------------------------------------------------------------
-    const handleToggleRoutineActive = async (assignmentId, currentStatus) => {
-        const newStatus = !currentStatus;
-        try {
-            const token = await getToken();
-            const headers = { 'Authorization': `Bearer ${token}` };
-
-            await axios.patch(
-                `${API_URL}/assignments/${assignmentId}`, 
-                { is_active: newStatus },
-                { headers }
-            );
-
-            // Solo actualiza localmente para una respuesta más rápida
-            setCurrentAssignments(prev => 
-                prev.map(a => a.id === assignmentId ? { ...a, is_active: newStatus } : a)
-            );
-
-            Alert.alert("Éxito", `Rutina ${newStatus ? 'activada' : 'inactivada'} correctamente.`);
-            
-            fetchCurrentAssignments(); // Refresca por si hay cambios en el backend
-
-        } catch (e) {
-            console.error("Error cambiando estado:", e.response ? e.response.data : e.message);
-            Alert.alert("Error", `Fallo al cambiar el estado. Detalle: ${e.response?.data?.detail || "Error de red/servidor."}`);
-        }
-    };
-
-    // ----------------------------------------------------------------
-    // FUNCION 3B: CAMBIAR ESTADO ACTIVO/INACTIVO DE GRUPO COMPLETO
-    // ----------------------------------------------------------------
-    const handleToggleGroupActive = async (assignments, currentStatus) => {
-        const newStatus = !currentStatus;
+    const handleToggleGroupActive = async (assignments, isGroupCurrentlyActive) => {
+        const newStatus = !isGroupCurrentlyActive;
+        
         try {
             const token = await getToken();
             const headers = { 'Authorization': `Bearer ${token}` };
             
-            // Simulación de acción de grupo: Activa/inactiva cada rutina del grupo
-            await Promise.all(assignments.map(assignment => 
-                axios.patch(
-                    `${API_URL}/assignments/${assignment.id}`, 
-                    { is_active: newStatus }, 
-                    { headers }
-                )
-            ));
+            if (newStatus === true) {
+                // ACTIVAR GRUPO: ¡ACTIVAR TODAS las asignaciones del grupo!
+                await Promise.all(assignments.map(assignment => 
+                    axios.patch(
+                        `${API_URL}/assignments/${assignment.id}`, 
+                        { is_active: true }, 
+                        { headers }
+                    )
+                ));
+            } else {
+                // INACTIVAR GRUPO: Inactiva todas las asignaciones del grupo
+                await Promise.all(assignments.map(assignment => 
+                    axios.patch(
+                        `${API_URL}/assignments/${assignment.id}`, 
+                        { is_active: false }, 
+                        { headers }
+                    )
+                ));
+            }
 
-            Alert.alert("Éxito", `Grupo ${newStatus ? 'activado' : 'inactivado'} correctamente.`);
-            fetchCurrentAssignments(); // Refresca para ver el estado de todas
+            Alert.alert("Éxito", `Grupo ${newStatus ? 'activado' : 'inactivado'} correctamente. **Todas las rutinas están ${newStatus ? 'activas' : 'inactivas'}.**`);
+            fetchCurrentAssignments(); 
 
         } catch (e) {
             console.error("Error cambiando estado del grupo:", e.response ? e.response.data : e.message);
@@ -551,56 +755,64 @@ function AssignmentView({ student, routines, onAssignmentComplete, onCancel, nav
     useEffect(() => {
         fetchCurrentAssignments();
     }, [student.id, isDark]); 
-
-    // --- ASIGNACION DE RUTINA (Logica original, sin cambios) ---
-    const handleAssign = async () => {
-        if (!selectedRoutine) {
-            Alert.alert("Error", "No hay rutinas disponibles para asignar.");
-            return;
-        }
-        // ... (resto de la lógica de asignación si la tuvieras aquí) ...
-    };
+    
     
     // ----------------------------------------------------------------
     // FUNCION DE AGRUPACION (Por el nombre base de la rutina)
     // ----------------------------------------------------------------
     const getGroupedAssignments = () => {
         const groups = {};
-        const dayPattern = / - Dia \d+$/;
-
+        
         for (const assignment of currentAssignments) {
-            const fullName = assignment.routine?.nombre || 'Rutina Sin Nombre';
             
             let groupName;
+            // La API devuelve YYYY-MM-DD
             let groupExpiryDate = assignment.routine?.routine_group?.fecha_vencimiento;
+            
+            let groupCreationDate = assignment.routine?.routine_group?.created_at || assignment.routine?.routine_group?.fecha_creacion; 
+            
+            let professorCreatorName = assignment.routine?.professor?.nombre; 
+            
             let routineGroupId = assignment.routine?.routine_group?.id;
 
             if (assignment.routine?.routine_group?.nombre) {
                 groupName = assignment.routine.routine_group.nombre;
             } else {
-                // Fallback para rutinas no agrupadas correctamente en backend
-                const match = fullName.match(dayPattern);
-                if (match) {
-                    groupName = fullName.substring(0, fullName.length - match[0].length).trim();
-                } else {
-                    groupName = fullName;
-                }
+                groupName = assignment.routine?.nombre || 'Rutina Sin Nombre';
+                routineGroupId = assignment.routine_id; 
             }
 
-            if (!groups[groupName]) {
-                groups[groupName] = {
+            const groupIdKey = routineGroupId ? `G-${routineGroupId}` : `R-${assignment.routine_id}`;
+
+            if (!groups[groupIdKey]) {
+                groups[groupIdKey] = {
+                    groupName: groupName,
                     assignments: [],
-                    expiryDate: groupExpiryDate,
-                    routineGroupId: routineGroupId
+                    expiryDate: groupExpiryDate, // YYYY-MM-DD de la API
+                    creationDate: groupCreationDate, // Cadena ISO/Fecha de la API
+                    professorCreatorName: professorCreatorName, // String o null
+                    routineGroupId: routineGroupId, 
                 };
             }
-            groups[groupName].assignments.push(assignment);
+            groups[groupIdKey].assignments.push(assignment);
         }
 
         return groups;
     };
 
     const groupedAssignments = getGroupedAssignments();
+    
+    // Si estamos editando un grupo, mostramos el wizard
+    if (editingGroup) {
+        return (
+            <EditGroupWizard 
+                groupData={editingGroup} 
+                onCancel={() => setEditingGroup(null)}
+                onComplete={() => setEditingGroup(null)}
+                fetchCurrentAssignments={fetchCurrentAssignments}
+            />
+        );
+    }
     
     // --- VISTA DE RENDERIZADO ---
     return (
@@ -616,60 +828,84 @@ function AssignmentView({ student, routines, onAssignmentComplete, onCancel, nav
                 ) : (
                     <View style={assignmentStyles.currentAssignmentList}>
                         {Object.keys(groupedAssignments).length > 0 ? (
-                            Object.keys(groupedAssignments).map((groupName) => {
-                                const groupAssignments = groupedAssignments[groupName].assignments;
-                                const groupData = groupedAssignments[groupName];
+                            Object.keys(groupedAssignments).map((groupIdKey) => {
+                                const groupData = groupedAssignments[groupIdKey];
+                                const groupAssignments = groupData.assignments;
                                 
-                                // Determinar si el grupo tiene un ID de grupo real y si al menos una está activa
                                 const routineGroupId = groupData.routineGroupId;
                                 const isGroupActive = groupAssignments.some(a => a.is_active);
-                                const isGroupMember = !!routineGroupId;
+                                
+                                // Determina la primera rutina para usar su ID para editar la rutina individual
+                                const firstRoutineInGroup = groupAssignments
+                                    .sort((a, b) => {
+                                        const aDayMatch = a.routine.nombre.match(/ - Dia (\d+)$/);
+                                        const bDayMatch = b.routine.nombre.match(/ - Dia (\d+)$/);
+                                        const aDay = aDayMatch ? parseInt(aDayMatch[1]) : 999;
+                                        const bDay = bDayMatch ? parseInt(bDayMatch[1]) : 999;
+                                        return aDay - bDay;
+                                    })[0];
+                                
+                                const finalGroupIdForActions = routineGroupId || firstRoutineInGroup?.routine_id;
 
                                 return (
-                                    <View key={groupName}>
-                                        {/* 🚨 ENCABEZADO Y ACCIONES DEL GRUPO */}
+                                    <View key={groupIdKey}>
+                                        {/* ENCABEZADO Y ACCIONES DEL GRUPO */}
                                         <View style={assignmentStyles.groupHeaderContainer}>
                                             <Text style={assignmentStyles.groupHeader}>
-                                                {groupName} ({groupAssignments.length})
+                                                {groupData.groupName} ({groupAssignments.length} Rutinas)
                                             </Text>
-                                            <Text style={{ fontSize: 14, fontWeight: 'normal', color: themeColors.textSecondary, marginBottom: 5 }}>
-                                                Vence: {groupData.expiryDate || 'N/A'}
+                                            
+                                            {/* Mostrar Fecha de Creación (Formateada) */}
+                                            {groupData.creationDate && (
+                                                <Text style={assignmentStyles.groupDetails}>
+                                                    Creado: {formatDisplayDate(groupData.creationDate)}
+                                                </Text>
+                                            )}
+
+                                            {/* Mostrar Profesor Creador (Se muestra N/A si está ausente) */}
+                                            <Text style={assignmentStyles.groupDetails}>
+                                                Profesor: {groupData.professorCreatorName || 'N/A'}
+                                            </Text>
+                                            
+                                            {/* Mostrar Fecha de Vencimiento formateada */}
+                                            <Text style={assignmentStyles.groupDetails}>
+                                                Vence: {formatDisplayDate(groupData.expiryDate)}
                                             </Text>
 
-                                            {/* 🚨 ACCIONES DEL GRUPO */}
-                                            {isGroupMember && (
+                                            {/* ACCIONES DEL GRUPO */}
+                                            {finalGroupIdForActions && (
                                                 <View style={assignmentStyles.groupActions}>
-                                                     {/* Botón de Editar Grupo (Navega a la edición de la primera rutina del grupo) */}
-                                                    <TouchableOpacity 
-                                                        style={assignmentStyles.editButton} 
-                                                        onPress={() => handleEditAssignment(groupAssignments[0].routine_id)}
-                                                    >
-                                                        <Edit size={20} color={themeColors.card} />
-                                                        <Text style={assignmentStyles.groupActionButtonText}>EDITAR GRUPO</Text>
-                                                    </TouchableOpacity>
-                                                    
-                                                    {/* Botón de Activar/Inactivar Grupo */}
-                                                    <TouchableOpacity 
-                                                        style={[
-                                                            assignmentStyles.toggleGroupButton, 
-                                                            { backgroundColor: isGroupActive ? themeColors.warning : themeColors.success } 
-                                                        ]}
-                                                        onPress={() => handleToggleGroupActive(groupAssignments, isGroupActive)}
-                                                    >
-                                                        <Text style={assignmentStyles.groupActionButtonText}>
-                                                            {isGroupActive ? 'INACTIVAR GRUPO' : 'ACTIVAR GRUPO'}
-                                                        </Text>
-                                                    </TouchableOpacity>
+                                                     {/* Botón Editar Grupo (Abre el nuevo Wizard) */}
+                                                     <TouchableOpacity 
+                                                         style={assignmentStyles.editButton} 
+                                                         onPress={() => handleEditGroup(groupData)} // Abre el nuevo modal/wizard
+                                                     >
+                                                         <Edit size={20} color={themeColors.card} />
+                                                         <Text style={assignmentStyles.groupActionButtonText}>EDITAR GRUPO</Text>
+                                                     </TouchableOpacity>
+                                                     
+                                                     {/* Botón de Activar/Inactivar Grupo */}
+                                                     <TouchableOpacity 
+                                                         style={[
+                                                             assignmentStyles.toggleGroupButton, 
+                                                             { backgroundColor: isGroupActive ? themeColors.warning : themeColors.success } 
+                                                         ]}
+                                                         onPress={() => handleToggleGroupActive(groupAssignments, isGroupActive)}
+                                                     >
+                                                         <Text style={assignmentStyles.groupActionButtonText}>
+                                                             {isGroupActive ? 'INACTIVAR GRUPO' : 'ACTIVAR GRUPO'}
+                                                         </Text>
+                                                     </TouchableOpacity>
 
-                                                    {/* Botón de Eliminar Grupo */}
-                                                    <TouchableOpacity 
-                                                        style={assignmentStyles.deleteButton} 
-                                                        onPress={() => handleDeleteRoutineGroup(routineGroupId, groupName)}
-                                                    >
-                                                        <Trash2 size={20} color={themeColors.card} />
-                                                        <Text style={assignmentStyles.groupActionButtonText}>ELIMINAR GRUPO</Text>
-                                                    </TouchableOpacity>
-                                                </View>
+                                                     {/* Botón de Eliminar Asignaciones de Grupo/Rutina */}
+                                                     <TouchableOpacity 
+                                                         style={assignmentStyles.deleteButton} 
+                                                         onPress={() => handleDeleteRoutineGroup(finalGroupIdForActions, groupData.groupName)}
+                                                     >
+                                                         <Trash2 size={20} color={themeColors.card} />
+                                                         <Text style={assignmentStyles.groupActionButtonText}>ELIMINAR</Text>
+                                                     </TouchableOpacity>
+                                                 </View>
                                             )}
                                             {/* Fin Acciones de Grupo */}
 
@@ -692,8 +928,6 @@ function AssignmentView({ student, routines, onAssignmentComplete, onCancel, nav
                                                     assignmentStyles={assignmentStyles}
                                                     themeColors={themeColors}
                                                     handleEditAssignment={handleEditAssignment}
-                                                    handleDeleteRoutineAssignment={handleDeleteRoutineAssignment} 
-                                                    handleToggleRoutineActive={handleToggleRoutineActive} 
                                                 />
                                             ))}
                                     </View>
@@ -706,7 +940,13 @@ function AssignmentView({ student, routines, onAssignmentComplete, onCancel, nav
                 )}
 
                 <View style={assignmentStyles.backButton}>
-                    <Button title="Volver al Panel" onPress={onCancel} color={themeColors.textSecondary} />
+                    {/* BOTÓN VOLVER AL PANEL */}
+                    <TouchableOpacity 
+                        style={[assignmentStyles.customButton, assignmentStyles.buttonSecondary, { minWidth: 160, marginBottom: 20 }]} 
+                        onPress={onCancel}
+                    >
+                        <Text style={assignmentStyles.buttonTextSecondary}>Volver al Panel</Text>
+                    </TouchableOpacity>
                 </View>
             </View>
         </ScrollView>
@@ -728,17 +968,16 @@ const getMainScreenStyles = (colors) => StyleSheet.create({
         alignItems: 'center',
         backgroundColor: colors.background,
     },
-    // ESTILO NUEVO: Campo de Busqueda
     searchInput: {
         height: 45,
-        backgroundColor: colors.card,
+        backgroundColor: colors.card, // Fondo de card
         borderColor: colors.divider,
         borderWidth: 1,
         borderRadius: 8,
         paddingHorizontal: 15,
         fontSize: 16,
-        color: colors.textPrimary,
-        marginHorizontal: 20, // Ajustar para padding
+        color: colors.textPrimary, // Color de texto principal
+        marginHorizontal: 20,
         marginBottom: 20,
     },
     header: {
@@ -746,31 +985,33 @@ const getMainScreenStyles = (colors) => StyleSheet.create({
         justifyContent: 'space-between',
         alignItems: 'center',
         padding: 15,
-        backgroundColor: colors.card,
+        backgroundColor: colors.card, // Fondo de card
         borderBottomWidth: 1,
         borderBottomColor: colors.divider,
         elevation: 2,
     },
-    headerSelection: { // Estilo para el encabezado en la seleccion de alumno
+    headerSelection: { 
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
         padding: 20,
-        backgroundColor: colors.card,
+        backgroundColor: colors.card, // Fondo de card
         borderBottomWidth: 1,
         borderBottomColor: colors.divider,
     },
     headerTitle: {
-        fontSize: 18, // 🚨 AJUSTE: Título más pequeño para el saludo
+        fontSize: 18, 
         fontWeight: 'bold',
-        color: colors.primary,
+        color: colors.textPrimary, // Título en el centro
+        flex: 1, // Para ocupar el espacio central
+        textAlign: 'center',
     },
     titleSelection: {
         fontSize: 22,
         fontWeight: 'bold',
         color: colors.success,
     },
-    headerButtons: { // Nuevo contenedor para botones de icono
+    headerButtons: { 
         flexDirection: 'row',
         gap: 15, 
     },
@@ -782,32 +1023,32 @@ const getMainScreenStyles = (colors) => StyleSheet.create({
         backgroundColor: colors.highlight,
     },
     actionSection: {
-        padding: 20,
-        backgroundColor: colors.card,
+        // AJUSTE DE ESTILO
+        paddingHorizontal: 20,
+        paddingVertical: 15,
+        backgroundColor: colors.card, // Fondo de card
         borderBottomWidth: 1,
         borderBottomColor: colors.divider,
-        alignItems: 'center',
-        gap: 10,
+        alignItems: 'flex-start', // Alinear texto a la izquierda
     },
     subtitle: {
-        fontSize: 18,
-        fontWeight: '600',
+        fontSize: 20, // Título más grande para el saludo
+        fontWeight: 'bold',
         color: colors.textPrimary,
-        marginBottom: 5,
+        marginBottom: 10,
     },
     listTitle: {
         fontSize: 20,
         fontWeight: 'bold',
         color: colors.textPrimary,
         padding: 20,
-        backgroundColor: colors.divider,
+        backgroundColor: colors.divider, // Fondo de divisor
     },
-    // --- Tarjeta de Alumno ---
     studentCard: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        backgroundColor: colors.card,
+        backgroundColor: colors.card, // Fondo de card
         borderRadius: 10,
         padding: 15,
         marginHorizontal: 0, 
@@ -828,7 +1069,6 @@ const getMainScreenStyles = (colors) => StyleSheet.create({
         fontSize: 14,
         color: colors.textSecondary,
     },
-    // NUEVOS ESTILOS PARA LOS BOTONES EN LA TARJETA
     studentCardActions: {
         flexDirection: 'row',
         gap: 10,
@@ -839,14 +1079,33 @@ const getMainScreenStyles = (colors) => StyleSheet.create({
         borderRadius: 8,
         alignItems: 'center',
         justifyContent: 'center',
-        minWidth: 80, // Ancho mínimo para que quepa el texto
+        minWidth: 80, 
     },
     actionButtonText: {
         fontSize: 13,
         fontWeight: 'bold',
         color: colors.card,
     },
-    // FIN NUEVOS ESTILOS 
+    // NUEVO ESTILO FAB (Floating Action Button)
+    fab: {
+        position: 'absolute',
+        width: 60,
+        height: 60,
+        alignItems: 'center',
+        justifyContent: 'center',
+        right: 20,
+        bottom: 20,
+        backgroundColor: colors.success, // Color principal para crear
+        borderRadius: 30,
+        elevation: 8,
+        shadowColor: colors.isDark ? colors.success : colors.success, // Ajuste de sombra para dark mode
+        shadowOpacity: 0.5,
+        shadowOffset: { width: 0, height: 4 },
+        shadowRadius: 5,
+    },
+    fabIcon: {
+        color: colors.card, // Icono blanco o color de tarjeta
+    },
     warningTextCenter: {
         color: colors.warning,
         textAlign: 'center',
@@ -870,34 +1129,37 @@ const getMainScreenStyles = (colors) => StyleSheet.create({
         color: colors.textSecondary,
         textAlign: 'center',
     },
-    // Estilos del Modal
+    // ESTILOS DEL DRAWER LATERAL (Modificados para deslizar de izquierda)
     modalOverlay: {
         flex: 1,
         backgroundColor: 'rgba(0, 0, 0, 0.5)',
         justifyContent: 'flex-start',
-        alignItems: 'flex-end',
-        paddingTop: 80, 
-        paddingRight: 10,
+        alignItems: 'flex-start',
     },
     menuContainer: {
-        width: 250,
+        width: 280, // Ancho fijo para el drawer
+        height: '100%', // Ocupa toda la altura
         backgroundColor: colors.card,
-        borderRadius: 10,
-        padding: 10,
+        // *** POSICIONAMIENTO CLAVE PARA DRAWER IZQUIERDO ***
+        position: 'absolute', 
+        left: 0,              
+        top: 0,               
+        // **************************************************
         shadowColor: colors.isDark ? '#000' : '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: colors.isDark ? 0.4 : 0.1,
+        shadowOffset: { width: 2, height: 0 }, 
+        shadowOpacity: colors.isDark ? 0.8 : 0.2,
         shadowRadius: 5,
-        elevation: 5,
+        elevation: 10,
     },
     menuTitle: {
-        fontSize: 16,
+        fontSize: 18,
         fontWeight: 'bold',
-        paddingBottom: 10,
-        marginBottom: 5,
+        paddingVertical: 10,
+        marginBottom: 10,
         borderBottomWidth: 1,
         borderBottomColor: colors.divider,
-        color: colors.textPrimary,
+        color: colors.primary,
+        paddingHorizontal: 15, 
     },
     menuItem: {
         paddingVertical: 12,
@@ -906,14 +1168,16 @@ const getMainScreenStyles = (colors) => StyleSheet.create({
         flexDirection: 'row', 
         alignItems: 'center',
         gap: 10,
+        paddingHorizontal: 15, 
     },
     menuItemClose: {
-        borderBottomWidth: 0,
-        marginTop: 10,
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        padding: 15,
         backgroundColor: colors.divider,
-        borderRadius: 8,
         alignItems: 'center',
-        flexDirection: 'column',
     },
     menuItemText: {
         fontSize: 15,
@@ -929,11 +1193,10 @@ const getMainScreenStyles = (colors) => StyleSheet.create({
         fontSize: 15,
         color: colors.textPrimary,
         fontWeight: '600',
-        padding: 5,
     },
-    // ESTILOS DEL WIZARD (se mantienen)
+    // Estilos del Wizard (para que se vean)
     wizardContainer: {
-        flex: 1,
+        flexGrow: 1, 
         padding: 20,
         width: '100%',
     },
@@ -968,7 +1231,6 @@ const getMainScreenStyles = (colors) => StyleSheet.create({
         justifyContent: 'space-between',
         marginTop: 30,
     },
-    // ESTILOS DEL CONTADOR
     routineCounter: {
         flexDirection: 'row',
         justifyContent: 'center',
@@ -989,7 +1251,166 @@ const getMainScreenStyles = (colors) => StyleSheet.create({
         width: 60,
         textAlign: 'center',
     },
+    // ESTILOS DEL INDICADOR DE PROGRESO (FALTANTES)
+    progressContainer: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingHorizontal: 30,
+        paddingVertical: 15,
+        width: '100%',
+    },
+    progressStep: {
+        flex: 1,
+        alignItems: 'center',
+        position: 'relative',
+    },
+    progressConnectorBackground: {
+        height: 4,
+        backgroundColor: colors.divider,
+        position: 'absolute',
+        top: 20, // Centrado verticalmente al tamaño del círculo
+    },
+    progressConnectorActive: {
+        backgroundColor: colors.success,
+    },
+    progressCircle: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        backgroundColor: colors.card,
+        borderWidth: 2,
+        borderColor: colors.textSecondary,
+        justifyContent: 'center',
+        alignItems: 'center',
+        zIndex: 1,
+    },
+    progressCircleActive: {
+        borderColor: colors.primary,
+    },
+    progressCircleDone: {
+        backgroundColor: colors.success,
+        borderColor: colors.success,
+    },
+    progressText: {
+        marginTop: 5,
+        fontSize: 12,
+        color: colors.textSecondary,
+        fontWeight: '500',
+    },
+    // --- Estilos de Botones Personalizados (Wizard/AssignmentView) ---
+    customButton: {
+        paddingVertical: 12,
+        paddingHorizontal: 20,
+        borderRadius: 10, // Bordes redondeados
+        alignItems: 'center',
+        justifyContent: 'center',
+        minWidth: 100,
+        // Sombra para darle un toque 3D
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.2,
+        shadowRadius: 3,
+        elevation: 4,
+    },
+    buttonPrimary: {
+        backgroundColor: colors.primary, // Color principal para avanzar/guardar
+    },
+    buttonSecondary: {
+        backgroundColor: colors.card, // Fondo claro o de tarjeta
+        borderColor: colors.divider,
+        borderWidth: 1,
+    },
+    buttonDanger: {
+        backgroundColor: colors.danger, // Color para cancelar
+    },
+    buttonText: {
+        fontSize: 16,
+        fontWeight: 'bold',
+        color: colors.card, // Texto blanco/color de tarjeta para botones de colores
+    },
+    buttonTextSecondary: {
+        fontSize: 16,
+        fontWeight: 'bold',
+        color: colors.textPrimary, // Texto principal para botones secundarios
+    },
 });
+
+// ----------------------------------------------------------------------
+// COMPONENTE: INDICADOR DE PROGRESO (Minimalista)
+// ----------------------------------------------------------------------
+const ProgressIndicator = ({ currentStep, totalSteps, stepNames, themeColors }) => {
+    const styles = getMainScreenStyles(themeColors);
+
+    const steps = Array.from({ length: totalSteps }, (_, i) => i + 1);
+
+    return (
+        <View style={{ width: '100%', paddingHorizontal: 0 }}>
+            <View style={styles.progressContainer}>
+                {steps.map((stepNum, index) => {
+                    const isActive = stepNum === currentStep;
+                    const isDone = stepNum < currentStep;
+
+                    let circleStyle = styles.progressCircle;
+                    
+                    if (isActive) {
+                        circleStyle = { ...circleStyle, ...styles.progressCircleActive };
+                    } else if (isDone) {
+                        circleStyle = { ...circleStyle, ...styles.progressCircleDone };
+                    }
+                    
+                    const isLastStep = index === totalSteps - 1;
+
+                    return (
+                        <View key={stepNum} style={styles.progressStep}>
+                            {/* Conector desde el paso anterior */}
+                            {index > 0 && (
+                                <View style={[
+                                    styles.progressConnectorBackground,
+                                    { width: '100%', right: '50%' }, 
+                                ]}>
+                                    <View style={[
+                                        { height: '100%' }, // Para que el conector ocupe la altura
+                                        styles.progressConnectorActive,
+                                        { width: isDone ? '100%' : (isActive ? '50%' : '0%') }
+                                    ]}/>
+                                </View>
+                            )}
+
+                            {/* Círculo del Paso */}
+                            <View style={circleStyle}>
+                                {isDone ? (
+                                    <CheckCircle size={18} color={themeColors.card} />
+                                ) : (
+                                    <Text style={{ 
+                                        color: isActive ? themeColors.primary : themeColors.textSecondary, 
+                                        fontWeight: 'bold',
+                                        fontSize: 14,
+                                    }}>
+                                        {stepNum}
+                                    </Text>
+                                )}
+                            </View>
+                            
+                            {/* Texto del Paso */}
+                            <Text style={[styles.progressText, { color: isDone ? themeColors.success : (isActive ? themeColors.primary : themeColors.textSecondary) }]}>
+                                {stepNames[stepNum - 1]}
+                            </Text>
+
+                            {/* Conector hacia el siguiente */}
+                            {!isLastStep && (
+                                <View style={[
+                                    styles.progressConnectorBackground,
+                                    { width: '100%', left: '50%' },
+                                ]}/>
+                            )}
+                        </View>
+                    );
+                })}
+            </View>
+        </View>
+    );
+};
 
 
 // --- COMPONENTE: Asistente de Creacion Simplificado (3 Pasos) ---
@@ -1000,9 +1421,14 @@ function CreationWizardSimplified({ students, onCancel, navigation }) {
 
     const [step, setStep] = useState(1);
     const [routineName, setRoutineName] = useState(''); // Paso 1: Nombre de Agrupacion
+    const [routineDescription, setRoutineDescription] = useState(''); // Paso 1: Descripcion de Agrupacion
     const [routinesCount, setRoutinesCount] = useState(1); // Paso 2: Cantidad de Rutinas
-    const [expirationDate, setExpirationDate] = useState(''); // FECHA DE VENCIMIENTO
+    const [expirationDate, setExpirationDate] = useState(''); // FECHA DE VENCIMIENTO (DD/MM/AAAA)
     const [searchTerm, setSearchTerm] = useState(''); // Filtro de alumnos
+
+    // Nombres de los pasos
+    const STEP_NAMES = ["Nombre", "Config", "Asignación"]; 
+    const TOTAL_STEPS = 3;
 
     // Filtra los alumnos solo para la seleccion (Step 3)
     const filteredStudents = useMemo(() => {
@@ -1017,6 +1443,10 @@ function CreationWizardSimplified({ students, onCancel, navigation }) {
     }, [students, searchTerm]);
 
     const handleSelectStudent = (student) => {
+        
+        // Convertir la fecha al formato YYYY-MM-DD para la API antes de pasarla al navigacion
+        const apiFormattedDate = formatAPIDate(expirationDate.trim());
+        
         // FIN DEL WIZARD: Navegamos a RoutineCreationScreen
         navigation.navigate('RoutineCreation', { 
             studentId: student.id,
@@ -1024,9 +1454,9 @@ function CreationWizardSimplified({ students, onCancel, navigation }) {
             // Enviamos la metadata completa al frontend
             routineMetadata: {
                 nombre: routineName.trim(),
-                descripcion: `Agrupacion de ${routinesCount} rutinas.`, 
+                descripcion: routineDescription.trim(), // Pasar la descripcion del grupo
                 days: routinesCount, // Cantidad de rutinas a crear
-                expirationDate: expirationDate.trim() // FECHA DE VENCIMIENTO
+                expirationDate: apiFormattedDate // Enviamos YYYY-MM-DD a la API
             }
         });
         onCancel(); // Cerramos el wizard en ProfessorScreen
@@ -1037,7 +1467,8 @@ function CreationWizardSimplified({ students, onCancel, navigation }) {
             case 1:
                 return (
                     <>
-                        <Text style={styles.stepText}>Paso 1 de 3: Nombre Genérico de la Agrupación</Text>
+                        <Text style={styles.stepText}>Paso 1: Nombre y Descripción del Grupo</Text>
+                        <Text style={styles.label}>Nombre de la Agrupación:</Text>
                         <TextInput
                             style={styles.wizardInput}
                             placeholder="Ej: Rutina Bloque A / Mes 1"
@@ -1045,6 +1476,15 @@ function CreationWizardSimplified({ students, onCancel, navigation }) {
                             value={routineName}
                             onChangeText={setRoutineName}
                             autoFocus
+                        />
+                        <Text style={styles.label}>Descripción del Grupo (Opcional):</Text>
+                        <TextInput
+                            style={[styles.wizardInput, { height: 80, textAlignVertical: 'top' }]}
+                            placeholder="Ej: Fase de hipertrofia de 4 semanas."
+                            placeholderTextColor={themeColors.textSecondary}
+                            value={routineDescription}
+                            onChangeText={setRoutineDescription}
+                            multiline
                         />
                         <Text style={styles.warningTextCenter}>
                             Este nombre agrupará las rutinas (Día 1, Día 2, etc.)
@@ -1054,7 +1494,7 @@ function CreationWizardSimplified({ students, onCancel, navigation }) {
             case 2:
                 return (
                     <>
-                        <Text style={styles.stepText}>Paso 2 de 3: Configuración de la Agrupación</Text>
+                        <Text style={styles.stepText}>Paso 2: Configuración de la Agrupación</Text>
                         
                         <Text style={styles.label}>Cantidad de Rutinas:</Text>
                         <Text style={styles.warningTextCenter}>
@@ -1080,18 +1520,18 @@ function CreationWizardSimplified({ students, onCancel, navigation }) {
                             </TouchableOpacity>
                         </View>
                         
-                        {/* NUEVO: INPUT DE FECHA DE VENCIMIENTO */}
+                        {/* INPUT DE FECHA DE VENCIMIENTO */}
                         <Text style={[styles.label, {marginTop: 20}]}>Fecha de Vencimiento:</Text>
                         <TextInput
                             style={styles.wizardInput}
-                            placeholder="Ej: 2024-12-31"
+                            placeholder="DD/MM/AAAA" // placeholder en nuevo formato
                             placeholderTextColor={themeColors.textSecondary}
                             value={expirationDate}
                             onChangeText={setExpirationDate}
                             keyboardType="default"
                         />
                         <Text style={styles.warningTextCenter}>
-                            Formato AAAA-MM-DD requerido por la API. Esta fecha debe ser futura.
+                            Formato DD/MM/AAAA requerido. Se convertirá a AAAA-MM-DD para la API.
                         </Text>
                         
                         <Text style={styles.studentEmail}>Agrupación: {routineName.trim()} | Vence: {expirationDate.trim() || '[Fecha Requerida]'}</Text>
@@ -1100,7 +1540,7 @@ function CreationWizardSimplified({ students, onCancel, navigation }) {
             case 3:
                 return (
                     <>
-                        <Text style={styles.stepText}>Paso 3 de 3: Selecciona el Alumno</Text>
+                        <Text style={styles.stepText}>Paso 3: Selecciona el Alumno</Text>
                         <TextInput
                             style={styles.searchInput} 
                             placeholder="Buscar alumno por nombre o email..."
@@ -1120,7 +1560,7 @@ function CreationWizardSimplified({ students, onCancel, navigation }) {
                                             <Text style={styles.studentName}>{item.nombre}</Text>
                                             <Text style={styles.studentEmail}>{item.email}</Text>
                                         </View>
-                                        <Text style={{...styles.assignButtonText, color: themeColors.success}}>CREAR >> </Text>
+                                        <Text style={{...styles.actionButtonText, color: themeColors.success}}>CREAR >> </Text>
                                     </TouchableOpacity>
                                 ))
                             ) : (
@@ -1147,27 +1587,28 @@ function CreationWizardSimplified({ students, onCancel, navigation }) {
                 Alert.alert("Error", "Debes seleccionar al menos una rutina para crear.");
                 return;
             }
-            // VALIDACION DE FECHA (Formato AAAA-MM-DD)
-            const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
-            if (!dateRegex.test(expirationDate.trim())) {
-                Alert.alert("Error", "Debes ingresar una fecha de vencimiento válida en formato AAAA-MM-DD.");
+            // Validacion de formato DD/MM/AAAA
+            const displayDateRegex = /^\d{2}[-/]\d{2}[-/]\d{4}$/;
+            if (!displayDateRegex.test(expirationDate.trim())) {
+                Alert.alert("Error", "Debes ingresar una fecha de vencimiento válida en formato DD/MM/AAAA.");
                 return;
             }
 
-            // Validacion de fecha futura simple
-            try {
-                const today = new Date();
-                today.setHours(0,0,0,0);
-                const expiry = new Date(expirationDate.trim());
-                if (expiry <= today) {
-                    Alert.alert("Error", "La fecha de vencimiento debe ser una fecha futura.");
-                    return;
-                }
-            } catch (e) {
-                Alert.alert("Error", "Formato de fecha no reconocido. Usa AAAA-MM-DD.");
+            // Validacion de fecha futura
+            const expiry = parseDateToJS(expirationDate.trim());
+            const today = new Date();
+            today.setUTCHours(0,0,0,0); 
+
+            if (!expiry || isNaN(expiry.getTime())) {
+                Alert.alert("Error", "Formato de fecha no reconocido. Usa DD/MM/AAAA.");
                 return;
             }
 
+            // Usamos UTC para la comparación para que sea solo la fecha
+            if (expiry <= today) {
+                Alert.alert("Error", "La fecha de vencimiento debe ser una fecha futura.");
+                return;
+            }
 
             setStep(3);
         }
@@ -1177,26 +1618,45 @@ function CreationWizardSimplified({ students, onCancel, navigation }) {
         <SafeAreaView style={styles.container}>
             <View style={styles.headerSelection}>
                 <Text style={styles.wizardTitle}>Crear Rutina Agrupada</Text>
-                <Button title="Cancelar" onPress={onCancel} color={themeColors.danger} />
+                {/* BOTÓN CANCELAR */}
+                <TouchableOpacity 
+                    style={[styles.customButton, styles.buttonDanger, {minWidth: 80}]} 
+                    onPress={onCancel}
+                >
+                    <Text style={styles.buttonText}>Cancelar</Text>
+                </TouchableOpacity>
             </View>
             
+            {/* INTEGRACIÓN DEL INDICADOR DE PROGRESO */}
+            <ProgressIndicator 
+                currentStep={step} 
+                totalSteps={TOTAL_STEPS} 
+                stepNames={STEP_NAMES} 
+                themeColors={themeColors}
+            />
+
             <ScrollView contentContainerStyle={styles.wizardContainer}>
                 {renderStep()}
 
                 <View style={styles.wizardActions}>
-                    <Button 
-                        title="< Atrás" 
+                    {/* BOTÓN ATRÁS */}
+                    <TouchableOpacity 
+                        style={[styles.customButton, styles.buttonSecondary, { opacity: step === 1 ? 0.5 : 1 }]} 
                         onPress={() => setStep(step - 1)} 
                         disabled={step === 1}
-                        color={themeColors.textSecondary}
-                    />
+                    >
+                        <Text style={styles.buttonTextSecondary}>{"< Atrás"}</Text>
+                    </TouchableOpacity>
+
                     {(step === 1 || step === 2) && (
-                        <Button 
-                            title={"Siguiente >"} 
+                        /* BOTÓN SIGUIENTE */
+                        <TouchableOpacity 
+                            style={[styles.customButton, styles.buttonPrimary, { opacity: (step === 1 ? !routineName.trim() : routinesCount < 1 || !expirationDate.trim()) ? 0.5 : 1 }]} 
                             onPress={nextStep} 
                             disabled={step === 1 ? !routineName.trim() : routinesCount < 1 || !expirationDate.trim()}
-                            color={themeColors.primary}
-                        />
+                        >
+                            <Text style={styles.buttonText}>{"Siguiente >"}</Text>
+                        </TouchableOpacity>
                     )}
                 </View>
             </ScrollView>
@@ -1221,7 +1681,6 @@ export default function ProfessorScreen({ navigation }) {
 
     const [searchTerm, setSearchTerm] = useState('');
 
-    // 🚨 MODIFICACIÓN CLAVE: Incluir userProfile en el contexto
     const { signOut, getToken, userProfile } = useContext(AuthContext);
 
     // ----------------------------------------------------------------
@@ -1260,24 +1719,43 @@ export default function ProfessorScreen({ navigation }) {
     };
     
     // ----------------------------------------------------------------
-    // FUNCIÓN: NAVEGAR A EDICIÓN DE DETALLES DEL ALUMNO (NUEVA)
+    // FUNCIÓN: NAVEGAR A EDICIÓN DE DETALLES DEL ALUMNO
     // ----------------------------------------------------------------
     const handleEditStudent = (studentData) => {
-        // Navega a la nueva pantalla 'StudentDetails'
         navigation.navigate('StudentDetails', { student: studentData });
     };
 
     // ----------------------------------------------------------------
-    // FUNCIÓN: Cierre de Sesion y Contrasena (Modal)
+    // FUNCIÓN: ACCIONES DEL MENÚ LATERAL (DRAWER)
     // ----------------------------------------------------------------
+    const handleViewProfile = () => {
+        setIsMenuVisible(false);
+        Alert.alert("Mi Perfil", "Esta sección navegará a tu pantalla de perfil (aún no implementada).");
+    };
+
     const handleChangePassword = () => {
         setIsMenuVisible(false); // Cierra el modal
-        navigation.navigate('ChangePassword'); // Debe existir en App.js
+        navigation.navigate('ChangePassword'); 
     };
     
+    const handleAddStudent = () => {
+        setIsMenuVisible(false); // Cierra el modal
+        // Navegación a la pantalla de creación de alumno (que el usuario creará)
+        navigation.navigate('AddStudent'); 
+    };
+
     const handleLogout = () => {
-        setIsMenuVisible(false);
-        signOut();
+        Alert.alert(
+            "Cerrar Sesión",
+            "¿Estás seguro de que quieres cerrar sesión?",
+            [
+                { text: "Cancelar", style: "cancel" },
+                { text: "Cerrar", onPress: () => {
+                    setIsMenuVisible(false);
+                    signOut();
+                }, style: "destructive" },
+            ]
+        );
     };
 
     useEffect(() => {
@@ -1291,9 +1769,7 @@ export default function ProfessorScreen({ navigation }) {
         fetchData(); 
     };
     
-    // ----------------------------------------------------------------
     // Logica de filtrado de estudiantes
-    // ----------------------------------------------------------------
     const filteredStudents = useMemo(() => {
         if (!searchTerm) {
             return students;
@@ -1311,16 +1787,18 @@ export default function ProfessorScreen({ navigation }) {
         return (
              <SafeAreaView style={styles.container}>
                  <View style={styles.errorView}>
-                      <Text style={styles.errorTitle}>!Error de Conexión!</Text>
-                      <Text style={styles.errorDetail}>{dataError}</Text>
-                      <View style={{marginTop: 20}}>
-                          <Button title="Intentar de Nuevo" onPress={fetchData} color={themeColors.primary} />
-                      </View>
-                      {dataError !== "Sesión inválida o expirada. Saliendo..." && (
-                          <View style={{marginTop: 10}}>
-                              <Button title="Salir" onPress={signOut} color={themeColors.danger} />
-                          </View>
-                      )}
+                     <Text style={styles.errorTitle}>!Error de Conexión!</Text>
+                     <Text style={styles.errorDetail}>{dataError}</Text>
+                     <View style={{marginTop: 20}}>
+                         {/* BOTÓN INTENTAR DE NUEVO (NO FUE PEDIDO, SE MANTIENE EL ESTILO ORIGINAL DE Button) */}
+                         <Button title="Intentar de Nuevo" onPress={fetchData} color={themeColors.primary} />
+                     </View>
+                     {dataError !== "Sesión inválida o expirada. Saliendo..." && (
+                         <View style={{marginTop: 10}}>
+                             {/* BOTÓN SALIR (NO FUE PEDIDO, SE MANTIENE EL ESTILO ORIGINAL DE Button) */}
+                             <Button title="Salir" onPress={signOut} color={themeColors.danger} />
+                         </View>
+                     )}
                  </View>
              </SafeAreaView>
            );
@@ -1366,44 +1844,42 @@ export default function ProfessorScreen({ navigation }) {
         <SafeAreaView style={styles.container}>
             {/* CABECERA ESTILIZADA CON ICONOS */}
             <View style={styles.header}>
-                {/* 🚨 MODIFICACIÓN: Saludo personalizado */}
-                <Text style={styles.headerTitle}>
-                    Bienvenido/a {userProfile?.nombre?.split(' ')[0] || 'Profesor/a'}
-                </Text>
-                <View style={styles.headerButtons}>
-                    {/* Boton de Actualizar: USAMOS LUCIDE */}
-                    <TouchableOpacity 
-                        onPress={fetchData} 
-                        style={styles.iconButton}
-                        disabled={isLoading}
-                    >
-                        <RefreshCcw size={22} color={themeColors.primaryDark} />
-                    </TouchableOpacity>
-                    {/* Boton de Menu/Opciones */}
-                    <TouchableOpacity 
-                        onPress={() => setIsMenuVisible(true)} 
-                        style={styles.iconButton}
-                    >
-                        <Settings size={22} color={themeColors.textPrimary} />
-                    </TouchableOpacity>
-                </View>
+                {/* Boton de Menu/Drawer (Izquierda) */}
+                <TouchableOpacity 
+                    onPress={() => setIsMenuVisible(true)} 
+                    style={styles.iconButton}
+                >
+                    <Menu size={22} color={themeColors.textPrimary} /> 
+                </TouchableOpacity>
+
+                <Text style={styles.headerTitle}>Gestor de Alumnos</Text>
+                
+                {/* Boton de Actualizar (Derecha) */}
+                <TouchableOpacity 
+                    onPress={fetchData} 
+                    style={styles.iconButton}
+                    disabled={isLoading}
+                >
+                    <RefreshCcw size={22} color={themeColors.primaryDark} />
+                </TouchableOpacity>
             </View>
             
+            {/* SCROLLVIEW PRINCIPAL */}
             <ScrollView style={{ flex: 1 }}>
                 
+                {/* SECCIÓN DE ACCIONES/SALUDO (Mejora visual) */}
                 <View style={styles.actionSection}>
-                    <Text style={styles.subtitle}>Opciones del Profesor</Text>
-                    
-                    {/* BOTON CREAR RUTINA */}
-                    <Button 
-                        title="Crear Nueva Rutina Agrupada y Asignar" 
-                        onPress={() => setCreatingForStudent(true)} 
-                        color={themeColors.success} 
-                    />
+                    <Text style={styles.subtitle}>
+                        👋 Bienvenido/a **{userProfile?.nombre?.split(' ')[0] || 'Profesor/a'}**
+                    </Text>
+                    <Text style={{ fontSize: 14, color: themeColors.textSecondary }}>
+                        Utiliza el botón flotante (Pesas) para crear una nueva rutina y asignarla.
+                    </Text>
                 </View>
 
-                <Text style={styles.listTitle}>Alumnos ({filteredStudents.length})</Text> 
-
+                <Text style={styles.listTitle}>Alumnos Registrados ({filteredStudents.length})</Text> 
+                
+                
                 {/* Input de busqueda */}
                 <TextInput
                     style={styles.searchInput} 
@@ -1413,7 +1889,7 @@ export default function ProfessorScreen({ navigation }) {
                     onChangeText={setSearchTerm}
                 />
                 
-                <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 20, paddingTop: 10 }}>
+                <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 80, paddingTop: 10 }}>
                     {filteredStudents.length > 0 ? (
                         filteredStudents.map((item) => (
                             <View 
@@ -1454,9 +1930,17 @@ export default function ProfessorScreen({ navigation }) {
                 </ScrollView>
             </ScrollView>
             
-            {/* MODAL DE OPCIONES DE USUARIO */}
+            {/* BOTÓN DE ACCIÓN FLOTANTE (FAB) CON ICONO DE PESAS */}
+            <TouchableOpacity 
+                style={styles.fab} 
+                onPress={() => setCreatingForStudent(true)}
+            >
+                <Weight size={30} color={themeColors.card} style={styles.fabIcon} />
+            </TouchableOpacity>
+
+            {/* MODAL DE OPCIONES (DRAWER LATERAL IZQUIERDO) */}
             <Modal 
-                animationType="fade"
+                animationType="slide" // Esto activa la animación de deslizamiento
                 transparent={true}
                 visible={isMenuVisible}
                 onRequestClose={() => setIsMenuVisible(false)}
@@ -1466,23 +1950,45 @@ export default function ProfessorScreen({ navigation }) {
                     activeOpacity={1} 
                     onPressOut={() => setIsMenuVisible(false)} // Cierra al tocar fuera
                 >
-                    <View style={styles.menuContainer}>
-                        <Text style={styles.menuTitle}>Ajustes de Cuenta</Text>
+                    {/* DRAWER CONTENT */}
+                    <View style={styles.menuContainer}> 
                         
-                        {/* Opcion 1: Cambiar Contrasena */}
-                        <TouchableOpacity style={styles.menuItem} onPress={handleChangePassword}>
-                            <Key size={18} color={themeColors.textPrimary} /> 
-                            <Text style={styles.menuItemText}>Cambiar Contraseña</Text>
-                        </TouchableOpacity>
+                        {/* 🚨 Usamos SafeAreaView para manejar la barra de estado y el padding */}
+                        <SafeAreaView style={{ flex: 1 }}> 
+                            
+                            {/* ScrollView para los ítems, con padding inferior para no solaparse con el botón "Cerrar" */}
+                            <ScrollView contentContainerStyle={{ paddingBottom: 70 }}>
+                                <Text style={styles.menuTitle}>Menú de Profesor</Text>
+                                
+                                {/* Mi Perfil */}
+                                <TouchableOpacity style={styles.menuItem} onPress={handleViewProfile}>
+                                    <User size={18} color={themeColors.textPrimary} /> 
+                                    <Text style={styles.menuItemText}>Mi Perfil</Text>
+                                </TouchableOpacity>
+
+                                {/* Cambiar Contraseña */}
+                                <TouchableOpacity style={styles.menuItem} onPress={handleChangePassword}>
+                                    <Key size={18} color={themeColors.textPrimary} /> 
+                                    <Text style={styles.menuItemText}>Cambiar Contraseña</Text>
+                                </TouchableOpacity>
+                                
+                                {/* Agregar Alumno */}
+                                <TouchableOpacity style={styles.menuItem} onPress={handleAddStudent}>
+                                    <UserPlus size={18} color={themeColors.success} /> 
+                                    <Text style={[styles.menuItemText, {color: themeColors.success}]}>Agregar Alumno</Text>
+                                </TouchableOpacity>
+
+                                {/* Cerrar Sesion */}
+                                <TouchableOpacity style={[styles.menuItem, {borderBottomWidth: 0}]} onPress={handleLogout}>
+                                    <LogOut size={18} color={themeColors.danger} />
+                                    <Text style={styles.menuItemTextLogout}>Cerrar Sesión</Text>
+                                </TouchableOpacity>
+                            </ScrollView>
+                        </SafeAreaView>
                         
-                        {/* Opcion 2: Cerrar Sesion */}
-                        <TouchableOpacity style={styles.menuItem} onPress={handleLogout}>
-                            <LogOut size={18} color={themeColors.danger} />
-                            <Text style={styles.menuItemTextLogout}>Cerrar Sesión</Text>
-                        </TouchableOpacity>
-                        
-                        <TouchableOpacity style={[styles.menuItem, styles.menuItemClose]} onPress={() => setIsMenuVisible(false)}>
-                            <Text style={styles.menuItemTextClose}>Cerrar Menú</Text>
+                        {/* Cerrar Menu (botón fijo en el fondo) */}
+                        <TouchableOpacity style={styles.menuItemClose} onPress={() => setIsMenuVisible(false)}>
+                            <Text style={styles.menuItemTextClose}>Cerrar</Text>
                         </TouchableOpacity>
 
                     </View>

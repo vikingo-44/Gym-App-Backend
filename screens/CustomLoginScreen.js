@@ -10,7 +10,7 @@ import { AuthContext } from '../App';
 import { useTheme } from '../ThemeContext'; 
 
 // ----------------------------------------------------------------------
-// URIs de Imágenes del Gimnasio
+// URIs de Imagenes del Gimnasio
 // ----------------------------------------------------------------------
 const LOGO_SOURCE = require('../assets/logoND.jpg'); 
 const BACKGROUND_SOURCE = require('../assets/wallpaper.jpg'); 
@@ -18,7 +18,6 @@ const BACKGROUND_SOURCE = require('../assets/wallpaper.jpg');
 
 // ----------------------------------------------------------------------
 // Componente de Registro de Alumno (Modal)
-// (Sin cambios, el foco está en CustomLoginScreen)
 // ----------------------------------------------------------------------
 function RegisterModal({ isVisible, onClose, API_URL, themeColors }) {
     const [nombre, setNombre] = useState('');
@@ -55,12 +54,12 @@ function RegisterModal({ isVisible, onClose, API_URL, themeColors }) {
             const detail = e.response?.data?.detail;
             let msg = detail && typeof detail === 'string' ? detail : "Fallo desconocido en el servidor.";
 
-            if (msg.includes("DNI ya está registrado")) {
+            if (msg.includes("DNI ya esta registrado")) {
                 msg = "El DNI proporcionado ya se encuentra registrado.";
-            } else if (msg.includes("El email ya está registrado")) {
+            } else if (msg.includes("El email ya esta registrado")) {
                 msg = "El Email proporcionado ya se encuentra registrado.";
             } else if (e.message === 'Network Error') {
-                msg = `Error de Conexión. Asegúrate de que el servidor de FastAPI y Ngrok están activos y que la URL (${API_URL}) es la correcta.`;
+                msg = `Error de Conexion. Asegurate de que el servidor de FastAPI y Ngrok estan activos y que la URL (${API_URL}) es la correcta.`;
             }
 
             setError(`Error en el registro: ${msg}`);
@@ -113,7 +112,7 @@ function RegisterModal({ isVisible, onClose, API_URL, themeColors }) {
                             color: themeColors.textPrimary,
                             borderColor: themeColors.inputBorder,
                         }]}
-                        placeholder="Número de Documento (DNI)"
+                        placeholder="Numero de Documento (DNI)"
                         placeholderTextColor={themeColors.textSecondary}
                         value={dni}
                         onChangeText={setDni}
@@ -156,7 +155,7 @@ function RegisterModal({ isVisible, onClose, API_URL, themeColors }) {
 }
 
 // ----------------------------------------------------------------------
-// Función de Login Personalizada 
+// Funcion de Login Personalizada 
 // ----------------------------------------------------------------------
 export default function CustomLoginScreen({ signIn, API_URL }) {
     const { colors: themeColors, isDark, toggleTheme } = useTheme(); 
@@ -191,9 +190,9 @@ export default function CustomLoginScreen({ signIn, API_URL }) {
             
             let errorMessage = "DNI o contraseña incorrectos.";
             if (e.message === 'Network Error') {
-                errorMessage = `Error de Conexión. Asegúrate de que el servidor de FastAPI y Ngrok están activos y que la URL (${API_URL}) es la correcta.`;
+                errorMessage = `Error de Conexion. Asegurate de que el servidor de FastAPI y Ngrok estan activos y que la URL (${API_URL}) es la correcta.`;
             } else if (e.response && e.response.status !== 401) {
-                errorMessage = `Error del Servidor (${e.response.status}). Intenta más tarde.`;
+                errorMessage = `Error del Servidor (${e.response.status}). Intenta mas tarde.`;
             }
             
             setError(errorMessage);
@@ -212,7 +211,7 @@ export default function CustomLoginScreen({ signIn, API_URL }) {
             style={styles.container}
             resizeMode="cover" 
         >
-            <SafeAreaView style={{ flex: 1, backgroundColor: 'transparent' }}>
+            <SafeAreaView style={{ flex: 1 }}>
                 <KeyboardAvoidingView 
                     style={{ flex: 1 }} 
                     behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -225,28 +224,20 @@ export default function CustomLoginScreen({ signIn, API_URL }) {
                         themeColors={themeColors}
                     />
 
-                    <ScrollView contentContainerStyle={styles.content}>
+                    <ScrollView contentContainerStyle={styles.contentTransparent}>
                         
-                        <View style={styles.themeToggleContainer}>
-                            <TouchableOpacity onPress={toggleTheme}>
-                                <Text style={[styles.themeToggleText, {color: themeColors.primary}]}>
-                                    {isDark ? '🌞 Modo Claro' : '🌙 Modo Oscuro'}
-                                </Text>
-                            </TouchableOpacity>
-                        </View>
-
                         <View style={styles.header}>
-                            {/* 🚨 CAMBIO: Se remueve el título de texto "ND Training" */}
                             <Image 
                                 source={LOGO_SOURCE} 
-                                style={styles.logo} // Estilo 'logo' modificado
+                                style={styles.logo} // Estilo 'logo' con efecto
                                 resizeMode="contain"
                             />
-                            {/* El slogan se mantiene, pero con un margen superior */}
-                            <Text style={[styles.slogan, {color: '#4B5563', marginTop: 15}]}>Es hora de llegar muy lejos</Text>
+                            {/* 🚨 APLICA SOMBRA DE TEXTO Y COLOR BLANCO */}
+                            <Text style={styles.slogan}>Es hora de llegar muy lejos</Text>
                         </View>
 
-                        {error && <Text style={[styles.errorText, {color: themeColors.danger, backgroundColor: '#FFEBEEAA'}]}>{error}</Text>}
+                        {/* Cambio: Ajustar el color de fondo de error para que funcione sobre cualquier fondo */}
+                        {error && <Text style={[styles.errorText, {color: themeColors.danger, backgroundColor: isDark ? '#B91C1CAB' : '#FFEBEEAA'}]}>{error}</Text>}
                         
                         <TextInput
                             style={[styles.input, {
@@ -254,7 +245,7 @@ export default function CustomLoginScreen({ signIn, API_URL }) {
                                 color: themeColors.textPrimary,
                                 borderColor: themeColors.inputBorder,
                             }]}
-                            placeholder="Número de Documento (DNI)"
+                            placeholder="Numero de Documento (DNI)"
                             placeholderTextColor={themeColors.textSecondary}
                             value={dni}
                             onChangeText={setDni}
@@ -300,23 +291,26 @@ export default function CustomLoginScreen({ signIn, API_URL }) {
 }
 
 // ----------------------------------------------------------------------
-// Función que genera los estilos básicos estáticos
+// Funcion que genera los estilos basicos estaticos
 // ----------------------------------------------------------------------
 const getStyles = (colors) => StyleSheet.create({
     container: {
         flex: 1,
     },
-    content: {
+    // Contenedor principal transparente
+    contentTransparent: {
         padding: 30,
         flexGrow: 1,
         justifyContent: 'center', 
-        backgroundColor: 'rgba(255, 255, 255, 0.85)', 
+        backgroundColor: 'transparent', 
         borderRadius: 20, 
         marginHorizontal: 20,
         paddingVertical: 50,
         alignSelf: 'center',
         width: Platform.OS === 'web' ? '40%' : '100%', 
         maxWidth: 400,
+        shadowColor: 'transparent',
+        elevation: 0,
     },
     themeToggleContainer: {
         position: 'absolute',
@@ -334,24 +328,30 @@ const getStyles = (colors) => StyleSheet.create({
         marginBottom: 30, 
     },
     logo: {
-        width: '80%', // El logo ocupará el 80% del ancho del contenedor.
-        height: 100,  // Altura fija, puedes ajustarla.
-        borderRadius: 15, // Borde redondeado suave para el logo.
-        // borderWidth: 0, // No necesitamos un borde explícito.
-        // borderColor: 'transparent', // No necesitamos color de borde.
-        marginBottom: 10,
-        alignSelf: 'center', // Asegurarse de que esté centrado.
+        // Estilos del logo (Se mantienen)
+        width: 180, 
+        height: 120, 
+        borderRadius: 20, 
+        marginBottom: 15,
+        alignSelf: 'center', 
+        overflow: 'hidden', 
+        // Efecto de sombra sutil pero estético (Se mantiene)
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.4,
+        shadowRadius: 8,
+        elevation: 12, 
     },
-    title: {
-        // Este estilo ya no se usa para el título principal, pero lo mantenemos
-        // por si acaso para otros textos.
-        fontSize: 38,
-        fontWeight: '900',
-        marginBottom: 5,
-    },
+    // 🚨 MODIFICACIÓN: Estilo del eslogan con Text Shadow para mejorar contraste
     slogan: {
         fontSize: 16,
         fontStyle: 'italic',
+        color: 'white', // Color blanco para el texto
+        marginTop: 15,
+        // Sombra de texto para crear un contorno negro y aumentar la legibilidad
+        textShadowColor: 'rgba(0, 0, 0, 0.75)',
+        textShadowOffset: { width: 1, height: 1 },
+        textShadowRadius: 3,
     },
     input: {
         height: 50,

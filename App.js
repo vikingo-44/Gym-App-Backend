@@ -16,7 +16,9 @@ import CustomLoginScreen from './screens/CustomLoginScreen';
 import RoutineCreationScreen from './screens/RoutineCreationScreen';
 import ChangePasswordScreen from './screens/ChangePasswordScreen'; 
 import StudentDetailsScreen from './screens/StudentDetailsScreen';
-// ?? IMPORTACI車N CLAVE: La nueva pantalla del Alumno (DEBE ESTAR EN ./screens/StudentRoutineScreen.js)
+// ?? PANTALLAS DE PROFESOR
+import AddStudentScreen from './screens/AddStudentScreen'; // <--- ?NUEVA IMPORTACI車N!
+// ?? PANTALLAS DE ALUMNO
 import StudentRoutineScreen from './screens/StudentRoutineScreen'; 
 // ?? IMPORTACI車N CLAVE: Importamos el ThemeProvider y el hook 
 import { ThemeProvider, useTheme } from './ThemeContext'; 
@@ -34,8 +36,7 @@ const decodeToken = (token) => {
     }
 }
 // ----------------------------------------------------------------------
-// ?? ???IMPORTANTE!!!
-// Pega tu URL p迆blica de Ngrok aqu赤 (la que termina en .ngrok.io)
+// URL p迆blica del backend
 // ----------------------------------------------------------------------
 const API_URL = "https://gym-app-backend-e9bn.onrender.com"; 
 // ----------------------------------------------------------------------
@@ -45,17 +46,13 @@ export const AuthContext = createContext();
 
 // --- PANTALLA DE LOGIN (Llama al componente personalizado) ---
 function LoginScreen() {
-    // ?? El useTheme no es necesario aqu赤 si solo se usa en CustomLoginScreen
+    // El useTheme no es necesario aqu赤 si solo se usa en CustomLoginScreen
     const { signIn } = useContext(AuthContext); 
     
     return (
         <CustomLoginScreen signIn={signIn} API_URL={API_URL} />
     );
 }
-
-// ----------------------------------------------------------------------
-// ?? SE ELIMINA LA L車GICA DE getStudentStyles Y StudentRoutineScreen DE ESTE ARCHIVO
-// ----------------------------------------------------------------------
 
 // --- NAVEGADOR PRINCIPAL ---
 const Stack = createNativeStackNavigator();
@@ -66,7 +63,7 @@ export default function App() {
     const [userRole, setUserRole] = useState(null);
     const [userProfile, setUserProfile] = useState(null); // Nuevo estado para perfil
 
-    // ?? Hook para determinar el esquema de color y ajustar el color del Header/Loader
+    // Hook para determinar el esquema de color y ajustar el color del Header/Loader
     const colorScheme = useColorScheme();
     const isDark = colorScheme === 'dark';
     // Colores del tema base para el cargador inicial
@@ -143,10 +140,10 @@ export default function App() {
     // El cerebro de la navegaci車n
     return (
         <AuthContext.Provider value={authContext}>
-            {/* ?? ENVOLVEMOS EL NAVEGADOR CON EL CONTEXTO DE TEMA */}
+            {/* ENVOLVEMOS EL NAVEGADOR CON EL CONTEXTO DE TEMA */}
             <ThemeProvider> 
                 <NavigationContainer>
-                    {/* ?? Usamos colores din芍micos para el header global */}
+                    {/* Usamos colores din芍micos para el header global */}
                     <Stack.Navigator screenOptions={{ 
                         headerShown: true, 
                         headerTintColor: primaryColor, // Color del texto y flecha
@@ -182,9 +179,16 @@ export default function App() {
                                     component={ChangePasswordScreen} 
                                     options={{ title: 'Cambiar Contrase?a' }}
                                 />
+                                {/* <--- ?NUEVA RUTA AGREGADA! ---> */}
+                                <Stack.Screen 
+                                    name="AddStudent" 
+                                    component={AddStudentScreen} 
+                                    options={{ title: 'Registrar Alumno', headerShown: false }} // Usamos el header interno
+                                />
+                                
                             </>
                         ) : (
-                            // ?? Rutas del Alumno (CORREGIDO para usar el componente externo)
+                            // Rutas del Alumno (CORREGIDO para usar el componente externo)
                             <>
                                 <Stack.Screen 
                                     name="StudentRoutine" 

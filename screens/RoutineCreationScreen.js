@@ -3,7 +3,7 @@ import {
     StyleSheet, Text, View, TextInput, Button, SafeAreaView, 
     ScrollView, TouchableOpacity, Alert, KeyboardAvoidingView, Platform, ActivityIndicator
 } from 'react-native';
-// 🚨 Importar useRoute para acceder a los parámetros de navegación
+// ?? Importar useRoute para acceder a los parametros de navegacion
 import { useRoute } from '@react-navigation/native';
 import axios from 'axios';
 import { AuthContext } from '../App'; 
@@ -17,7 +17,7 @@ const API_URL = "https://gym-app-backend-e9bn.onrender.com";
 // Componente para un solo ejercicio
 const ExerciseItem = ({ index, exercise, updateExercise, removeExercise, toggleSelector }) => {
     
-    // 🚨 Función centralizada de cambio para Series/Repeticiones/Peso
+    // ?? Funcion centralizada de cambio para Series/Repeticiones/Peso
     const handleChange = (field, value) => {
         updateExercise(index, field, value);
     };
@@ -31,7 +31,7 @@ const ExerciseItem = ({ index, exercise, updateExercise, removeExercise, toggleS
                 </TouchableOpacity>
             </View>
 
-            {/* BOTÓN/DISPLAY DEL EJERCICIO SELECCIONADO */}
+            {/* BOToN/DISPLAY DEL EJERCICIO SELECCIONADO */}
             <TouchableOpacity 
                 style={[exerciseStyles.selectButton, !exercise.exercise_id && {borderColor: '#EF4444'}]} 
                 onPress={() => toggleSelector(index)} 
@@ -62,7 +62,7 @@ const ExerciseItem = ({ index, exercise, updateExercise, removeExercise, toggleS
                 />
             </View>
             
-            {/* 🚨 NUEVO: Input de Peso/Resistencia (Full Width) */}
+            {/* ?? NUEVO: Input de Peso/Resistencia (Full Width) */}
             <TextInput
                 style={[exerciseStyles.input, { width: '100%', marginBottom: 10 }]}
                 placeholder="Peso/Resistencia (ej: 20 kg, N/A, Bandas)"
@@ -76,17 +76,17 @@ const ExerciseItem = ({ index, exercise, updateExercise, removeExercise, toggleS
 };
 
 // ----------------------------------------------------------------------
-// Pantalla Principal de Creación / Edición
+// Pantalla Principal de Creacion / Edicion
 // ----------------------------------------------------------------------
 export default function RoutineCreationScreen({ navigation }) {
     
-    // 🚨 MODIFICADO: Capturar routineMetadata (Nombre Grupo, Días, Fecha Vencimiento)
+    // ?? MODIFICADO: Capturar routineMetadata (Nombre Grupo, Dias, Fecha Vencimiento)
     const route = useRoute();
     const { studentId, studentName, routineId, routineMetadata } = route.params || {};
     
     const isEditMode = !!routineId; 
     
-    // 🚨 ESTADOS PARA AGRUPACIÓN Y FLUJO MULTI-DÍA
+    // ?? ESTADOS PARA AGRUPACIoN Y FLUJO MULTI-DiA
     const totalDays = isEditMode ? 1 : (routineMetadata?.days || 1);
     const baseName = isEditMode ? '' : (routineMetadata?.nombre || 'Nueva Rutina');
 
@@ -96,9 +96,9 @@ export default function RoutineCreationScreen({ navigation }) {
     const [allRoutinesData, setAllRoutinesData] = useState(() => 
         isEditMode ? [] : Array.from({ length: totalDays }, (_, i) => ({
             day: i + 1,
-            // 🚨 Nombre base + " - Día X"
-            name: `${baseName} - Día ${i + 1}`,
-            description: routineMetadata?.descripcion || '', // Descripción del grupo, se puede usar como base
+            // ?? Nombre base + " - Dia X"
+            name: `${baseName} - Dia ${i + 1}`,
+            description: '', // Descripcion individual de la rutina
             exercises: [],
         }))
     );
@@ -119,12 +119,12 @@ export default function RoutineCreationScreen({ navigation }) {
     const { getToken } = useContext(AuthContext);
 
     // ------------------------------------------------------------------
-    // 🚨 FUNCIÓN PARA ACTUALIZAR EL DATO DE LA RUTINA ACTUAL (nombre, descripción, ejercicios)
+    // ?? FUNCIoN PARA ACTUALIZAR EL DATO DE LA RUTINA ACTUAL (nombre, descripcion, ejercicios)
     // ------------------------------------------------------------------
     const setRoutineData = (field, value) => {
         setAllRoutinesData(prev => {
             const newRoutines = [...prev];
-            // Si hay un error de índice, prevenimos el crash
+            // Si hay un error de indice, prevenimos el crash
             if (newRoutines[currentDay - 1]) {
                 newRoutines[currentDay - 1][field] = value;
             }
@@ -133,7 +133,7 @@ export default function RoutineCreationScreen({ navigation }) {
     };
 
     // ------------------------------------------------------------------
-    // FUNCIÓN DE AYUDA PARA ACTUALIZAR UN EJERCICIO DENTRO DE LA RUTINA ACTUAL
+    // FUNCIoN DE AYUDA PARA ACTUALIZAR UN EJERCICIO DENTRO DE LA RUTINA ACTUAL
     // ------------------------------------------------------------------
     const updateExercise = (index, field, value) => {
         setAllRoutinesData(prev => {
@@ -163,7 +163,7 @@ export default function RoutineCreationScreen({ navigation }) {
             const exercisesResponse = await axios.get(`${API_URL}/exercises/`, { headers });
             setAvailableExercises(exercisesResponse.data);
             
-            // 2. Si es MODO EDICIÓN, cargar los datos de la rutina
+            // 2. Si es MODO EDICIoN, cargar los datos de la rutina
             if (isEditMode && routineId) {
                 const routineResponse = await axios.get(`${API_URL}/routines/${routineId}`, { headers });
                 const routineData = routineResponse.data;
@@ -175,11 +175,11 @@ export default function RoutineCreationScreen({ navigation }) {
                         name: link.exercise?.nombre || 'Ejercicio Desconocido',
                         series: String(link.sets),
                         repetitions: link.repetitions,
-                        // 🚨 NUEVO: Cargar el campo peso desde la API
+                        // ?? NUEVO: Cargar el campo peso desde la API
                         peso: link.peso || 'N/A', 
                     }));
                 
-                // Cargar la rutina de edición en la posición 0
+                // Cargar la rutina de edicion en la posicion 0
                 setAllRoutinesData([{
                     day: 1,
                     name: routineData.nombre,
@@ -190,13 +190,13 @@ export default function RoutineCreationScreen({ navigation }) {
                 navigation.setOptions({ title: `Editar: ${routineData.nombre}` });
 
             } else {
-                // Modo CREACIÓN (múltiples días o 1 día nuevo)
-                navigation.setOptions({ title: `Creación: ${baseName}` });
+                // Modo CREACIoN (multiples dias o 1 dia nuevo)
+                navigation.setOptions({ title: `Creacion: ${baseName}` });
             }
 
         } catch (e) {
             console.error("Error cargando datos:", e.response ? e.response.data : e.message);
-            setFetchError(`Error de conexión al cargar datos. ${isEditMode ? 'Rutina no encontrada.' : ''}`);
+            setFetchError(`Error de conexion al cargar datos. ${isEditMode ? 'Rutina no encontrada.' : ''}`);
         } finally {
             setIsLoading(false);
         }
@@ -206,14 +206,14 @@ export default function RoutineCreationScreen({ navigation }) {
         fetchData();
     }, [routineId]); 
 
-    // --- Lógica de Manejo de Ejercicios ---
+    // --- Logica de Manejo de Ejercicios ---
     const addExercise = () => {
         const newExercises = [...currentRoutine.exercises, { 
             exercise_id: null, 
             name: '', 
             series: '', 
             repetitions: '', 
-            // 🚨 NUEVO: Inicializar campo peso
+            // ?? NUEVO: Inicializar campo peso
             peso: '', 
         }];
         setRoutineData('exercises', newExercises);
@@ -224,7 +224,7 @@ export default function RoutineCreationScreen({ navigation }) {
         setRoutineData('exercises', newExercises);
     };
     
-    // --- Lógica de la Lista Desplegable de Ejercicios ---
+    // --- Logica de la Lista Desplegable de Ejercicios ---
     const toggleExerciseSelector = (index) => {
         setCurrentExerciseIndex(index);
         setIsExerciseSelectorOpen(true);
@@ -234,7 +234,7 @@ export default function RoutineCreationScreen({ navigation }) {
         if (currentExerciseIndex !== null) {
             const isDuplicate = currentRoutine.exercises.some((ex, i) => i !== currentExerciseIndex && ex.exercise_id === exerciseId);
             if (isDuplicate) {
-                Alert.alert("Advertencia", "Este ejercicio ya está en la rutina. Puedes editar sus series/repeticiones.");
+                Alert.alert("Advertencia", "Este ejercicio ya esta en la rutina. Puedes editar sus series/repeticiones.");
             }
             
             updateExercise(currentExerciseIndex, 'exercise_id', exerciseId);
@@ -245,11 +245,11 @@ export default function RoutineCreationScreen({ navigation }) {
     };
     
     // ------------------------------------------------------------------
-    // 🚨 FUNCIÓN DE VALIDACIÓN COMPARTIDA
+    // ?? FUNCIoN DE VALIDACIoN COMPARTIDA
     // ------------------------------------------------------------------
     const validateCurrentRoutine = () => {
         if (!currentRoutine.name.trim()) {
-            Alert.alert("Error", `El nombre de la rutina ${currentRoutine.name} no puede estar vacío.`);
+            Alert.alert("Error", `El nombre de la rutina ${currentRoutine.name} no puede estar vacio.`);
             return false;
         }
         
@@ -265,30 +265,30 @@ export default function RoutineCreationScreen({ navigation }) {
         // NOTA: El campo 'peso' no se hace obligatorio ya que puede ser 'N/A'
 
         if (invalidExercise) {
-            Alert.alert("Error de Validación", `En "${currentRoutine.name}": Todos los ejercicios deben estar seleccionados y tener Series (entero positivo) y Repeticiones válidas.`);
+            Alert.alert("Error de Validacion", `En "${currentRoutine.name}": Todos los ejercicios deben estar seleccionados y tener Series (entero positivo) y Repeticiones validas.`);
             return false;
         }
         return true;
     };
     
     // ------------------------------------------------------------------
-    // 🚨 Lógica de Guardado (Modo Creación: Siguiente Día o Transacción Final)
+    // ?? Logica de Guardado (Modo Creacion: Siguiente Dia o Transaccion Final)
     // ------------------------------------------------------------------
     const handleNextRoutineOrSaveAll = async () => {
         if (!validateCurrentRoutine()) return;
 
         if (currentDay < totalDays) {
-            // Guardar temporalmente el día actual e ir al siguiente
+            // Guardar temporalmente el dia actual e ir al siguiente
             setCurrentDay(currentDay + 1);
-            Alert.alert("Rutina Guardada Temporalmente", `¡Rutina "${currentRoutine.name}" completada! Editando el Día ${currentDay + 1}.`, [{ text: "OK" }]);
+            Alert.alert("Rutina Guardada Temporalmente", `?Rutina "${currentRoutine.name}" completada! Editando el Dia ${currentDay + 1}.`, [{ text: "OK" }]);
         } else {
-            // Último día: Guardar la transacción completa
+            // ultimo dia: Guardar la transaccion completa
             await handleSaveTransaction();
         }
     };
 
     // ------------------------------------------------------------------
-    // 🚨 Guardado Transaccional (POST /routines-group/create-transactional)
+    // ?? Guardado Transaccional (POST /routines-group/create-transactional)
     // ------------------------------------------------------------------
     const handleSaveTransaction = async () => {
         if (isSaving) return;
@@ -299,16 +299,18 @@ export default function RoutineCreationScreen({ navigation }) {
         // 1. Construir el payload completo para la API
         const payload = {
             nombre: baseName, // Nombre del Grupo (Bloque A)
+            descripcion: routineMetadata?.descripcion || null, // Descripcion del Grupo
             fecha_vencimiento: expirationDate,
             student_id: studentId,
+            days: totalDays, // Necesario para el esquema de la API
             routines: allRoutinesData.map((routine, index) => ({
-                nombre: routine.name, // Nombre de la rutina (Bloque A - Día X o el nombre personalizado)
+                nombre: routine.name, // Nombre de la rutina (Bloque A - Dia X o el nombre personalizado)
                 descripcion: routine.description.trim() || null,
                 exercises: routine.exercises.map((ex, exIndex) => ({
                     exercise_id: ex.exercise_id,
                     sets: parseInt(ex.series),
                     repetitions: ex.repetitions.trim(),
-                    // 🚨 INCLUIR PESO EN EL PAYLOAD
+                    // ?? INCLUIR PESO EN EL PAYLOAD
                     peso: ex.peso.trim() || 'N/A', 
                     order: exIndex + 1
                 }))
@@ -319,22 +321,27 @@ export default function RoutineCreationScreen({ navigation }) {
             const token = await getToken();
             const headers = { 'Authorization': `Bearer ${token}` };
 
-            // 🚨 Llamada al nuevo endpoint transaccional
+            // ?? Llamada al nuevo endpoint transaccional
             await axios.post(`${API_URL}/routines-group/create-transactional`, payload, { headers });
             
             Alert.alert(
-                "¡Éxito Total! ✅", 
-                `Se creó la agrupación "${baseName}" con ${totalDays} rutinas y fue asignada a ${studentName}.`
+                "?Exito Total!", 
+                `Se creo la agrupacion "${baseName}" con ${totalDays} rutinas y fue asignada a ${studentName}.`
             );
             
             navigation.goBack(); 
             
         } catch (e) {
-            console.error("Error guardando transacción (API):", e.message, JSON.stringify(e.response ? e.response.data : e.message)); 
+            console.error("Error guardando transaccion (API):", e.message, JSON.stringify(e.response ? e.response.data : e.message)); 
             
-            let errorMessage = "Fallo desconocido al guardar la transacción.";
+            let errorMessage = "Fallo desconocido al guardar la transaccion.";
             if (e.response && e.response.data && e.response.data.detail) {
-                errorMessage = `Error de FastAPI: ${JSON.stringify(e.response.data.detail)}`;
+                // Intenta mostrar el detalle si es un array o string
+                if (Array.isArray(e.response.data.detail) || typeof e.response.data.detail === 'string') {
+                    errorMessage = `Error de FastAPI: ${JSON.stringify(e.response.data.detail)}`;
+                } else {
+                     errorMessage = `Error de FastAPI: Ver log del servidor.`;
+                }
             }
             
             Alert.alert("Error de Guardado", errorMessage);
@@ -345,7 +352,7 @@ export default function RoutineCreationScreen({ navigation }) {
 
 
     // ------------------------------------------------------------------
-    // Guardado Único (Modo Edición: PATCH)
+    // Guardado unico (Modo Edicion: PATCH)
     // ------------------------------------------------------------------
     const handleSaveSingleRoutine = async () => {
         if (!validateCurrentRoutine()) return;
@@ -362,33 +369,37 @@ export default function RoutineCreationScreen({ navigation }) {
                     exercise_id: ex.exercise_id, 
                     sets: parseInt(ex.series), 
                     repetitions: ex.repetitions.trim(), 
-                    // 🚨 INCLUIR PESO EN EL PAYLOAD
+                    // ?? INCLUIR PESO EN EL PAYLOAD
                     peso: ex.peso.trim() || 'N/A', 
                     order: index + 1 
                 }))
             };
 
-            // MODO EDICIÓN: PATCH /routines/{id}
+            // MODO EDICIoN: PATCH /routines/{id}
             await axios.patch(`${API_URL}/routines/${routineId}`, routineData, { headers });
             
-            Alert.alert("Éxito de Edición", `Rutina "${currentRoutine.name.trim()}" actualizada exitosamente.`);
+            Alert.alert("exito de Edicion", `Rutina "${currentRoutine.name.trim()}" actualizada exitosamente.`);
             navigation.goBack(); 
             
         } catch (e) {
             console.error("Error guardando rutina (API):", e.message, JSON.stringify(e.response ? e.response.data : e.message)); 
             
             let errorMessage = "Fallo desconocido al guardar la rutina.";
-            if (e.response && e.response.data && e.response.data.detail) {
-                errorMessage = `Error de FastAPI: ${JSON.stringify(e.response.data.detail)}`;
+             if (e.response && e.response.data && e.response.data.detail) {
+                 if (Array.isArray(e.response.data.detail) || typeof e.response.data.detail === 'string') {
+                    errorMessage = `Error de FastAPI: ${JSON.stringify(e.response.data.detail)}`;
+                } else {
+                     errorMessage = `Error de FastAPI: Ver log del servidor.`;
+                }
             }
             
-            Alert.alert("Error de Edición", errorMessage);
+            Alert.alert("Error de Edicion", errorMessage);
         } finally {
             setIsSaving(false);
         }
     };
     
-    // Determinar qué función de guardado usar en el botón principal
+    // Determinar que funcion de guardado usar en el boton principal
     const handleMainSaveAction = isEditMode ? handleSaveSingleRoutine : handleNextRoutineOrSaveAll;
     
     // --- VISTAS DE ESTADO ---
@@ -405,7 +416,7 @@ export default function RoutineCreationScreen({ navigation }) {
           return (
               <SafeAreaView style={styles.container}>
                   <View style={styles.errorView}>
-                      <Text style={styles.errorTitle}>Error de Conexión</Text>
+                      <Text style={styles.errorTitle}>Error de Conexion</Text>
                       <Text style={styles.errorDetail}>{fetchError}</Text>
                       <Button title="Reintentar Carga" onPress={fetchData} color="#FF9500" />
                   </View>
@@ -413,12 +424,12 @@ export default function RoutineCreationScreen({ navigation }) {
           );
     }
     
-    // --- VISTA DE SELECCIÓN DE EJERCICIOS (MODAL) ---
+    // --- VISTA DE SELECCIoN DE EJERCICIOS (MODAL) ---
     if (isExerciseSelectorOpen) {
         return (
             <SafeAreaView style={styles.selectorContainer}>
                 <Text style={styles.selectorTitle}>Seleccionar Ejercicio</Text>
-                <ScrollView contentContainerStyle={styles.selectorList}>
+                <ScrollView contentContainerContainerStyle={styles.selectorList}>
                     {availableExercises.map((ex) => (
                         <TouchableOpacity
                             key={ex.id.toString()}
@@ -437,7 +448,7 @@ export default function RoutineCreationScreen({ navigation }) {
         );
     }
 
-    // --- VISTA PRINCIPAL DE CREACIÓN / EDICIÓN ---
+    // --- VISTA PRINCIPAL DE CREACIoN / EDICIoN ---
     return (
         <SafeAreaView style={styles.container}>
             <KeyboardAvoidingView 
@@ -447,22 +458,22 @@ export default function RoutineCreationScreen({ navigation }) {
             >
                 <ScrollView contentContainerStyle={styles.content}>
                     
-                    {/* TÍTULO DINÁMICO */}
+                    {/* TiTULO DINaMICO */}
                     <Text style={styles.headerTitle}>
-                        {isEditMode ? "✍️ Editar Rutina" : `🛠️ Creación de: ${baseName}`}
+                        {isEditMode ? "Editar Rutina" : `Creacion de: ${baseName}`}
                     </Text>
                     
-                    {/* 🚨 DISPLAY DE DÍA ACTUAL/GRUPO */}
+                    {/* ?? DISPLAY DE DiA ACTUAL/GRUPO */}
                     {!isEditMode && totalDays > 1 && (
                         <View style={[styles.studentInfoBox, {marginBottom: 15, backgroundColor: '#D1E7FF', borderLeftColor: '#3B82F6'}]}>
-                            <Text style={styles.label}>Agrupación: {baseName} (Vence: {routineMetadata?.expirationDate})</Text>
+                            <Text style={styles.label}>Agrupacion: {baseName} (Vence: {routineMetadata?.expirationDate})</Text>
                             <Text style={[styles.studentNameDisplay, {color: '#3B82F6'}]}>
-                                Día {currentDay} de {totalDays}
+                                Dia {currentDay} de {totalDays}
                             </Text>
                         </View>
                     )}
                     
-                    {/* DISPLAY DEL ALUMNO SELECCIONADO (Solo en modo Creación) */}
+                    {/* DISPLAY DEL ALUMNO SELECCIONADO (Solo en modo Creacion) */}
                     {!isEditMode && studentName && (
                         <View style={styles.studentInfoBox}>
                             <Text style={styles.label}>Asignando a:</Text>
@@ -473,19 +484,19 @@ export default function RoutineCreationScreen({ navigation }) {
                     )}
 
                     {/* INPUT NOMBRE RUTINA */}
-                    <Text style={styles.label}>Nombre de la Rutina (Día {currentDay}):</Text>
+                    <Text style={styles.label}>Nombre de la Rutina (Dia {currentDay}):</Text>
                     <TextInput
-                        // 🚨 MODIFICACIÓN CLAVE: Quitamos la restricción de estilo y editable para multi-días
+                        // ?? MODIFICACIoN CLAVE: Quitamos la restriccion de estilo y editable para multi-dias
                         style={styles.input} 
-                        placeholder="e.g., Rutina Hipertrofia Día A"
+                        placeholder="e.g., Rutina Hipertrofia Dia A"
                         placeholderTextColor="#A0A0A0"
                         value={currentRoutine.name}
                         onChangeText={(text) => setRoutineData('name', text)}
-                        editable={true} // Siempre editable en esta vista (a menos que sea modo edición y necesite ser forzado a read-only, pero aquí queremos que sea editable)
+                        editable={true} // Siempre editable en esta vista (a menos que sea modo edicion y necesite ser forzado a read-only, pero aqui queremos que sea editable)
                     />
                     
-                    {/* INPUT DESCRIPCIÓN */}
-                    <Text style={styles.label}>Descripción (Opcional):</Text>
+                    {/* INPUT DESCRIPCIoN */}
+                    <Text style={styles.label}>Descripcion (Opcional):</Text>
                     <TextInput
                         style={[styles.input, styles.textArea]}
                         placeholder="e.g., Fase de volumen 4 semanas"
@@ -498,8 +509,8 @@ export default function RoutineCreationScreen({ navigation }) {
                     {availableExercises.length === 0 && (
                         <View style={styles.noExercisesWarning}>
                             <Text style={styles.warningText}>
-                                ⚠️ **Advertencia:** No hay ejercicios disponibles. 
-                                ¡Crea al menos uno en FastAPI para poder seleccionarlo!
+                                ?? **Advertencia:** No hay ejercicios disponibles. 
+                                ?Crea al menos uno en FastAPI para poder seleccionarlo!
                             </Text>
                         </View>
                     )}
@@ -522,7 +533,7 @@ export default function RoutineCreationScreen({ navigation }) {
                     </View>
 
                     <TouchableOpacity onPress={addExercise} style={styles.addButton} disabled={fetchError || availableExercises.length === 0}>
-                        <Text style={styles.addButtonText}>➕ Agregar Ejercicio</Text>
+                        <Text style={styles.addButtonText}>Agregar Ejercicio</Text>
                     </TouchableOpacity>
 
                 </ScrollView>
@@ -530,15 +541,15 @@ export default function RoutineCreationScreen({ navigation }) {
 
             <View style={styles.footer}>
                 <Button 
-                    // 🚨 TEXTO DEL BOTÓN DINÁMICO
+                    // ?? TEXTO DEL BOToN DINaMICO
                     title={isSaving ? "Procesando..." : (
                         isEditMode ? "GUARDAR CAMBIOS" : 
-                        (currentDay < totalDays ? `SIGUIENTE RUTINA (Día ${currentDay + 1})` : "GUARDAR Y ASIGNAR TODO")
+                        (currentDay < totalDays ? `SIGUIENTE RUTINA (Dia ${currentDay + 1})` : "GUARDAR Y ASIGNAR TODO")
                     )} 
                     onPress={handleMainSaveAction} 
-                    // Validación en modo creación
+                    // Validacion en modo creacion
                     disabled={isSaving || !currentRoutine.name.trim() || currentRoutine.exercises.length === 0 || (!isEditMode && !studentId)}
-                    // 🚨 COLOR DEL BOTÓN DINÁMICO
+                    // ?? COLOR DEL BOToN DINaMICO
                     color={isEditMode ? "#FF9500" : (currentDay < totalDays ? "#3B82F6" : "#10B981")} 
                 />
                 <View style={{marginTop: 10}}>

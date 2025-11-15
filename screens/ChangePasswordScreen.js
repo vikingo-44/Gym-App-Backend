@@ -4,10 +4,10 @@ import {
     ScrollView, SafeAreaView, Alert, ActivityIndicator 
 } from 'react-native';
 import axios from 'axios';
-// Importa el AuthContext desde tu App.js (asume que está en la misma carpeta superior)
+// Importa el AuthContext desde tu App.js (asume que esta en la misma carpeta superior)
 import { AuthContext } from '../App'; 
 
-// 🚨 Asegúrate de que esta URL sea la misma que en App.js
+// 🚨 Asegurate de que esta URL sea la misma que en App.js
 const API_URL = "https://gym-app-backend-e9bn.onrender.com"; 
 
 export default function ChangePasswordScreen({ navigation }) {
@@ -20,7 +20,7 @@ export default function ChangePasswordScreen({ navigation }) {
 
     const handleChangePassword = async () => {
         if (newPassword !== confirmPassword) {
-            Alert.alert("Error", "La nueva contraseña y la confirmación no coinciden.");
+            Alert.alert("Error", "La nueva contraseña y la confirmacion no coinciden.");
             return;
         }
 
@@ -46,7 +46,7 @@ export default function ChangePasswordScreen({ navigation }) {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
 
-            Alert.alert("Éxito", "Tu contraseña ha sido actualizada. Por favor, vuelve a iniciar sesión.", [
+            Alert.alert("exito", "Tu contraseña ha sido actualizada. Por favor, vuelve a iniciar sesion.", [
                 { 
                     text: "OK", 
                     onPress: () => signOut() // Forzamos el cierre para que use el nuevo hash
@@ -78,7 +78,7 @@ export default function ChangePasswordScreen({ navigation }) {
 
                 <TextInput
                     style={styles.input}
-                    placeholder="Nueva Contraseña (mínimo 6 caracteres)"
+                    placeholder="Nueva Contraseña (minimo 6 caracteres)"
                     secureTextEntry={true}
                     value={newPassword}
                     onChangeText={setNewPassword}

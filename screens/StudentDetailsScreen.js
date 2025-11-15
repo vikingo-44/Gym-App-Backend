@@ -3,7 +3,7 @@ import { StyleSheet, Text, View, SafeAreaView, ScrollView, Button, TextInput, Al
 import { useRoute } from '@react-navigation/native';
 import axios from 'axios';
 import { useTheme } from '../ThemeContext'; 
-import { AuthContext } from '../App'; // Asumiendo que AuthContext está disponible en '../App'
+import { AuthContext } from '../App'; // Asumiendo que AuthContext esta disponible en '../App'
 
 const API_URL = "https://gym-app-backend-e9bn.onrender.com";
 
@@ -24,11 +24,11 @@ export default function StudentDetailsScreen({ navigation }) {
     const hasChanges = nombre !== student.nombre || email !== student.email || dni !== student.dni;
 
     // ----------------------------------------------------------------
-    // 🚨 2. FUNCIÓN DE GUARDADO (PATCH a la API)
+    // 🚨 2. FUNCIoN DE GUARDADO (PATCH a la API)
     // ----------------------------------------------------------------
     const handleSave = async () => {
         if (!hasChanges) {
-            Alert.alert("Atención", "No hay cambios para guardar.");
+            Alert.alert("Atencion", "No hay cambios para guardar.");
             return;
         }
 
@@ -48,19 +48,19 @@ export default function StudentDetailsScreen({ navigation }) {
                 dni: dni.trim(),
             };
             
-            // Envía la solicitud PATCH al nuevo endpoint
+            // Envia la solicitud PATCH al nuevo endpoint
             await axios.patch(`${API_URL}/users/student/${student.id}`, updatePayload, { headers });
 
-            Alert.alert("Éxito", `Los datos de ${nombre} se actualizaron correctamente.`);
+            Alert.alert("exito", `Los datos de ${nombre} se actualizaron correctamente.`);
             
             // 3. Opcional: Volver al profesor screen y forzar recarga de la lista
             navigation.navigate('ProfessorPanel', { reload: true }); 
 
         } catch (e) {
             console.error("Error al guardar datos del alumno:", e.response ? e.response.data : e.message);
-            let errorMessage = "Fallo al actualizar. Verifica la conexión o el DNI/Email ya están en uso.";
+            let errorMessage = "Fallo al actualizar. Verifica la conexion o el DNI/Email ya estan en uso.";
             if (e.response && e.response.data && e.response.data.detail) {
-                // Muestra un error más específico si viene del backend
+                // Muestra un error mas especifico si viene del backend
                 errorMessage = e.response.data.detail;
             }
             Alert.alert("Error", errorMessage);
@@ -169,11 +169,11 @@ export default function StudentDetailsScreen({ navigation }) {
                         keyboardType="numeric"
                     />
 
-                    {/* CAMPO ESTÁTICO: ID Interno (No editable) */}
-                    <Text style={styles.detailLabel}>ID Interno (Estático):</Text>
+                    {/* CAMPO ESTaTICO: ID Interno (No editable) */}
+                    <Text style={styles.detailLabel}>ID Interno (Estatico):</Text>
                     <Text style={styles.detailValueStatic}>{student.id}</Text>
                     
-                    {/* 🚨 ROL ELIMINADO según solicitud */}
+                    {/* 🚨 ROL ELIMINADO segun solicitud */}
                     
                 </View>
                 

@@ -42,7 +42,7 @@ const DarkTheme = {
 
 // 1. Crear el Contexto, incluyendo toggleTheme
 const ThemeContext = createContext({
-    ...LightTheme,
+    ...DarkTheme, // 🚨 AJUSTE: El contexto por defecto ahora es DarkTheme
     toggleTheme: () => {}, // Función placeholder
 });
 
@@ -55,15 +55,17 @@ export const ThemeProvider = ({ children }) => {
     const systemScheme = useColorScheme();
     
     // Estado para permitir la anulación manual: 'light', 'dark', o 'system'
-    const [manualScheme, setManualScheme] = useState('system'); 
+    // 🚨 MODIFICACIÓN CLAVE: Inicializa a 'dark' para forzar el modo oscuro
+    const [manualScheme, setManualScheme] = useState('dark'); 
 
     // Determina el esquema actual: manual o del sistema
+    // El esquema del sistema ya no importa para el inicio, pero se mantiene la lógica de alternar por si se necesita
     const currentScheme = manualScheme === 'system' ? systemScheme : manualScheme;
     
     // El tema activo se basa en el esquema actual
     const activeTheme = currentScheme === 'dark' ? DarkTheme : LightTheme;
 
-    // Función para alternar el esquema (si no es manual, lo cambia a lo opuesto del actual)
+    // Función para alternar el esquema (Si ya no necesitas esta función, podrías eliminarla y dejar manualScheme siempre en 'dark')
     const toggleTheme = () => {
         setManualScheme(prevScheme => {
             if (prevScheme === 'system') {
