@@ -1,5 +1,5 @@
 import os
-from datetime import datetime, timedelta, timezone, date # CRiTICO: Importar 'date'
+from datetime import datetime, timedelta, timezone, date # ?? CRiTICO: Importar 'date'
 from typing import Annotated, List, Optional
 from contextlib import asynccontextmanager
 
@@ -14,7 +14,6 @@ from sqlalchemy import func # NECESARIO para usar func.lower() en validacion de 
 from passlib.context import CryptContext
 from jose import JWTError, jwt
 from dotenv import load_dotenv
-from pydantic import BaseModel # <--- ¡NUEVA IMPORTACIoN REQUERIDA!
 
 # Importaciones de tu estructura y esquemas
 from database import create_db_and_tables, get_session
@@ -34,11 +33,6 @@ from models import (
     UserUpdateByProfessor,
     RoutineCreateForTransactional # Nuevo esquema para usar en la transaccion
 )
-
-# NUEVO ESQUEMA: Utilizado para actualizar los campos del grupo de rutinas
-class RoutineGroupUpdate(BaseModel):
-    nombre: Optional[str] = None
-    fecha_vencimiento: Optional[date] = None # date esta importado arriba
 
 
 load_dotenv()
@@ -353,178 +347,6 @@ def update_student_data(
     session.refresh(student_to_update)
     
     return student_to_update
-
-# ----------------------------------------------------------------------
-# Rutas de Grupos de Rutinas 
-# ----------------------------------------------------------------------
-
-@app.patch("/routine_groups/{routine_group_id}", response_model=RoutineGroupRead, tags=["Grupos de Rutinas"])
-def update_routine_group(
-    routine_group_id: int,
-    group_data: RoutineGroupUpdate, # Usamos el nuevo esquema
-    session: Annotated[Session, Depends(get_session)],
-    current_professor: Annotated[User, Depends(get_current_professor)]
-):
-    """(Profesor) Actualiza solo el nombre y/o la fecha de vencimiento de un grupo de rutinas (metadata)."""
-    
-    # 1. Buscar el grupo
-    routine_group = session.get(RoutineGroup, routine_group_id)
-    
-    if not routine_group:
-        raise HTTPException(status_code=404, detail="Grupo de rutinas no encontrado.")
-        
-    # 2. Verificar propiedad 
-    if routine_group.professor_id != current_professor.id:
-        raise HTTPException(status_code=403, detail="No autorizado para editar este grupo.")
-        
-    # 3. Aplicar los cambios
-    update_data = group_data.model_dump(exclude_unset=True)
-    
-    for key, value in update_data.items():
-        setattr(routine_group, key, value)
-        
-    # 4. Guardar los cambios
-    session.add(routine_group)
-    session.commit()
-    session.refresh(routine_group)
-    
-    return routine_group
-
-@app.patch("/routine_groups/{routine_group_id}/full-update/{student_id}", response_model=List[RoutineAssignmentRead], tags=["Grupos de Rutinas"])
-def update_routine_group_full(
-    routine_group_id: int,
-    student_id: int, # Necesario para re-asignar las nuevas rutinas
-    data: RoutineGroupCreateAndRoutines, # Contiene nuevo nombre, fecha y la LISTA COMPLETA de nuevas rutinas
-    session: Annotated[Session, Depends(get_session)],
-    current_professor: Annotated[User, Depends(get_current_professor)]
-):
-    """
-    (Profesor) Actualiza completamente un grupo de rutinas y REEMPLAZA todas las 
-    rutinas/dias asociados al mismo, manteniendo la asignacion al alumno.
-    """
-    try:
-        # 1. Validar Grupo y Permisos
-        routine_group = session.get(RoutineGroup, routine_group_id)
-        if not routine_group:
-            raise HTTPException(status_code=404, detail="Grupo de rutinas no encontrado.")
-            
-        if routine_group.professor_id != current_professor.id:
-            raise HTTPException(status_code=403, detail="No autorizado para editar este grupo.")
-
-        # 2. Validar Alumno
-        student = session.get(User, student_id)
-        if not student or student.rol != UserRole.STUDENT:
-            raise HTTPException(status_code=404, detail="Alumno no encontrado o rol incorrecto.")
-
-        if not data.routines or len(data.routines) == 0:
-            raise HTTPException(status_code=400, detail="Debe enviar al menos una rutina para actualizar el grupo.")
-
-        # 3. Actualizar la metadata del grupo
-        routine_group.nombre = data.nombre
-        routine_group.fecha_vencimiento = data.fecha_vencimiento
-        session.add(routine_group)
-        session.flush()
-
-        # 4. Eliminar todas las rutinas antiguas asociadas a este grupo
-        # 4a. Encontrar todas las rutinas antiguas del grupo
-        old_routines_statement = select(Routine).where(Routine.routine_group_id == routine_group_id)
-        old_routines = session.exec(old_routines_statement).all()
-        old_routine_ids = [r.id for r in old_routines]
-
-        if old_routine_ids:
-            # 4b. Eliminar enlaces de ejercicios de las rutinas antiguas
-            session.exec(select(RoutineExercise).where(RoutineExercise.routine_id.in_(old_routine_ids))).delete()
-            # 4c. Eliminar las asignaciones de las rutinas antiguas para ESTE alumno
-            session.exec(select(RoutineAssignment).where(
-                RoutineAssignment.routine_id.in_(old_routine_ids),
-                RoutineAssignment.student_id == student_id
-            )).delete()
-            # 4d. Eliminar las rutinas antiguas (maestras)
-            session.exec(select(Routine).where(Routine.id.in_(old_routine_ids))).delete()
-        
-        session.flush() # Limpia la sesion de los objetos eliminados antes de crear los nuevos.
-        
-        # 5. Crear las NUEVAS Rutinas, asociarlas al grupo y asignarlas al alumno
-        created_assignment_ids = []
-        is_first_routine = True # Para marcar solo la primera asignacion como activa
-        
-        for routine_data in data.routines:
-            
-            # 5a. Crear el modelo de Rutina (nuevo objeto)
-            routine_model = Routine(
-                nombre=routine_data.nombre,
-                descripcion=routine_data.descripcion,
-                owner_id=current_professor.id,
-                routine_group_id=routine_group.id # ASOCIAR AL GRUPO EXISTENTE
-            )
-            session.add(routine_model)
-            session.flush() # Obtiene el nuevo ID de la rutina
-            
-            # 5b. Crear los enlaces de ejercicios (RoutineExercise)
-            for index, exercise_link_data in enumerate(routine_data.exercises):
-                exercise = session.get(Exercise, exercise_link_data.exercise_id)
-                if not exercise:
-                    session.rollback()
-                    raise HTTPException(
-                        status_code=404, 
-                        detail=f"Ejercicio con id {exercise_link_data.exercise_id} no encontrado. Edicion cancelada."
-                    )
-                    
-                link = RoutineExercise(
-                    routine_id=routine_model.id, 
-                    exercise_id=exercise.id,
-                    sets=exercise_link_data.sets,
-                    repetitions=exercise_link_data.repetitions,
-                    peso=exercise_link_data.peso, 
-                    order=index + 1
-                )
-                session.add(link)
-
-            # 5c. Crear la asignacion (nueva)
-            assignment = RoutineAssignment(
-                routine_id=routine_model.id,
-                student_id=student_id,
-                professor_id=current_professor.id,
-                is_active=is_first_routine # Solo la primera rutina del nuevo grupo es activa
-            )
-            session.add(assignment)
-            session.flush()
-
-            created_assignment_ids.append(assignment.id) 
-            is_first_routine = False
-
-        # 6. COMMIT uNICO
-        session.commit()
-
-        # 7. Fetch y retorno de las nuevas asignaciones creadas
-        statement_read = (
-            select(RoutineAssignment)
-            .where(RoutineAssignment.id.in_(created_assignment_ids))
-            .options(
-                selectinload(RoutineAssignment.routine)
-                    .selectinload(Routine.routine_group),
-                selectinload(RoutineAssignment.routine)
-                    .selectinload(Routine.exercise_links)
-                    .selectinload(RoutineExercise.exercise),
-                selectinload(RoutineAssignment.student),
-                selectinload(RoutineAssignment.professor)
-            )
-        )
-        
-        final_assignments = session.exec(statement_read).all()
-        return final_assignments
-
-    except HTTPException:
-        session.rollback() 
-        raise
-    except Exception as e:
-        session.rollback() 
-        print(f"ERROR: Fallo transaccional al actualizar grupo de rutinas: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
-            detail=f"Error transaccional al actualizar grupo: {str(e)}"
-        )
-
 
 # ----------------------------------------------------------------------
 # Rutas de Ejercicios (CRUD - RESTAURADAS)
@@ -907,8 +729,8 @@ def set_assignment_active_status(
     updated_assignment = session.exec(statement_read).first()
 
     if not updated_assignment:
-            raise HTTPException(status_code=500, detail="Error interno: No se pudo recargar la asignacion actualizada.")
-            
+          raise HTTPException(status_code=500, detail="Error interno: No se pudo recargar la asignacion actualizada.")
+          
     return updated_assignment
     
 # --- Ruta para eliminar un grupo de asignaciones para un alumno especifico ---
@@ -1156,7 +978,7 @@ def get_assignments_for_student_by_professor(
         # Obtener los IDs de las rutinas en el grupo
         active_group_routine_ids = {r.id for r in grouped_routines}
         
-        for routine in grouped_routines: # Itera sobre la lista de rutinas
+        for routine in grouped_routines:
             
             # Buscamos la asignacion real para esta rutina especifica. 
             # Si no la encontramos, usamos los datos del ancla (is_the_original_assigned_routine)
@@ -1174,7 +996,7 @@ def get_assignments_for_student_by_professor(
                 student_id=active_anchor_assignment.student_id,
                 professor_id=active_anchor_assignment.professor_id,
                 assigned_at=active_anchor_assignment.assigned_at,
-                is_active=real_assignment.is_active if real_assignment else (True if routine.id == active_anchor_assignment.routine_id else False), # Usa el estado real, o el de la ancla, el resto son False (historico, pero parte del grupo)
+                is_active=real_assignment.is_active if real_assignment else True, # Usa el estado real o True por defecto si es parte del grupo
                 routine=routine, # La rutina individual (Dia 1, Dia 2...)
                 student=active_anchor_assignment.student, # Cargado desde el ancla
                 professor=active_anchor_assignment.professor # Cargado desde el ancla
@@ -1216,7 +1038,7 @@ def get_my_active_routine(
         )
         .order_by(desc(RoutineAssignment.assigned_at)) 
         .options(
-            # ?? FIX L?GICO: Cargar la Rutina y su Grupo (CR?TICO) ??
+            # ?? FIX L¨®GICO: Cargar la Rutina y su Grupo (CR¨ªTICO) ??
             selectinload(RoutineAssignment.routine)
                 .selectinload(Routine.routine_group),
             selectinload(RoutineAssignment.routine)
@@ -1265,7 +1087,7 @@ def get_my_active_routine(
             
             # Usamos los datos de la asignacion real o del ancla como fallback
             assignment_id_to_use = real_assignment.id if real_assignment else active_anchor_assignment.id
-            # is_active_status = real_assignment.is_active if real_assignment else True # NOTA: La logica para el alumno es devolver el grupo activo.
+            is_active_status = real_assignment.is_active if real_assignment else True
 
             # Creamos un objeto RoutineAssignmentRead para cada rutina en el grupo
             pseudo_assignment_data = RoutineAssignmentRead(
@@ -1274,7 +1096,7 @@ def get_my_active_routine(
                 student_id=active_anchor_assignment.student_id,
                 professor_id=active_anchor_assignment.professor_id,
                 assigned_at=active_anchor_assignment.assigned_at,
-                is_active=True if routine.id == active_anchor_assignment.routine_id else False, # Solo la rutina ancla es True, el resto de las del grupo son 'historicas' pero las mostramos
+                is_active=True, # Usamos TRUE para que el cliente sepa que esta rutina pertenece al grupo activo.
                 routine=routine,
                 student=active_anchor_assignment.student,
                 professor=active_anchor_assignment.professor
