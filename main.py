@@ -14,6 +14,7 @@ from sqlalchemy import func # NECESARIO para usar func.lower() en validacion de 
 from passlib.context import CryptContext
 from jose import JWTError, jwt
 from dotenv import load_dotenv
+from pydantic import BaseModel # <--- ¡NUEVA IMPORTACIÓN REQUERIDA!
 
 # Importaciones de tu estructura y esquemas
 from database import create_db_and_tables, get_session
@@ -33,6 +34,11 @@ from models import (
     UserUpdateByProfessor,
     RoutineCreateForTransactional # Nuevo esquema para usar en la transaccion
 )
+
+# NUEVO ESQUEMA: Utilizado para actualizar los campos del grupo de rutinas
+class RoutineGroupUpdate(BaseModel):
+    nombre: Optional[str] = None
+    fecha_vencimiento: Optional[date] = None # date está importado arriba
 
 
 load_dotenv()
@@ -347,6 +353,43 @@ def update_student_data(
     session.refresh(student_to_update)
     
     return student_to_update
+
+# ----------------------------------------------------------------------
+# Rutas de Grupos de Rutinas (NUEVA RUTA DE EDICIÓN)
+# ----------------------------------------------------------------------
+
+@app.patch("/routine_groups/{routine_group_id}", response_model=RoutineGroupRead, tags=["Grupos de Rutinas"])
+def update_routine_group(
+    routine_group_id: int,
+    group_data: RoutineGroupUpdate, # Usamos el nuevo esquema
+    session: Annotated[Session, Depends(get_session)],
+    current_professor: Annotated[User, Depends(get_current_professor)]
+):
+    """(Profesor) Actualiza el nombre y/o la fecha de vencimiento de un grupo de rutinas."""
+    
+    # 1. Buscar el grupo
+    routine_group = session.get(RoutineGroup, routine_group_id)
+    
+    if not routine_group:
+        raise HTTPException(status_code=404, detail="Grupo de rutinas no encontrado.")
+        
+    # 2. Verificar propiedad (Asumimos que el profesor debe ser el que creó el grupo)
+    if routine_group.professor_id != current_professor.id:
+        raise HTTPException(status_code=403, detail="No autorizado para editar este grupo.")
+        
+    # 3. Aplicar los cambios
+    update_data = group_data.model_dump(exclude_unset=True)
+    
+    for key, value in update_data.items():
+        setattr(routine_group, key, value)
+        
+    # 4. Guardar los cambios
+    session.add(routine_group)
+    session.commit()
+    session.refresh(routine_group)
+    
+    return routine_group
+
 
 # ----------------------------------------------------------------------
 # Rutas de Ejercicios (CRUD - RESTAURADAS)
@@ -729,8 +772,8 @@ def set_assignment_active_status(
     updated_assignment = session.exec(statement_read).first()
 
     if not updated_assignment:
-          raise HTTPException(status_code=500, detail="Error interno: No se pudo recargar la asignacion actualizada.")
-          
+            raise HTTPException(status_code=500, detail="Error interno: No se pudo recargar la asignacion actualizada.")
+            
     return updated_assignment
     
 # --- Ruta para eliminar un grupo de asignaciones para un alumno especifico ---
@@ -978,7 +1021,7 @@ def get_assignments_for_student_by_professor(
         # Obtener los IDs de las rutinas en el grupo
         active_group_routine_ids = {r.id for r in grouped_routines}
         
-        for routine in grouped_routines:
+        for routine in grouped_routines: # Itera sobre la lista de rutinas
             
             # Buscamos la asignacion real para esta rutina especifica. 
             # Si no la encontramos, usamos los datos del ancla (is_the_original_assigned_routine)
@@ -996,7 +1039,7 @@ def get_assignments_for_student_by_professor(
                 student_id=active_anchor_assignment.student_id,
                 professor_id=active_anchor_assignment.professor_id,
                 assigned_at=active_anchor_assignment.assigned_at,
-                is_active=real_assignment.is_active if real_assignment else True, # Usa el estado real o True por defecto si es parte del grupo
+                is_active=real_assignment.is_active if real_assignment else (True if routine.id == active_anchor_assignment.routine_id else False), # Usa el estado real, o el de la ancla, el resto son False (histórico, pero parte del grupo)
                 routine=routine, # La rutina individual (Dia 1, Dia 2...)
                 student=active_anchor_assignment.student, # Cargado desde el ancla
                 professor=active_anchor_assignment.professor # Cargado desde el ancla
@@ -1038,7 +1081,7 @@ def get_my_active_routine(
         )
         .order_by(desc(RoutineAssignment.assigned_at)) 
         .options(
-            # ?? FIX L¨®GICO: Cargar la Rutina y su Grupo (CR¨ªTICO) ??
+            # ?? FIX L?GICO: Cargar la Rutina y su Grupo (CR?TICO) ??
             selectinload(RoutineAssignment.routine)
                 .selectinload(Routine.routine_group),
             selectinload(RoutineAssignment.routine)
@@ -1087,7 +1130,7 @@ def get_my_active_routine(
             
             # Usamos los datos de la asignacion real o del ancla como fallback
             assignment_id_to_use = real_assignment.id if real_assignment else active_anchor_assignment.id
-            is_active_status = real_assignment.is_active if real_assignment else True
+            # is_active_status = real_assignment.is_active if real_assignment else True # NOTA: La lógica para el alumno es devolver el grupo activo.
 
             # Creamos un objeto RoutineAssignmentRead para cada rutina en el grupo
             pseudo_assignment_data = RoutineAssignmentRead(
@@ -1096,7 +1139,7 @@ def get_my_active_routine(
                 student_id=active_anchor_assignment.student_id,
                 professor_id=active_anchor_assignment.professor_id,
                 assigned_at=active_anchor_assignment.assigned_at,
-                is_active=True, # Usamos TRUE para que el cliente sepa que esta rutina pertenece al grupo activo.
+                is_active=True if routine.id == active_anchor_assignment.routine_id else False, # Sólo la rutina ancla es True, el resto de las del grupo son 'históricas' pero las mostramos
                 routine=routine,
                 student=active_anchor_assignment.student,
                 professor=active_anchor_assignment.professor
