@@ -14,7 +14,7 @@ from sqlalchemy import func # NECESARIO para usar func.lower() en validacion de 
 from passlib.context import CryptContext
 from jose import JWTError, jwt
 from dotenv import load_dotenv
-from pydantic import BaseModel # <--- ¡NUEVA IMPORTACIÓN REQUERIDA!
+from pydantic import BaseModel # <--- ¡NUEVA IMPORTACIoN REQUERIDA!
 
 # Importaciones de tu estructura y esquemas
 from database import create_db_and_tables, get_session
@@ -38,7 +38,7 @@ from models import (
 # NUEVO ESQUEMA: Utilizado para actualizar los campos del grupo de rutinas
 class RoutineGroupUpdate(BaseModel):
     nombre: Optional[str] = None
-    fecha_vencimiento: Optional[date] = None # date está importado arriba
+    fecha_vencimiento: Optional[date] = None # date esta importado arriba
 
 
 load_dotenv()
@@ -400,7 +400,7 @@ def update_routine_group_full(
 ):
     """
     (Profesor) Actualiza completamente un grupo de rutinas y REEMPLAZA todas las 
-    rutinas/días asociados al mismo, manteniendo la asignación al alumno.
+    rutinas/dias asociados al mismo, manteniendo la asignacion al alumno.
     """
     try:
         # 1. Validar Grupo y Permisos
@@ -442,7 +442,7 @@ def update_routine_group_full(
             # 4d. Eliminar las rutinas antiguas (maestras)
             session.exec(select(Routine).where(Routine.id.in_(old_routine_ids))).delete()
         
-        session.flush() # Limpia la sesión de los objetos eliminados antes de crear los nuevos.
+        session.flush() # Limpia la sesion de los objetos eliminados antes de crear los nuevos.
         
         # 5. Crear las NUEVAS Rutinas, asociarlas al grupo y asignarlas al alumno
         created_assignment_ids = []
@@ -467,7 +467,7 @@ def update_routine_group_full(
                     session.rollback()
                     raise HTTPException(
                         status_code=404, 
-                        detail=f"Ejercicio con id {exercise_link_data.exercise_id} no encontrado. Edición cancelada."
+                        detail=f"Ejercicio con id {exercise_link_data.exercise_id} no encontrado. Edicion cancelada."
                     )
                     
                 link = RoutineExercise(
@@ -1174,7 +1174,7 @@ def get_assignments_for_student_by_professor(
                 student_id=active_anchor_assignment.student_id,
                 professor_id=active_anchor_assignment.professor_id,
                 assigned_at=active_anchor_assignment.assigned_at,
-                is_active=real_assignment.is_active if real_assignment else (True if routine.id == active_anchor_assignment.routine_id else False), # Usa el estado real, o el de la ancla, el resto son False (histórico, pero parte del grupo)
+                is_active=real_assignment.is_active if real_assignment else (True if routine.id == active_anchor_assignment.routine_id else False), # Usa el estado real, o el de la ancla, el resto son False (historico, pero parte del grupo)
                 routine=routine, # La rutina individual (Dia 1, Dia 2...)
                 student=active_anchor_assignment.student, # Cargado desde el ancla
                 professor=active_anchor_assignment.professor # Cargado desde el ancla
@@ -1265,7 +1265,7 @@ def get_my_active_routine(
             
             # Usamos los datos de la asignacion real o del ancla como fallback
             assignment_id_to_use = real_assignment.id if real_assignment else active_anchor_assignment.id
-            # is_active_status = real_assignment.is_active if real_assignment else True # NOTA: La lógica para el alumno es devolver el grupo activo.
+            # is_active_status = real_assignment.is_active if real_assignment else True # NOTA: La logica para el alumno es devolver el grupo activo.
 
             # Creamos un objeto RoutineAssignmentRead para cada rutina en el grupo
             pseudo_assignment_data = RoutineAssignmentRead(
@@ -1274,7 +1274,7 @@ def get_my_active_routine(
                 student_id=active_anchor_assignment.student_id,
                 professor_id=active_anchor_assignment.professor_id,
                 assigned_at=active_anchor_assignment.assigned_at,
-                is_active=True if routine.id == active_anchor_assignment.routine_id else False, # Solo la rutina ancla es True, el resto de las del grupo son 'históricas' pero las mostramos
+                is_active=True if routine.id == active_anchor_assignment.routine_id else False, # Solo la rutina ancla es True, el resto de las del grupo son 'historicas' pero las mostramos
                 routine=routine,
                 student=active_anchor_assignment.student,
                 professor=active_anchor_assignment.professor
