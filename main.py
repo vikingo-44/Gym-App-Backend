@@ -1301,4 +1301,3 @@ def get_my_active_routine(
         
     # 5. Si no hay grupo (rutina simple antigua), devuelve la asignacion original
     return [active_anchor_assignment]
-```eof
