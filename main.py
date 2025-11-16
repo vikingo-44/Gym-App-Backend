@@ -243,7 +243,7 @@ def login_for_access_token(
     if not user or not verify_password(form_data.password, user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="DNI o contraseña incorrectos",
+            detail="DNI o contrasena incorrectos",
             headers={"WWW-Authenticate": "Bearer"},
         )
     
@@ -275,22 +275,22 @@ def change_password(
     current_user: Annotated[User, Depends(get_current_user)]
 ):
     """
-    Permite a un usuario (Profesor o Alumno) cambiar su contraseña.
-    Requiere la contraseña antigua para la verificacion.
+    Permite a un usuario (Profesor o Alumno) cambiar su contrasena.
+    Requiere la contrasena antigua para la verificacion.
     """
     
-    # 1. Verificar la contraseña antigua
+    # 1. Verificar la contrasena antigua
     if not verify_password(password_data.old_password, current_user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Contraseña antigua incorrecta."
+            detail="Contrasena antigua incorrecta."
         )
 
-    # 2. Verificar la longitud de la nueva contraseña (buena practica)
+    # 2. Verificar la longitud de la nueva contrasena (buena practica)
     if len(password_data.new_password) < 6:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="La nueva contraseña debe tener al menos 6 caracteres."
+            detail="La nueva contrasena debe tener al menos 6 caracteres."
         )
 
     # 3. Generar el nuevo hash y actualizar el usuario
@@ -301,7 +301,7 @@ def change_password(
     session.commit()
     session.refresh(current_user)
     
-    return {"message": "Contraseña actualizada exitosamente."}
+    return {"message": "Contrasena actualizada exitosamente."}
 
 
 @app.get("/users/students", response_model=List[UserReadSimple], tags=["Usuarios"])
