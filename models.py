@@ -1,6 +1,6 @@
 from typing import Optional, List
 from sqlmodel import Field, SQLModel, Relationship
-# ?? AGREGADO: Importamos date para la fecha de vencimiento
+# AGREGADO: Importamos date para la fecha de vencimiento
 from datetime import datetime, timezone, date 
 from enum import Enum
 from pydantic import BaseModel # Necesario para los Schemas de lectura
@@ -21,7 +21,8 @@ class MuscleGroup(str, Enum):
     PIERNAS = "Piernas"
     HOMBRO = "Hombro"
     BRAZOS = "Brazos"
-    ABDOMEN = "Abdomen"
+    ABDOMEN = "Abdomen" # CORREGIDO/CONFIRMADO
+    GLUTEOS = "Gluteos" # NUEVA INCORPORACIÓN
     CARDIO = "Cardio"
 
 # ----------------------------------------------------------------------
@@ -75,7 +76,7 @@ class RoutineAssignment(SQLModel, table=True):
     )
 
 
-# --- TABLA DE AGRUPACION DE RUTINAS (ROUTINES_GROUP) ?? ESTADO CORRECTO ---
+# --- TABLA DE AGRUPACION DE RUTINAS (ROUTINES_GROUP) ---
 class RoutineGroup(SQLModel, table=True):
     __tablename__ = "ROUTINES_GROUP"
     
@@ -135,7 +136,7 @@ class Exercise(SQLModel, table=True):
     routine_links: List[RoutineExercise] = Relationship(back_populates="exercise")
 
 
-# --- TABLA DE RUTINAS ?? ESTADO CORRECTO ---
+# --- TABLA DE RUTINAS ---
 class Routine(SQLModel, table=True):
     """Representa la tabla 'ROUTINES' (Rutina Maestra)."""
     __tablename__ = "ROUTINES"
@@ -169,7 +170,7 @@ class Routine(SQLModel, table=True):
 # Esquemas Pydantic (Para la API)
 # ----------------------------------------------------------------------
 
-# --- Esquemas de RoutineGroup ?? ESTADO CORRECTO ---
+# --- Esquemas de RoutineGroup ---
 class RoutineGroupCreate(BaseModel):
     nombre: str
     fecha_vencimiento: date 
@@ -185,7 +186,7 @@ class RoutineGroupRead(BaseModel):
     class Config:
         from_attributes = True
 
-# --- Esquema Transaccional ?? ESTADO CORRECTO (Ahora incluye el array de rutinas) ---
+# --- Esquema Transaccional ---
 class RoutineCreateForTransactional(BaseModel):
     """Esquema para una rutina individual dentro de la transaccion grupal."""
     nombre: str
@@ -321,7 +322,7 @@ class RoutineRead(BaseModel):
     created_at: datetime
     owner_id: int
     
-    # ?? AGREGADO: Incluir el grupo de rutina (CRITICO para la visualizacion en el profesor)
+    # AGREGADO: Incluir el grupo de rutina (CRITICO para la visualizacion en el profesor)
     routine_group: Optional[RoutineGroupRead] = None
     
     # CRITICO: Incluir los links de ejercicio para la serializacion de la asignacion
