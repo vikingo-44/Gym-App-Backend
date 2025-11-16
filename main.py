@@ -243,7 +243,7 @@ def login_for_access_token(
     if not user or not verify_password(form_data.password, user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="DNI o contrasena incorrectos",
+            detail="DNI o contraseña incorrectos",
             headers={"WWW-Authenticate": "Bearer"},
         )
     
@@ -275,22 +275,22 @@ def change_password(
     current_user: Annotated[User, Depends(get_current_user)]
 ):
     """
-    Permite a un usuario (Profesor o Alumno) cambiar su contrasena.
-    Requiere la contrasena antigua para la verificacion.
+    Permite a un usuario (Profesor o Alumno) cambiar su contraseña.
+    Requiere la contraseña antigua para la verificacion.
     """
     
-    # 1. Verificar la contrasena antigua
+    # 1. Verificar la contraseña antigua
     if not verify_password(password_data.old_password, current_user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Contrasena antigua incorrecta."
+            detail="Contraseña antigua incorrecta."
         )
 
-    # 2. Verificar la longitud de la nueva contrasena (buena practica)
+    # 2. Verificar la longitud de la nueva contraseña (buena practica)
     if len(password_data.new_password) < 6:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="La nueva contrasena debe tener al menos 6 caracteres."
+            detail="La nueva contraseña debe tener al menos 6 caracteres."
         )
 
     # 3. Generar el nuevo hash y actualizar el usuario
@@ -301,7 +301,7 @@ def change_password(
     session.commit()
     session.refresh(current_user)
     
-    return {"message": "Contrasena actualizada exitosamente."}
+    return {"message": "Contraseña actualizada exitosamente."}
 
 
 @app.get("/users/students", response_model=List[UserReadSimple], tags=["Usuarios"])
@@ -461,7 +461,8 @@ def update_routine_group_full(
             # 5a. Crear el modelo de Rutina (nuevo objeto)
             routine_model = Routine(
                 nombre=routine_data.nombre,
-                descripcion=routine_data.descripcion,
+                # CORRECCIoN PARA EL ERROR NOT NULL: Asegurar que la descripcion no sea NULL
+                descripcion=routine_data.descripcion or "",
                 owner_id=current_professor.id,
                 routine_group_id=routine_group.id # ASOCIAR AL GRUPO EXISTENTE
             )
@@ -549,7 +550,11 @@ def create_exercise_batch(
     created_exercises = []
     for exercise_data in exercises:
         # Prevencion de duplicados basada en el nombre
-        existing_exercise = session.exec(select(Exercise).where(Exercise.nombre == exercise_data.nombre)).first()
+        # CORRECCIoN CRUCIAL: Usar func.lower() para la verificacion de duplicados de nombre de ejercicio (case-insensitive)
+        existing_exercise = session.exec(
+            select(Exercise).where(func.lower(Exercise.nombre) == func.lower(exercise_data.nombre))
+        ).first()
+        
         if existing_exercise:
             print(f"Advertencia: Ejercicio '{exercise_data.nombre}' ya existe, omitiendo.")
             continue 
@@ -664,7 +669,8 @@ def create_routine_group_and_routines(
             # 3a. Crear el modelo de Rutina
             routine_model = Routine(
                 nombre=routine_data.nombre,
-                descripcion=routine_data.descripcion,
+                # FIX NOT NULL: Asegurar que la descripcion no sea NULL
+                descripcion=routine_data.descripcion or "", 
                 owner_id=current_professor.id,
                 routine_group_id=routine_group.id # ASOCIAR AL GRUPO
             )
@@ -876,7 +882,7 @@ def set_assignment_active_status(
     if not assignment:
         raise HTTPException(status_code=404, detail="Asignacion no encontrada.")
 
-    # Opcional: Verificar que el profesor sea due?o (basado en el profesor que la asigno)
+    # Opcional: Verificar que el profesor sea dueño (basado en el profesor que la asigno)
     if assignment.professor_id != current_professor.id:
         raise HTTPException(status_code=403, detail="No tienes permiso para modificar esta asignacion.")
         
@@ -980,7 +986,8 @@ def update_routine_full(
 
     # 1. Actualizar metadata (Nombre/Descripcion)
     db_routine.nombre = routine_data.nombre
-    db_routine.descripcion = routine_data.descripcion
+    # CORRECCIoN PARA EL ERROR NOT NULL: Asegurar que la descripcion no sea NULL
+    db_routine.descripcion = routine_data.descripcion or ""
     
     # 2. Eliminar todos los enlaces de ejercicios existentes para reemplazarlos
     # CORRECCIoN CLAVE: Usamos la sintaxis correcta de DELETE(Table).where(...)
@@ -1294,3 +1301,4 @@ def get_my_active_routine(
         
     # 5. Si no hay grupo (rutina simple antigua), devuelve la asignacion original
     return [active_anchor_assignment]
+```eof
