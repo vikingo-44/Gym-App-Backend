@@ -154,7 +154,7 @@ def read_root():
     return {"message": "API del Gestor de Rutinas de Gimnasio activa."}
 
 # ***************************************************************
-# NUEVA RUTA DE ADMINISTRACIÓN: SINCRONIZACIÓN CROSSHERO
+# NUEVA RUTA DE ADMINISTRACIoN: SINCRONIZACIoN CROSSHERO
 # ***************************************************************
 @app.post("/admin/sync/crosshero", tags=["Administracion"])
 def trigger_crosshero_sync(
@@ -266,7 +266,7 @@ def login_for_access_token(
     if not user or not verify_password(form_data.password, user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Correo electrónico o contraseña incorrectos", # Mensaje de error actualizado
+            detail="Correo electronico o contrasena incorrectos", # Mensaje de error actualizado
             headers={"WWW-Authenticate": "Bearer"},
         )
     
