@@ -7,8 +7,8 @@ from fastapi import FastAPI, Depends, HTTPException, status, BackgroundTasks # <
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlmodel import Session, select, delete # IMPORTANTE: Importar delete de sqlmodel
 # Importamos selectinload para forzar la carga de relaciones anidadas
-from sqlalchemy.orm import selectinload 
-from sqlalchemy import desc 
+from sqlalchemy.orm import selectinload
+from sqlalchemy import desc
 from sqlalchemy import func # NECESARIO para usar func.lower() en validacion de email
 
 from passlib.context import CryptContext
