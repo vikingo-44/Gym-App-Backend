@@ -1,5 +1,5 @@
 import os
-from datetime import datetime, timedelta, timezone, date 
+from datetime import datetime, timedelta, timezone, date # CRITICO: Importar 'date'
 from typing import Annotated, List, Optional
 from contextlib import asynccontextmanager
 
@@ -8,8 +8,9 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlmodel import Session, select
 # Importamos selectinload para forzar la carga de relaciones anidadas
 from sqlalchemy.orm import selectinload 
-from sqlalchemy import desc, delete # <-- FIX: AGREGADO 'delete'
+from sqlalchemy import desc 
 from sqlalchemy import func # NECESARIO para usar func.lower() en validacion de email
+from sqlalchemy import delete # <--- ¡IMPORTACIÓN CRÍTICA AÑADIDA!
 
 from passlib.context import CryptContext
 from jose import JWTError, jwt
@@ -28,7 +29,7 @@ from models import (
     RoutineAssignmentUpdate, 
     ChangePassword,
     RoutineCreateOrUpdate, 
-    # CRiTICO: Importaciones de Grupo y Transaccional
+    # CRITICO: Importaciones de Grupo y Transaccional
     RoutineGroup, RoutineGroupCreate, RoutineGroupRead, RoutineGroupCreateAndRoutines,
     UserUpdateByProfessor,
     RoutineCreateForTransactional # Nuevo esquema para usar en la transaccion
@@ -115,14 +116,6 @@ def get_current_user(
     user = session.exec(select(User).where(User.dni == dni)).first()
     if user is None:
         raise credentials_exception
-        
-    # ** MODIFICACIoN: VALIDACIoN DE ESTADO ACTIVO **
-    if hasattr(user, 'is_active') and user.is_active is False:
-        # Bloquear el acceso si el usuario está inactivo
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Tu cuenta ha sido desactivada. Contacta a un profesor."
-        )
     
     return user
 
@@ -245,20 +238,12 @@ def login_for_access_token(
     if not user or not verify_password(form_data.password, user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="DNI o contrase?a incorrectos",
+            detail="DNI o contraseña incorrectos",
             headers={"WWW-Authenticate": "Bearer"},
         )
     
-    # ** MODIFICACIoN: RE-VALIDACIoN DE ESTADO ACTIVO ANTES DE CREAR TOKEN **
-    if hasattr(user, 'is_active') and user.is_active is False:
-        # Bloquear el login si el usuario está inactivo
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Tu cuenta ha sido desactivada. Contacta a un profesor."
-        )
-    
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    # CORRECCIoN CLAVE: Incluimos el nombre del usuario en el token.
+    # CORRECCION CLAVE: Incluimos el nombre del usuario en el token.
     access_token = create_access_token(
         data={"dni": user.dni, "rol": user.rol.value, "nombre": user.nombre}, 
         expires_delta=access_token_expires
@@ -276,31 +261,31 @@ def read_users_me(
     """Obtiene la informacion del usuario actualmente autenticado."""
     return current_user
 
-# RUTA: CAMBIO DE CONTRASE?A
+# RUTA: CAMBIO DE CONTRASEÑA
 @app.post("/users/change-password", tags=["Usuarios"])
 def change_password(
     password_data: ChangePassword, # Usamos el nuevo esquema ChangePassword
     session: Annotated[Session, Depends(get_session)],
-    # Permite a profesores y alumnos cambiar su contrase?a
+    # Permite a profesores y alumnos cambiar su contraseña
     current_user: Annotated[User, Depends(get_current_user)]
 ):
     """
-    Permite a un usuario (Profesor o Alumno) cambiar su contrase?a.
-    Requiere la contrase?a antigua para la verificacion.
+    Permite a un usuario (Profesor o Alumno) cambiar su contraseña.
+    Requiere la contraseña antigua para la verificacion.
     """
     
-    # 1. Verificar la contrase?a antigua
+    # 1. Verificar la contraseña antigua
     if not verify_password(password_data.old_password, current_user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Contrase?a antigua incorrecta."
+            detail="Contraseña antigua incorrecta."
         )
 
-    # 2. Verificar la longitud de la nueva contrase?a (buena practica)
+    # 2. Verificar la longitud de la nueva contraseña (buena practica)
     if len(password_data.new_password) < 6:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="La nueva contrase?a debe tener al menos 6 caracteres."
+            detail="La nueva contraseña debe tener al menos 6 caracteres."
         )
 
     # 3. Generar el nuevo hash y actualizar el usuario
@@ -311,7 +296,7 @@ def change_password(
     session.commit()
     session.refresh(current_user)
     
-    return {"message": "Contrase?a actualizada exitosamente."}
+    return {"message": "Contraseña actualizada exitosamente."}
 
 
 @app.get("/users/students", response_model=List[UserReadSimple], tags=["Usuarios"])
@@ -320,7 +305,6 @@ def read_students_list(
     current_professor: Annotated[User, Depends(get_current_professor)]
 ):
     """Obtiene una lista de todos los usuarios con rol 'Alumno' (para asignar rutinas)."""
-    # El campo is_active se cargará automáticamente en el objeto User si existe en la tabla.
     students = session.exec(select(User).where(User.rol == UserRole.STUDENT)).all()
     return students
 
@@ -328,17 +312,16 @@ def read_students_list(
 @app.patch("/users/student/{student_id}", response_model=UserRead, tags=["Usuarios"])
 def update_student_data(
     student_id: int,
-    user_data: UserUpdateByProfessor, # Usamos el esquema importado (Debe incluir is_active: Optional[bool])
+    user_data: UserUpdateByProfessor, # Usamos el esquema importado
     session: Annotated[Session, Depends(get_session)],
     current_professor: Annotated[User, Depends(get_current_professor)]
 ):
-    """(Profesor) Permite actualizar el nombre, email, DNI o el estado (is_active) de un alumno especifico."""
+    """(Profesor) Permite actualizar el nombre, email o DNI de un alumno especifico."""
     
     # 1. Buscar al alumno
-    statement = select(User).where(User.id == student_id, User.rol == UserRole.STUDENT)
-    student_to_update = session.exec(statement).first()
+    student_to_update = session.get(User, student_id)
     
-    if not student_to_update:
+    if not student_to_update or student_to_update.rol != UserRole.STUDENT:
         raise HTTPException(status_code=404, detail="Alumno no encontrado.")
         
     # 2. Convertir el esquema a diccionario, excluyendo campos no seteados (omitidos)
@@ -346,7 +329,7 @@ def update_student_data(
     
     # 3. Aplicar los cambios al objeto de la DB
     for key, value in update_data.items():
-        # Validacion especial para email y dni
+        # Validar si el DNI o Email ya existen en OTRO usuario
         if key == 'email' and value is not None and value.lower() != student_to_update.email.lower():
             existing_user = session.exec(select(User).where(func.lower(User.email) == value.lower())).first()
             if existing_user and existing_user.id != student_to_update.id: # Aseguramos que no sea el mismo
@@ -356,8 +339,7 @@ def update_student_data(
             existing_user = session.exec(select(User).where(User.dni == value)).first()
             if existing_user and existing_user.id != student_to_update.id: # Aseguramos que no sea el mismo
                 raise HTTPException(status_code=400, detail="El nuevo DNI ya esta en uso por otro usuario.")
-        
-        # is_active y nombre se actualizan aquí si están presentes en update_data
+                
         setattr(student_to_update, key, value)
         
     # 4. Guardar los cambios
@@ -457,7 +439,7 @@ def delete_exercise(
 
 
 # ----------------------------------------------------------------------
-# ?? RUTA TRANSACCIONAL DE CREACIoN DE GRUPO Y RUTINAS (CORREGIDA PARA USAR PAYLOAD DEL FRONTEND)
+# RUTA TRANSACCIONAL DE CREACION DE GRUPO Y RUTINAS (CORREGIDA PARA USAR PAYLOAD DEL FRONTEND)
 # ----------------------------------------------------------------------
 
 @app.post("/routines-group/create-transactional", response_model=List[RoutineAssignmentRead], tags=["Rutinas"])
@@ -537,7 +519,7 @@ def create_routine_group_and_routines(
             created_assignment_ids.append(assignment.id) 
             is_first_routine = False # El resto de las asignaciones son inactivas por defecto
 
-        # 4. COMMIT uNICO
+        # 4. COMMIT UNICO
         session.commit()
 
         # 5. Fetch todas las asignaciones recien creadas con las relaciones anidadas (codigo de lectura existente)
@@ -648,7 +630,7 @@ def read_routines(
     Obtiene una lista de todas las rutinas maestras creadas por el profesor.
     """
     try:
-        # CORRECCIoN/MEJORA: Forzamos la carga de relaciones anidadas (links + detalles del ejercicio + grupo)
+        # CORRECCION/MEJORA: Forzamos la carga de relaciones anidadas (links + detalles del ejercicio + grupo)
         statement = (
             select(Routine)
             .where(Routine.owner_id == current_professor.id)
@@ -679,7 +661,7 @@ def read_routine(
     current_user: Annotated[User, Depends(get_current_user)]
 ):
     """Obtiene una rutina especifica por su ID, incluyendo todos sus ejercicios."""
-    # CORRECCIoN/MEJORA: Forzamos la carga de relaciones anidadas (links + detalles del ejercicio + grupo)
+    # CORRECCION/MEJORA: Forzamos la carga de relaciones anidadas (links + detalles del ejercicio + grupo)
     statement = (
         select(Routine)
         .where(Routine.id == routine_id)
@@ -695,7 +677,7 @@ def read_routine(
     
     return routine
 
-# RUTA CRiTICA CORREGIDA: PATCH para cambiar el estado de activacion de una asignacion
+# RUTA CRITICA CORREGIDA: PATCH para cambiar el estado de activacion de una asignacion
 @app.patch("/assignments/{assignment_id}", response_model=RoutineAssignmentRead, tags=["Asignaciones"])
 def set_assignment_active_status(
     assignment_id: int,
@@ -709,7 +691,7 @@ def set_assignment_active_status(
     if not assignment:
         raise HTTPException(status_code=404, detail="Asignacion no encontrada.")
 
-    # Opcional: Verificar que el profesor sea due?o (basado en el profesor que la asigno)
+    # Opcional: Verificar que el profesor sea dueño (basado en el profesor que la asigno)
     if assignment.professor_id != current_professor.id:
         raise HTTPException(status_code=403, detail="No tienes permiso para modificar esta asignacion.")
         
@@ -731,7 +713,7 @@ def set_assignment_active_status(
             detail="Fallo al confirmar el cambio de estado en la base de datos."
         )
 
-    # CORRECCIoN CLAVE: Recargar la asignacion con todas las relaciones anidadas
+    # CORRECCION CLAVE: Recargar la asignacion con todas las relaciones anidadas
     statement_read = (
         select(RoutineAssignment)
         .where(RoutineAssignment.id == assignment_id)
@@ -791,7 +773,7 @@ def delete_assignment_group_for_student(
     
     return {"message": f"Se eliminaron {len(assignments_to_delete)} asignaciones de grupo para el alumno."}
 
-# RUTA ACTUALIZADA: EDICIoN COMPLETA (Metadata y Ejercicios)
+# RUTA ACTUALIZADA: EDICION COMPLETA (Metadata y Ejercicios)
 @app.patch("/routines/{routine_id}", response_model=RoutineRead, tags=["Rutinas"])
 def update_routine_full(
     routine_id: int,
@@ -812,7 +794,7 @@ def update_routine_full(
     db_routine.descripcion = routine_data.descripcion
     
     # 2. Eliminar todos los enlaces de ejercicios existentes para reemplazarlos
-    # FIX CRÍTICO: Usamos la sentencia delete de SQLAlchemy
+    # CORRECCIÓN CLAVE: Usamos la función delete() de SQLAlchemy
     session.exec(delete(RoutineExercise).where(RoutineExercise.routine_id == routine_id))
     
     # 3. Crear los nuevos enlaces
@@ -876,8 +858,8 @@ def delete_routine(
     if db_routine.owner_id != current_professor.id:
         raise HTTPException(status_code=403, detail="No autorizado para eliminar esta rutina")
 
-    # Eliminamos enlaces y asignaciones antes de eliminar la rutina (CRiTICO para evitar errores de Foreign Key)
-    # FIX CRÍTICO: Usamos la sentencia delete de SQLAlchemy
+    # Eliminamos enlaces y asignaciones antes de eliminar la rutina (CRITICO para evitar errores de Foreign Key)
+    # CORRECCIÓN: Usamos la función delete() de SQLAlchemy
     session.exec(delete(RoutineExercise).where(RoutineExercise.routine_id == routine_id))
     session.exec(delete(RoutineAssignment).where(RoutineAssignment.routine_id == routine_id))
         
@@ -906,7 +888,6 @@ def assign_routine_to_student(
         
     # 2. Verificar que el alumno exista
     student = session.get(User, assignment_data.student_id)
-    # ** Se debería verificar también el estado `is_active` si fuera una restricción aquí, pero se permite asignar a inactivos.
     if not student or student.rol != UserRole.STUDENT:
         raise HTTPException(status_code=404, detail="Alumno no encontrado")
         
@@ -963,9 +944,7 @@ def get_assignments_for_student_by_professor(
         )
         .order_by(desc(RoutineAssignment.assigned_at)) 
         .options(
-            # FIX PROFESOR: Asegura la carga del profesor creador del grupo
-            selectinload(RoutineAssignment.routine).selectinload(Routine.professor), 
-            # CRiTICO: Asegura la carga del grupo para la logica de agrupamiento del frontend
+            # CRITICO: Asegura la carga del grupo para la logica de agrupamiento del frontend
             selectinload(RoutineAssignment.routine).selectinload(Routine.routine_group),
             selectinload(RoutineAssignment.routine).selectinload(Routine.exercise_links).selectinload(RoutineExercise.exercise),
             selectinload(RoutineAssignment.student),
@@ -990,8 +969,6 @@ def get_assignments_for_student_by_professor(
             .where(Routine.routine_group_id == routine_group_id)
             .order_by(Routine.id) # Ordena por ID (orden de creacion)
             .options(
-                # FIX: Cargamos el profesor dueño de la rutina (que es el creador del grupo)
-                selectinload(Routine.professor), 
                 selectinload(Routine.routine_group),
                 selectinload(Routine.exercise_links).selectinload(RoutineExercise.exercise)
             )
@@ -1013,7 +990,8 @@ def get_assignments_for_student_by_professor(
             assignment_id_to_use = real_assignment.id if real_assignment else active_anchor_assignment.id
             
             # Construimos el objeto de respuesta, asegurando que todos los campos del Assignment Read Model esten presentes.
-            # CRiTICO: Usamos el assigned_at del ancla si la asignacion real no existe, pero marcamos 'is_active' con el valor real
+            # CRITICO: Usamos el assigned_at del ancla si la asignacion real no existe, pero marcamos 'is_active' siempre como True 
+            # para que el frontend sepa que es la rutina que esta en curso.
             pseudo_assignment_data = RoutineAssignmentRead(
                 id=assignment_id_to_use, 
                 routine_id=routine.id,
@@ -1062,8 +1040,7 @@ def get_my_active_routine(
         )
         .order_by(desc(RoutineAssignment.assigned_at)) 
         .options(
-            # FIX PROFESOR: Cargar el profesor para que esté disponible si el front lo necesita
-            selectinload(RoutineAssignment.routine).selectinload(Routine.professor), 
+            # FIX LÓGICO: Cargar la Rutina y su Grupo (CRÍTICO) 
             selectinload(RoutineAssignment.routine)
                 .selectinload(Routine.routine_group),
             selectinload(RoutineAssignment.routine)
