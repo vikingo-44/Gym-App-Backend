@@ -19,20 +19,20 @@ from pydantic import BaseModel # <--- ¡NUEVA IMPORTACIoN REQUERIDA!
 # Importaciones de tu estructura y esquemas
 from database import create_db_and_tables, get_session
 from models import (
-    User, UserCreate, UserRead, UserReadSimple, UserRole, UserLogin, Token,
-    # Importaciones de EJERCICIOS
-    Exercise, ExerciseCreate, ExerciseRead, ExerciseUpdate, MuscleGroup,
-    Routine, RoutineCreate, RoutineRead, RoutineUpdate,
-    RoutineExercise, RoutineAssignment, 
-    RoutineAssignmentCreate, RoutineAssignmentRead,
-    # Esquemas necesarios
-    RoutineAssignmentUpdate, 
-    ChangePassword,
-    RoutineCreateOrUpdate, 
-    # CRiTICO: Importaciones de Grupo y Transaccional
-    RoutineGroup, RoutineGroupCreate, RoutineGroupRead, RoutineGroupCreateAndRoutines,
-    UserUpdateByProfessor,
-    RoutineCreateForTransactional # Nuevo esquema para usar en la transaccion
+User, UserCreate, UserRead, UserReadSimple, UserRole, UserLogin, Token,
+# Importaciones de EJERCICIOS
+Exercise, ExerciseCreate, ExerciseRead, ExerciseUpdate, MuscleGroup,
+Routine, RoutineCreate, RoutineRead, RoutineUpdate,
+RoutineExercise, RoutineAssignment, 
+RoutineAssignmentCreate, RoutineAssignmentRead,
+# Esquemas necesarios
+RoutineAssignmentUpdate, 
+ChangePassword,
+RoutineCreateOrUpdate, 
+# CRiTICO: Importaciones de Grupo y Transaccional
+RoutineGroup, RoutineGroupCreate, RoutineGroupRead, RoutineGroupCreateAndRoutines,
+UserUpdateByProfessor,
+RoutineCreateForTransactional # Nuevo esquema para usar en la transaccion
 )
 
 # NUEVO ESQUEMA: Utilizado para actualizar los campos del grupo de rutinas
