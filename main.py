@@ -10,7 +10,7 @@ from sqlmodel import Session, select
 from sqlalchemy.orm import selectinload 
 from sqlalchemy import desc 
 from sqlalchemy import func # NECESARIO para usar func.lower() en validacion de email
-from sqlalchemy import delete # <--- ¡IMPORTACIÓN CRÍTICA AÑADIDA!
+from sqlalchemy import delete # <--- ¡IMPORTACIoN CRiTICA AnADIDA!
 
 from passlib.context import CryptContext
 from jose import JWTError, jwt
@@ -238,7 +238,7 @@ def login_for_access_token(
     if not user or not verify_password(form_data.password, user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="DNI o contraseña incorrectos",
+            detail="DNI o contrasena incorrectos",
             headers={"WWW-Authenticate": "Bearer"},
         )
     
@@ -261,31 +261,31 @@ def read_users_me(
     """Obtiene la informacion del usuario actualmente autenticado."""
     return current_user
 
-# RUTA: CAMBIO DE CONTRASEÑA
+# RUTA: CAMBIO DE CONTRASEnA
 @app.post("/users/change-password", tags=["Usuarios"])
 def change_password(
     password_data: ChangePassword, # Usamos el nuevo esquema ChangePassword
     session: Annotated[Session, Depends(get_session)],
-    # Permite a profesores y alumnos cambiar su contraseña
+    # Permite a profesores y alumnos cambiar su contrasena
     current_user: Annotated[User, Depends(get_current_user)]
 ):
     """
-    Permite a un usuario (Profesor o Alumno) cambiar su contraseña.
-    Requiere la contraseña antigua para la verificacion.
+    Permite a un usuario (Profesor o Alumno) cambiar su contrasena.
+    Requiere la contrasena antigua para la verificacion.
     """
     
-    # 1. Verificar la contraseña antigua
+    # 1. Verificar la contrasena antigua
     if not verify_password(password_data.old_password, current_user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Contraseña antigua incorrecta."
+            detail="Contrasena antigua incorrecta."
         )
 
-    # 2. Verificar la longitud de la nueva contraseña (buena practica)
+    # 2. Verificar la longitud de la nueva contrasena (buena practica)
     if len(password_data.new_password) < 6:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="La nueva contraseña debe tener al menos 6 caracteres."
+            detail="La nueva contrasena debe tener al menos 6 caracteres."
         )
 
     # 3. Generar el nuevo hash y actualizar el usuario
@@ -296,7 +296,7 @@ def change_password(
     session.commit()
     session.refresh(current_user)
     
-    return {"message": "Contraseña actualizada exitosamente."}
+    return {"message": "Contrasena actualizada exitosamente."}
 
 
 @app.get("/users/students", response_model=List[UserReadSimple], tags=["Usuarios"])
@@ -691,7 +691,7 @@ def set_assignment_active_status(
     if not assignment:
         raise HTTPException(status_code=404, detail="Asignacion no encontrada.")
 
-    # Opcional: Verificar que el profesor sea dueño (basado en el profesor que la asigno)
+    # Opcional: Verificar que el profesor sea dueno (basado en el profesor que la asigno)
     if assignment.professor_id != current_professor.id:
         raise HTTPException(status_code=403, detail="No tienes permiso para modificar esta asignacion.")
         
@@ -794,7 +794,7 @@ def update_routine_full(
     db_routine.descripcion = routine_data.descripcion
     
     # 2. Eliminar todos los enlaces de ejercicios existentes para reemplazarlos
-    # CORRECCIÓN CLAVE: Usamos la función delete() de SQLAlchemy
+    # CORRECCIoN CLAVE: Usamos la funcion delete() de SQLAlchemy
     session.exec(delete(RoutineExercise).where(RoutineExercise.routine_id == routine_id))
     
     # 3. Crear los nuevos enlaces
@@ -859,7 +859,7 @@ def delete_routine(
         raise HTTPException(status_code=403, detail="No autorizado para eliminar esta rutina")
 
     # Eliminamos enlaces y asignaciones antes de eliminar la rutina (CRITICO para evitar errores de Foreign Key)
-    # CORRECCIÓN: Usamos la función delete() de SQLAlchemy
+    # CORRECCIoN: Usamos la funcion delete() de SQLAlchemy
     session.exec(delete(RoutineExercise).where(RoutineExercise.routine_id == routine_id))
     session.exec(delete(RoutineAssignment).where(RoutineAssignment.routine_id == routine_id))
         
@@ -1040,7 +1040,7 @@ def get_my_active_routine(
         )
         .order_by(desc(RoutineAssignment.assigned_at)) 
         .options(
-            # FIX LÓGICO: Cargar la Rutina y su Grupo (CRÍTICO) 
+            # FIX LoGICO: Cargar la Rutina y su Grupo (CRiTICO) 
             selectinload(RoutineAssignment.routine)
                 .selectinload(Routine.routine_group),
             selectinload(RoutineAssignment.routine)
