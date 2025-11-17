@@ -1,16 +1,14 @@
-arranquemos por lo primero, el punto 1, yo te paso mi main y vos agregale lo que falte, si? pero no me rompas nada
-
 import os
 from datetime import datetime, timedelta, timezone, date # CRiTICO: Importar 'date'
 from typing import Annotated, List, Optional
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Depends, HTTPException, status
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials 
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials 
 from sqlmodel import Session, select, delete # IMPORTANTE: Importar delete de sqlmodel
 # Importamos selectinload para forzar la carga de relaciones anidadas
-from sqlalchemy.orm import selectinload 
-from sqlalchemy import desc 
+from sqlalchemy.orm import selectinload 
+from sqlalchemy import desc 
 from sqlalchemy import func # NECESARIO para usar func.lower() en validacion de email
 
 from passlib.context import CryptContext
@@ -25,12 +23,12 @@ from models import (
     # Importaciones de EJERCICIOS
     Exercise, ExerciseCreate, ExerciseRead, ExerciseUpdate, MuscleGroup,
     Routine, RoutineCreate, RoutineRead, RoutineUpdate,
-    RoutineExercise, RoutineAssignment, 
+    RoutineExercise, RoutineAssignment, 
     RoutineAssignmentCreate, RoutineAssignmentRead,
     # Esquemas necesarios
-    RoutineAssignmentUpdate, 
+    RoutineAssignmentUpdate, 
     ChangePassword,
-    RoutineCreateOrUpdate, 
+    RoutineCreateOrUpdate, 
     # CRiTICO: Importaciones de Grupo y Transaccional
     RoutineGroup, RoutineGroupCreate, RoutineGroupRead, RoutineGroupCreateAndRoutines,
     UserUpdateByProfessor,
@@ -250,7 +248,7 @@ def login_for_access_token(
         )
     
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    # CORRECCIoN CLAVE: Incluimos el nombre del usuario en el token.
+    # Incluimos el nombre del usuario en el token.
     access_token = create_access_token(
         data={"dni": user.dni, "rol": user.rol.value, "nombre": user.nombre}, 
         expires_delta=access_token_expires
@@ -534,6 +532,426 @@ def update_routine_group_full(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
             detail=f"Error transaccional al actualizar grupo: {str(e)}"
+        )
+
+
+# ----------------------------------------------------------------------
+# Rutas de Ejercicios (CRUD - RESTAURADAS)
+# ----------------------------------------------------------------------
+
+@app.post("/exercises/", response_model=List[ExerciseRead], status_code=status.HTTP_201_CREATED, tags=["Ejercicios"])
+def create_exercise_batch(
+    exercises: List[ExerciseCreate],
+    session: Annotated[Session, Depends(get_session)],
+    current_professor: Annotated[User, Depends(get_current_professor)]
+):
+    """Crea multiples ejercicios a la vez. Solo accesible para Profesores."""
+    
+    created_exercises = []
+    for exercise_data in exercises:
+        # Prevencion de duplicados basada en el nombre
+        # CORRECCIoN CRUCIAL: Usar func.lower() para la verificacion de duplicados de nombre de ejercicio (case-insensitive)
+        existing_exercise = session.exec(
+            select(Exercise).where(func.lower(Exercise.nombre) == func.lower(exercise_data.nombre))
+        ).first()
+        
+        if existing_exercise:
+            print(f"Advertencia: Ejercicio '{exercise_data.nombre}' ya existe, omitiendo.")
+            continue 
+
+        db_exercise = Exercise.model_validate(exercise_data)
+        session.add(db_exercise)
+        created_exercises.append(db_exercise)
+        
+    session.commit()
+
+    for db_exercise in created_exercises:
+        session.refresh(db_exercise)
+        
+    return created_exercises
+
+@app.get("/exercises/", response_model=List[ExerciseRead], tags=["Ejercicios"])
+def read_exercises(
+    session: Annotated[Session, Depends(get_session)],
+    current_user: Annotated[User, Depends(get_current_user)]
+):
+    """Obtiene una lista de todos los ejercicios. Accesible para todos los usuarios autenticados."""
+    exercises = session.exec(select(Exercise)).all()
+    return exercises
+
+@app.get("/exercises/{exercise_id}", response_model=ExerciseRead, tags=["Ejercicios"])
+def read_exercise(
+    exercise_id: int,
+    session: Annotated[Session, Depends(get_session)],
+    current_user: Annotated[User, Depends(get_current_user)]
+):
+    """Obtiene un ejercicio por su ID."""
+    exercise = session.get(Exercise, exercise_id)
+    if not exercise:
+        raise HTTPException(status_code=404, detail="Ejercicio no encontrado")
+    return exercise
+
+@app.patch("/exercises/{exercise_id}", response_model=ExerciseRead, tags=["Ejercicios"])
+def update_exercise(
+    exercise_id: int,
+    exercise_data: ExerciseUpdate,
+    session: Annotated[Session, Depends(get_session)],
+    current_professor: Annotated[User, Depends(get_current_professor)]
+):
+    """Actualiza un ejercicio existente por ID. Solo accesible para Profesores."""
+    db_exercise = session.get(Exercise, exercise_id)
+    if not db_exercise:
+        raise HTTPException(status_code=404, detail="Ejercicio no encontrado")
+        
+    exercise_dict = exercise_data.model_dump(exclude_unset=True)
+    for key, value in exercise_dict.items():
+        setattr(db_exercise, key, value)
+
+    session.add(db_exercise)
+    session.commit()
+    session.refresh(db_exercise)
+    return db_exercise
+
+@app.delete("/exercises/{exercise_id}", status_code=status.HTTP_204_NO_CONTENT, tags=["Ejercicios"])
+def delete_exercise(
+    exercise_id: int,
+    session: Annotated[Session, Depends(get_session)],
+    current_professor: Annotated[User, Depends(get_current_professor)]
+):
+    """Elimina un ejercicio por ID. Solo accesible para Profesores."""
+    exercise = session.get(Exercise, exercise_id)
+    if not exercise:
+        raise HTTPException(status_code=404, detail="Ejercicio no encontrado")
+        
+    session.delete(exercise)
+    session.commit()
+    return
+
+
+# ----------------------------------------------------------------------
+# RUTA TRANSACCIONAL DE CREACIoN DE GRUPO Y RUTINAS (CORREGIDA PARA USAR PAYLOAD DEL FRONTEND)
+# ----------------------------------------------------------------------
+
+@app.post("/routines-group/create-transactional", response_model=List[RoutineAssignmentRead], tags=["Rutinas"])
+def create_routine_group_and_routines(
+    data: RoutineGroupCreateAndRoutines,
+    session: Annotated[Session, Depends(get_session)],
+    current_professor: Annotated[User, Depends(get_current_professor)]
+):
+    """
+    (Profesor) Crea un nuevo grupo de rutinas, crea las N rutinas individuales
+    enviadas por el frontend (con ejercicios), y asigna CADA UNA al alumno.
+    """
+    try:
+        # 1. Validar Alumno y Rutinas
+        student = session.get(User, data.student_id)
+        if not student or student.rol != UserRole.STUDENT:
+            raise HTTPException(status_code=404, detail="Alumno no encontrado o rol incorrecto para la asignacion.")
+
+        if not data.routines or len(data.routines) == 0:
+            raise HTTPException(status_code=400, detail="Debe enviar al menos una rutina para crear.")
+            
+        # 2. Crear el Grupo de Rutinas (RoutineGroup)
+        routine_group = RoutineGroup(
+            nombre=data.nombre,
+            fecha_vencimiento=data.fecha_vencimiento, 
+            professor_id=current_professor.id
+        )
+        session.add(routine_group)
+        session.flush() # Flush 1: Obtiene ID del grupo
+
+        # 3. Crear las Rutinas individuales, asociarlas al grupo y asignarlas
+        created_assignment_ids = []
+        is_first_routine = True # Para marcar solo la primera asignacion como activa
+        
+        for routine_data in data.routines: # Itera sobre la lista de rutinas enviada por el frontend
+            
+            # 3a. Crear el modelo de Rutina
+            routine_model = Routine(
+                nombre=routine_data.nombre,
+                # FIX NOT NULL: Asegurar que la descripcion no sea NULL
+                descripcion=routine_data.descripcion or "", 
+                owner_id=current_professor.id,
+                routine_group_id=routine_group.id # ASOCIAR AL GRUPO
+            )
+            session.add(routine_model)
+            session.flush() # Flush 2: Obtiene ID de la rutina
+            
+            # 3b. Crear los enlaces de ejercicios (RoutineExercise)
+            for index, exercise_link_data in enumerate(routine_data.exercises):
+                exercise = session.get(Exercise, exercise_link_data.exercise_id)
+                if not exercise:
+                    session.rollback() 
+                    raise HTTPException(
+                        status_code=404, 
+                        detail=f"Ejercicio con id {exercise_link_data.exercise_id} no encontrado en la rutina '{routine_model.nombre}'. Creacion cancelada."
+                    )
+                    
+                link = RoutineExercise(
+                    routine_id=routine_model.id, 
+                    exercise_id=exercise.id,
+                    sets=exercise_link_data.sets,
+                    repetitions=exercise_link_data.repetitions,
+                    peso=exercise_link_data.peso, 
+                    order=index + 1 # Usar el indice para el orden, asegurando que sea un entero
+                )
+                session.add(link)
+
+            # 3c. Crear la asignacion
+            assignment = RoutineAssignment(
+                routine_id=routine_model.id,
+                student_id=data.student_id,
+                professor_id=current_professor.id,
+                is_active=is_first_routine # Solo la primera rutina del grupo es activa
+            )
+            session.add(assignment)
+            session.flush() # Flush 3: Obtiene ID de la asignacion
+
+            created_assignment_ids.append(assignment.id) 
+            is_first_routine = False # El resto de las asignaciones son inactivas por defecto
+
+        # 4. COMMIT uNICO
+        session.commit()
+
+        # 5. Fetch todas las asignaciones recien creadas con las relaciones anidadas (codigo de lectura existente)
+        statement_read = (
+            select(RoutineAssignment)
+            .where(RoutineAssignment.id.in_(created_assignment_ids))
+            .options(
+                selectinload(RoutineAssignment.routine)
+                    .selectinload(Routine.routine_group),
+                selectinload(RoutineAssignment.routine)
+                    .selectinload(Routine.exercise_links)
+                    .selectinload(RoutineExercise.exercise),
+                selectinload(RoutineAssignment.student),
+                selectinload(RoutineAssignment.professor)
+            )
+        )
+        
+        final_assignments = session.exec(statement_read).all()
+        return final_assignments
+
+    except HTTPException:
+        # Re-lanza HTTPExceptions para que FastAPI las maneje correctamente
+        session.rollback() 
+        raise
+    except Exception as e:
+        session.rollback() 
+        print(f"ERROR: Fallo transaccional al crear grupo de rutinas: {e}")
+        # Muestra el error real para depuracion
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
+            detail=f"Error transaccional al crear grupo: {str(e)}"
+        )
+
+
+# ----------------------------------------------------------------------
+# Rutas de Ejercicios (CRUD - RESTAURADAS)
+# ----------------------------------------------------------------------
+
+@app.post("/exercises/", response_model=List[ExerciseRead], status_code=status.HTTP_201_CREATED, tags=["Ejercicios"])
+def create_exercise_batch(
+    exercises: List[ExerciseCreate],
+    session: Annotated[Session, Depends(get_session)],
+    current_professor: Annotated[User, Depends(get_current_professor)]
+):
+    """Crea multiples ejercicios a la vez. Solo accesible para Profesores."""
+    
+    created_exercises = []
+    for exercise_data in exercises:
+        # Prevencion de duplicados basada en el nombre
+        # CORRECCIoN CRUCIAL: Usar func.lower() para la verificacion de duplicados de nombre de ejercicio (case-insensitive)
+        existing_exercise = session.exec(
+            select(Exercise).where(func.lower(Exercise.nombre) == func.lower(exercise_data.nombre))
+        ).first()
+        
+        if existing_exercise:
+            print(f"Advertencia: Ejercicio '{exercise_data.nombre}' ya existe, omitiendo.")
+            continue 
+
+        db_exercise = Exercise.model_validate(exercise_data)
+        session.add(db_exercise)
+        created_exercises.append(db_exercise)
+        
+    session.commit()
+
+    for db_exercise in created_exercises:
+        session.refresh(db_exercise)
+        
+    return created_exercises
+
+@app.get("/exercises/", response_model=List[ExerciseRead], tags=["Ejercicios"])
+def read_exercises(
+    session: Annotated[Session, Depends(get_session)],
+    current_user: Annotated[User, Depends(get_current_user)]
+):
+    """Obtiene una lista de todos los ejercicios. Accesible para todos los usuarios autenticados."""
+    exercises = session.exec(select(Exercise)).all()
+    return exercises
+
+@app.get("/exercises/{exercise_id}", response_model=ExerciseRead, tags=["Ejercicios"])
+def read_exercise(
+    exercise_id: int,
+    session: Annotated[Session, Depends(get_session)],
+    current_user: Annotated[User, Depends(get_current_user)]
+):
+    """Obtiene un ejercicio por su ID."""
+    exercise = session.get(Exercise, exercise_id)
+    if not exercise:
+        raise HTTPException(status_code=404, detail="Ejercicio no encontrado")
+    return exercise
+
+@app.patch("/exercises/{exercise_id}", response_model=ExerciseRead, tags=["Ejercicios"])
+def update_exercise(
+    exercise_id: int,
+    exercise_data: ExerciseUpdate,
+    session: Annotated[Session, Depends(get_session)],
+    current_professor: Annotated[User, Depends(get_current_professor)]
+):
+    """Actualiza un ejercicio existente por ID. Solo accesible para Profesores."""
+    db_exercise = session.get(Exercise, exercise_id)
+    if not db_exercise:
+        raise HTTPException(status_code=404, detail="Ejercicio no encontrado")
+        
+    exercise_dict = exercise_data.model_dump(exclude_unset=True)
+    for key, value in exercise_dict.items():
+        setattr(db_exercise, key, value)
+
+    session.add(db_exercise)
+    session.commit()
+    session.refresh(db_exercise)
+    return db_exercise
+
+@app.delete("/exercises/{exercise_id}", status_code=status.HTTP_204_NO_CONTENT, tags=["Ejercicios"])
+def delete_exercise(
+    exercise_id: int,
+    session: Annotated[Session, Depends(get_session)],
+    current_professor: Annotated[User, Depends(get_current_professor)]
+):
+    """Elimina un ejercicio por ID. Solo accesible para Profesores."""
+    exercise = session.get(Exercise, exercise_id)
+    if not exercise:
+        raise HTTPException(status_code=404, detail="Ejercicio no encontrado")
+        
+    session.delete(exercise)
+    session.commit()
+    return
+
+
+# ----------------------------------------------------------------------
+# RUTA TRANSACCIONAL DE CREACIoN DE GRUPO Y RUTINAS (CORREGIDA PARA USAR PAYLOAD DEL FRONTEND)
+# ----------------------------------------------------------------------
+
+@app.post("/routines-group/create-transactional", response_model=List[RoutineAssignmentRead], tags=["Rutinas"])
+def create_routine_group_and_routines(
+    data: RoutineGroupCreateAndRoutines,
+    session: Annotated[Session, Depends(get_session)],
+    current_professor: Annotated[User, Depends(get_current_professor)]
+):
+    """
+    (Profesor) Crea un nuevo grupo de rutinas, crea las N rutinas individuales
+    enviadas por el frontend (con ejercicios), y asigna CADA UNA al alumno.
+    """
+    try:
+        # 1. Validar Alumno y Rutinas
+        student = session.get(User, data.student_id)
+        if not student or student.rol != UserRole.STUDENT:
+            raise HTTPException(status_code=404, detail="Alumno no encontrado o rol incorrecto para la asignacion.")
+
+        if not data.routines or len(data.routines) == 0:
+            raise HTTPException(status_code=400, detail="Debe enviar al menos una rutina para crear.")
+            
+        # 2. Crear el Grupo de Rutinas (RoutineGroup)
+        routine_group = RoutineGroup(
+            nombre=data.nombre,
+            fecha_vencimiento=data.fecha_vencimiento, 
+            professor_id=current_professor.id
+        )
+        session.add(routine_group)
+        session.flush() # Flush 1: Obtiene ID del grupo
+
+        # 3. Crear las Rutinas individuales, asociarlas al grupo y asignarlas
+        created_assignment_ids = []
+        is_first_routine = True # Para marcar solo la primera asignacion como activa
+        
+        for routine_data in data.routines: # Itera sobre la lista de rutinas enviada por el frontend
+            
+            # 3a. Crear el modelo de Rutina
+            routine_model = Routine(
+                nombre=routine_data.nombre,
+                # FIX NOT NULL: Asegurar que la descripcion no sea NULL
+                descripcion=routine_data.descripcion or "", 
+                owner_id=current_professor.id,
+                routine_group_id=routine_group.id # ASOCIAR AL GRUPO
+            )
+            session.add(routine_model)
+            session.flush() # Flush 2: Obtiene ID de la rutina
+            
+            # 3b. Crear los enlaces de ejercicios (RoutineExercise)
+            for index, exercise_link_data in enumerate(routine_data.exercises):
+                exercise = session.get(Exercise, exercise_link_data.exercise_id)
+                if not exercise:
+                    session.rollback() 
+                    raise HTTPException(
+                        status_code=404, 
+                        detail=f"Ejercicio con id {exercise_link_data.exercise_id} no encontrado en la rutina '{routine_model.nombre}'. Creacion cancelada."
+                    )
+                    
+                link = RoutineExercise(
+                    routine_id=routine_model.id, 
+                    exercise_id=exercise.id,
+                    sets=exercise_link_data.sets,
+                    repetitions=exercise_link_data.repetitions,
+                    peso=exercise_link_data.peso, 
+                    order=index + 1 # Usar el indice para el orden, asegurando que sea un entero
+                )
+                session.add(link)
+
+            # 3c. Crear la asignacion
+            assignment = RoutineAssignment(
+                routine_id=routine_model.id,
+                student_id=data.student_id,
+                professor_id=current_professor.id,
+                is_active=is_first_routine # Solo la primera rutina del grupo es activa
+            )
+            session.add(assignment)
+            session.flush() # Flush 3: Obtiene ID de la asignacion
+
+            created_assignment_ids.append(assignment.id) 
+            is_first_routine = False # El resto de las asignaciones son inactivas por defecto
+
+        # 4. COMMIT uNICO
+        session.commit()
+
+        # 5. Fetch todas las asignaciones recien creadas con las relaciones anidadas (codigo de lectura existente)
+        statement_read = (
+            select(RoutineAssignment)
+            .where(RoutineAssignment.id.in_(created_assignment_ids))
+            .options(
+                selectinload(RoutineAssignment.routine)
+                    .selectinload(Routine.routine_group),
+                selectinload(RoutineAssignment.routine)
+                    .selectinload(Routine.exercise_links)
+                    .selectinload(RoutineExercise.exercise),
+                selectinload(RoutineAssignment.student),
+                selectinload(RoutineAssignment.professor)
+            )
+        )
+        
+        final_assignments = session.exec(statement_read).all()
+        return final_assignments
+
+    except HTTPException:
+        # Re-lanza HTTPExceptions para que FastAPI las maneje correctamente
+        session.rollback() 
+        raise
+    except Exception as e:
+        session.rollback() 
+        print(f"ERROR: Fallo transaccional al crear grupo de rutinas: {e}")
+        # Muestra el error real para depuracion
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
+            detail=f"Error transaccional al crear grupo: {str(e)}"
         )
 
 
