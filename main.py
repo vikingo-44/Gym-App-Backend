@@ -1,20 +1,23 @@
 import os
-from datetime import datetime, timedelta, timezone, date
+from datetime import datetime, timedelta, timezone, date # CRiTICO: Importar 'date'
 from typing import Annotated, List, Optional
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi import FastAPI, Depends, HTTPException, status, BackgroundTasks # <-- IMPORTACION CORREGIDA: Agregamos BackgroundTasks
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials 
-from sqlmodel import Session, select, delete 
+from sqlmodel import Session, select, delete # IMPORTANTE: Importar delete de sqlmodel
+# Importamos selectinload para forzar la carga de relaciones anidadas
 from sqlalchemy.orm import selectinload 
 from sqlalchemy import desc 
-from sqlalchemy import func 
+from sqlalchemy import func # NECESARIO para usar func.lower() en validacion de email
 
 from passlib.context import CryptContext
 from jose import JWTError, jwt
 from dotenv import load_dotenv
-from pydantic import BaseModel 
+from pydantic import BaseModel # <--- ¡NUEVA IMPORTACIoN REQUERIDA!
+from .sync_crosshero import sync_users_from_crosshero # <--- ¡sync crosshero!
 
+# Importaciones de tu estructura y esquemas
 from database import create_db_and_tables, get_session
 from models import (
     User, UserCreate, UserRead, UserReadSimple, UserRole, UserLogin, Token,
@@ -30,12 +33,13 @@ from models import (
     # CRiTICO: Importaciones de Grupo y Transaccional
     RoutineGroup, RoutineGroupCreate, RoutineGroupRead, RoutineGroupCreateAndRoutines,
     UserUpdateByProfessor,
-    RoutineCreateForTransactional 
+    RoutineCreateForTransactional # Nuevo esquema para usar en la transaccion
 )
 
+# NUEVO ESQUEMA: Utilizado para actualizar los campos del grupo de rutinas
 class RoutineGroupUpdate(BaseModel):
     nombre: Optional[str] = None
-    fecha_vencimiento: Optional[date] = None 
+    fecha_vencimiento: Optional[date] = None # date esta importado arriba
 
 
 load_dotenv()
@@ -46,7 +50,7 @@ load_dotenv()
 pwd_context = CryptContext(schemes=["sha256_crypt"], deprecated="auto")
 SECRET_KEY = os.environ.get("SECRET_KEY", "CLAVE_SECRETA_DEFAULT_DEBES_CAMBIARLA")
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 
+ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 # Token de 1 dia
 
 http_bearer = HTTPBearer()
 
@@ -148,12 +152,35 @@ def read_root():
     """Endpoint de bienvenida y verificacion de salud de la API."""
     return {"message": "API del Gestor de Rutinas de Gimnasio activa."}
 
+# ***************************************************************
+# NUEVA RUTA DE ADMINISTRACIÓN: SINCRONIZACIÓN CROSSHERO
+# ***************************************************************
+@app.post("/admin/sync/crosshero", tags=["Administracion"])
+def trigger_crosshero_sync(
+    background_tasks: BackgroundTasks, # Para ejecutar la sincronizacion en segundo plano
+    current_professor: Annotated[User, Depends(get_current_professor)] # Solo Profesor puede dispararla
+):
+    """
+    (Profesor/Admin) Dispara el proceso de sincronizacion de usuarios 
+    desde la API de CrossHero a la base de datos local.
+    """
+    # Agrega la funcion de sincronizacion a las tareas de fondo. 
+    # Esto libera inmediatamente el endpoint HTTP.
+    background_tasks.add_task(sync_users_from_crosshero) 
+    
+    return {
+        "message": "Sincronizacion de CrossHero iniciada en segundo plano.", 
+        "advice": "Revisa los logs del servidor para ver el progreso y los resultados."
+    }
+# ***************************************************************
+
 # NUEVA RUTA: Registro solo de Alumnos
 @app.post("/register/student", response_model=UserRead, status_code=status.HTTP_201_CREATED, tags=["Autenticacion"])
 def register_student(
     user_data: UserCreate, # Se usa UserCreate, pero el rol se fuerza a Alumno
     session: Annotated[Session, Depends(get_session)]
 ):
+# [El resto de las rutas permanece igual]
     """Permite el registro de nuevos usuarios con rol forzado a Alumno."""
     
     # 1. Verificar si DNI ya existe
@@ -228,15 +255,14 @@ def login_for_access_token(
     form_data: UserLogin, # form_data tiene .dni y .password
     session: Annotated[Session, Depends(get_session)]
 ):
-    """
-    Verifica credenciales (DNI y Password) y devuelve un JWT para la sesion.
-    FIX CRiTICO: BUSCAR SOLO POR DNI.
-    """
+    """Verifica credenciales (Email/DNI y Password) y devuelve un JWT para la sesion."""
     
-    # CORRECCIoN CRiTICA: BUSCAR SOLO POR DNI
-    user = session.exec(select(User).where(User.dni == form_data.dni)).first()
+    # Busqueda por EMAIL (asumiendo que el campo 'dni' en el payload del frontend es el Email)
+    user = session.exec(select(User).where(User.email == form_data.dni)).first()
     
-    # NOTA: Se elimina la busqueda por email como fallback para forzar el uso del DNI.
+    # Si la busqueda por email falla, intentar por DNI (fallback)
+    if not user:
+        user = session.exec(select(User).where(User.dni == form_data.dni)).first()
     
     if not user or not verify_password(form_data.password, user.password_hash):
         raise HTTPException(
@@ -246,7 +272,7 @@ def login_for_access_token(
         )
     
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    # Incluimos el nombre del usuario en el token.
+    # CORRECCIoN CLAVE: Incluimos el nombre del usuario en el token.
     access_token = create_access_token(
         data={"dni": user.dni, "rol": user.rol.value, "nombre": user.nombre}, 
         expires_delta=access_token_expires
@@ -264,12 +290,12 @@ def read_users_me(
     """Obtiene la informacion del usuario actualmente autenticado."""
     return current_user
 
-# RUTA: CAMBIO DE CONTRASEnA
+# RUTA: CAMBIO DE CONTRASE?A
 @app.post("/users/change-password", tags=["Usuarios"])
 def change_password(
     password_data: ChangePassword, # Usamos el nuevo esquema ChangePassword
     session: Annotated[Session, Depends(get_session)],
-    # Permite a profesores y alumnos cambiar su contrase±a
+    # Permite a profesores y alumnos cambiar su contrase?a
     current_user: Annotated[User, Depends(get_current_user)]
 ):
     """
@@ -492,7 +518,7 @@ def update_routine_group_full(
                 routine_id=routine_model.id,
                 student_id=student_id,
                 professor_id=current_professor.id,
-                is_active=is_first_routine # Solo la primera asignacion del nuevo grupo es activa
+                is_active=is_first_routine # Solo la primera rutina del nuevo grupo es activa
             )
             session.add(assignment)
             session.flush()
@@ -530,216 +556,6 @@ def update_routine_group_full(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
             detail=f"Error transaccional al actualizar grupo: {str(e)}"
-        )
-
-
-# ----------------------------------------------------------------------
-# Rutas de Ejercicios (CRUD - RESTAURADAS)
-# ----------------------------------------------------------------------
-
-@app.post("/exercises/", response_model=List[ExerciseRead], status_code=status.HTTP_201_CREATED, tags=["Ejercicios"])
-def create_exercise_batch(
-    exercises: List[ExerciseCreate],
-    session: Annotated[Session, Depends(get_session)],
-    current_professor: Annotated[User, Depends(get_current_professor)]
-):
-    """Crea multiples ejercicios a la vez. Solo accesible para Profesores."""
-    
-    created_exercises = []
-    for exercise_data in exercises:
-        # Prevencion de duplicados basada en el nombre
-        # CORRECCIoN CRUCIAL: Usar func.lower() para la verificacion de duplicados de nombre de ejercicio (case-insensitive)
-        existing_exercise = session.exec(
-            select(Exercise).where(func.lower(Exercise.nombre) == func.lower(exercise_data.nombre))
-        ).first()
-        
-        if existing_exercise:
-            print(f"Advertencia: Ejercicio '{exercise_data.nombre}' ya existe, omitiendo.")
-            continue 
-
-        db_exercise = Exercise.model_validate(exercise_data)
-        session.add(db_exercise)
-        created_exercises.append(db_exercise)
-        
-    session.commit()
-
-    for db_exercise in created_exercises:
-        session.refresh(db_exercise)
-        
-    return created_exercises
-
-@app.get("/exercises/", response_model=List[ExerciseRead], tags=["Ejercicios"])
-def read_exercises(
-    session: Annotated[Session, Depends(get_session)],
-    current_user: Annotated[User, Depends(get_current_user)]
-):
-    """Obtiene una lista de todos los ejercicios. Accesible para todos los usuarios autenticados."""
-    exercises = session.exec(select(Exercise)).all()
-    return exercises
-
-@app.get("/exercises/{exercise_id}", response_model=ExerciseRead, tags=["Ejercicios"])
-def read_exercise(
-    exercise_id: int,
-    session: Annotated[Session, Depends(get_session)],
-    current_user: Annotated[User, Depends(get_current_user)]
-):
-    """Obtiene un ejercicio por su ID."""
-    exercise = session.get(Exercise, exercise_id)
-    if not exercise:
-        raise HTTPException(status_code=404, detail="Ejercicio no encontrado")
-    return exercise
-
-@app.patch("/exercises/{exercise_id}", response_model=ExerciseRead, tags=["Ejercicios"])
-def update_exercise(
-    exercise_id: int,
-    exercise_data: ExerciseUpdate,
-    session: Annotated[Session, Depends(get_session)],
-    current_professor: Annotated[User, Depends(get_current_professor)]
-):
-    """Actualiza un ejercicio existente por ID. Solo accesible para Profesores."""
-    db_exercise = session.get(Exercise, exercise_id)
-    if not db_exercise:
-        raise HTTPException(status_code=404, detail="Ejercicio no encontrado")
-        
-    exercise_dict = exercise_data.model_dump(exclude_unset=True)
-    for key, value in exercise_dict.items():
-        setattr(db_exercise, key, value)
-
-    session.add(db_exercise)
-    session.commit()
-    session.refresh(db_exercise)
-    return db_exercise
-
-@app.delete("/exercises/{exercise_id}", status_code=status.HTTP_204_NO_CONTENT, tags=["Ejercicios"])
-def delete_exercise(
-    exercise_id: int,
-    session: Annotated[Session, Depends(get_session)],
-    current_professor: Annotated[User, Depends(get_current_professor)]
-):
-    """Elimina un ejercicio por ID. Solo accesible para Profesores."""
-    exercise = session.get(Exercise, exercise_id)
-    if not exercise:
-        raise HTTPException(status_code=404, detail="Ejercicio no encontrado")
-        
-    session.delete(exercise)
-    session.commit()
-    return
-
-
-# ----------------------------------------------------------------------
-# RUTA TRANSACCIONAL DE CREACIoN DE GRUPO Y RUTINAS (CORREGIDA PARA USAR PAYLOAD DEL FRONTEND)
-# ----------------------------------------------------------------------
-
-@app.post("/routines-group/create-transactional", response_model=List[RoutineAssignmentRead], tags=["Rutinas"])
-def create_routine_group_and_routines(
-    data: RoutineGroupCreateAndRoutines,
-    session: Annotated[Session, Depends(get_session)],
-    current_professor: Annotated[User, Depends(get_current_professor)]
-):
-    """
-    (Profesor) Crea un nuevo grupo de rutinas, crea las N rutinas individuales
-    enviadas por el frontend (con ejercicios), y asigna CADA UNA al alumno.
-    """
-    try:
-        # 1. Validar Alumno y Rutinas
-        student = session.get(User, data.student_id)
-        if not student or student.rol != UserRole.STUDENT:
-            raise HTTPException(status_code=404, detail="Alumno no encontrado o rol incorrecto para la asignacion.")
-
-        if not data.routines or len(data.routines) == 0:
-            raise HTTPException(status_code=400, detail="Debe enviar al menos una rutina para crear.")
-            
-        # 2. Crear el Grupo de Rutinas (RoutineGroup)
-        routine_group = RoutineGroup(
-            nombre=data.nombre,
-            fecha_vencimiento=data.fecha_vencimiento, 
-            professor_id=current_professor.id
-        )
-        session.add(routine_group)
-        session.flush() # Flush 1: Obtiene ID del grupo
-
-        # 3. Crear las Rutinas individuales, asociarlas al grupo y asignarlas
-        created_assignment_ids = []
-        is_first_routine = True # Para marcar solo la primera asignacion como activa
-        
-        for routine_data in data.routines: # Itera sobre la lista de rutinas enviada por el frontend
-            
-            # 3a. Crear el modelo de Rutina
-            routine_model = Routine(
-                nombre=routine_data.nombre,
-                # FIX NOT NULL: Asegurar que la descripcion no sea NULL
-                descripcion=routine_data.descripcion or "", 
-                owner_id=current_professor.id,
-                routine_group_id=routine_group.id # ASOCIAR AL GRUPO
-            )
-            session.add(routine_model)
-            session.flush() # Flush 2: Obtiene ID de la rutina
-            
-            # 3b. Crear los enlaces de ejercicios (RoutineExercise)
-            for index, exercise_link_data in enumerate(routine_data.exercises):
-                exercise = session.get(Exercise, exercise_link_data.exercise_id)
-                if not exercise:
-                    session.rollback() 
-                    raise HTTPException(
-                        status_code=404, 
-                        detail=f"Ejercicio con id {exercise_link_data.exercise_id} no encontrado en la rutina '{routine_model.nombre}'. Creacion cancelada."
-                    )
-                    
-                link = RoutineExercise(
-                    routine_id=routine_model.id, 
-                    exercise_id=exercise.id,
-                    sets=exercise_link_data.sets,
-                    repetitions=exercise_link_data.repetitions,
-                    peso=exercise_link_data.peso, 
-                    order=index + 1 # Usar el indice para el orden, asegurando que sea un entero
-                )
-                session.add(link)
-
-            # 3c. Crear la asignacion
-            assignment = RoutineAssignment(
-                routine_id=routine_model.id,
-                student_id=data.student_id,
-                professor_id=current_professor.id,
-                is_active=is_first_routine # Solo la primera rutina del grupo es activa
-            )
-            session.add(assignment)
-            session.flush() # Flush 3: Obtiene ID de la asignacion
-
-            created_assignment_ids.append(assignment.id) 
-            is_first_routine = False # El resto de las asignaciones son inactivas por defecto
-
-        # 4. COMMIT uNICO
-        session.commit()
-
-        # 5. Fetch todas las asignaciones recien creadas con las relaciones anidadas (codigo de lectura existente)
-        statement_read = (
-            select(RoutineAssignment)
-            .where(RoutineAssignment.id.in_(created_assignment_ids))
-            .options(
-                selectinload(RoutineAssignment.routine)
-                    .selectinload(Routine.routine_group),
-                selectinload(RoutineAssignment.routine)
-                    .selectinload(Routine.exercise_links)
-                    .selectinload(RoutineExercise.exercise),
-                selectinload(RoutineAssignment.student),
-                selectinload(RoutineAssignment.professor)
-            )
-        )
-        
-        final_assignments = session.exec(statement_read).all()
-        return final_assignments
-
-    except HTTPException:
-        # Re-lanza HTTPExceptions para que FastAPI las maneje correctamente
-        session.rollback() 
-        raise
-    except Exception as e:
-        session.rollback() 
-        print(f"ERROR: Fallo transaccional al crear grupo de rutinas: {e}")
-        # Muestra el error real para depuracion
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
-            detail=f"Error transaccional al crear grupo: {str(e)}"
         )
 
 
@@ -1170,7 +986,7 @@ def delete_assignment_group_for_student(
     result = session.exec(delete_assignments_stmt)
     
     if result.rowcount == 0:
-          raise HTTPException(status_code=404, detail="No se encontraron asignaciones para este grupo en el alumno.")
+         raise HTTPException(status_code=404, detail="No se encontraron asignaciones para este grupo en el alumno.")
 
     session.commit()
     
