@@ -15,7 +15,6 @@ from passlib.context import CryptContext
 from jose import JWTError, jwt
 from dotenv import load_dotenv
 from pydantic import BaseModel # <--- ¡NUEVA IMPORTACIoN REQUERIDA!
-from .sync_crosshero import sync_users_from_crosshero # <--- ¡sync crosshero!
 
 # Importaciones de tu estructura y esquemas
 from database import create_db_and_tables, get_session
@@ -462,8 +461,7 @@ def update_routine_group_full(
             # 5a. Crear el modelo de Rutina (nuevo objeto)
             routine_model = Routine(
                 nombre=routine_data.nombre,
-                # CORRECCIoN PARA EL ERROR NOT NULL: Asegurar que la descripcion no sea NULL
-                descripcion=routine_data.descripcion or "",
+                descripcion=routine_data.descripcion,
                 owner_id=current_professor.id,
                 routine_group_id=routine_group.id # ASOCIAR AL GRUPO EXISTENTE
             )
@@ -551,11 +549,7 @@ def create_exercise_batch(
     created_exercises = []
     for exercise_data in exercises:
         # Prevencion de duplicados basada en el nombre
-        # CORRECCIoN CRUCIAL: Usar func.lower() para la verificacion de duplicados de nombre de ejercicio (case-insensitive)
-        existing_exercise = session.exec(
-            select(Exercise).where(func.lower(Exercise.nombre) == func.lower(exercise_data.nombre))
-        ).first()
-        
+        existing_exercise = session.exec(select(Exercise).where(Exercise.nombre == exercise_data.nombre)).first()
         if existing_exercise:
             print(f"Advertencia: Ejercicio '{exercise_data.nombre}' ya existe, omitiendo.")
             continue 
@@ -670,8 +664,7 @@ def create_routine_group_and_routines(
             # 3a. Crear el modelo de Rutina
             routine_model = Routine(
                 nombre=routine_data.nombre,
-                # FIX NOT NULL: Asegurar que la descripcion no sea NULL
-                descripcion=routine_data.descripcion or "", 
+                descripcion=routine_data.descripcion,
                 owner_id=current_professor.id,
                 routine_group_id=routine_group.id # ASOCIAR AL GRUPO
             )
@@ -883,7 +876,7 @@ def set_assignment_active_status(
     if not assignment:
         raise HTTPException(status_code=404, detail="Asignacion no encontrada.")
 
-    # Opcional: Verificar que el profesor sea dueno (basado en el profesor que la asigno)
+    # Opcional: Verificar que el profesor sea due?o (basado en el profesor que la asigno)
     if assignment.professor_id != current_professor.id:
         raise HTTPException(status_code=403, detail="No tienes permiso para modificar esta asignacion.")
         
@@ -987,8 +980,7 @@ def update_routine_full(
 
     # 1. Actualizar metadata (Nombre/Descripcion)
     db_routine.nombre = routine_data.nombre
-    # CORRECCIoN PARA EL ERROR NOT NULL: Asegurar que la descripcion no sea NULL
-    db_routine.descripcion = routine_data.descripcion or ""
+    db_routine.descripcion = routine_data.descripcion
     
     # 2. Eliminar todos los enlaces de ejercicios existentes para reemplazarlos
     # CORRECCIoN CLAVE: Usamos la sintaxis correcta de DELETE(Table).where(...)
