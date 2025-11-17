@@ -8,7 +8,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlmodel import Session, select
 # Importamos selectinload para forzar la carga de relaciones anidadas
 from sqlalchemy.orm import selectinload 
-from sqlalchemy import desc, delete # <--- FIX: AGREGADO 'delete'
+from sqlalchemy import desc 
 from sqlalchemy import func # NECESARIO para usar func.lower() en validacion de email
 
 from passlib.context import CryptContext
@@ -118,7 +118,7 @@ def get_current_user(
         
     # ** MODIFICACIoN: VALIDACIoN DE ESTADO ACTIVO **
     if hasattr(user, 'is_active') and user.is_active is False:
-        # Bloquear el acceso si el usuario esta inactivo
+        # Bloquear el acceso si el usuario está inactivo
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Tu cuenta ha sido desactivada. Contacta a un profesor."
@@ -251,7 +251,7 @@ def login_for_access_token(
     
     # ** MODIFICACIoN: RE-VALIDACIoN DE ESTADO ACTIVO ANTES DE CREAR TOKEN **
     if hasattr(user, 'is_active') and user.is_active is False:
-        # Bloquear el login si el usuario esta inactivo
+        # Bloquear el login si el usuario está inactivo
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Tu cuenta ha sido desactivada. Contacta a un profesor."
@@ -320,7 +320,7 @@ def read_students_list(
     current_professor: Annotated[User, Depends(get_current_professor)]
 ):
     """Obtiene una lista de todos los usuarios con rol 'Alumno' (para asignar rutinas)."""
-    # El campo is_active se cargara automaticamente en el objeto User si existe en la tabla.
+    # El campo is_active se cargará automáticamente en el objeto User si existe en la tabla.
     students = session.exec(select(User).where(User.rol == UserRole.STUDENT)).all()
     return students
 
@@ -357,7 +357,7 @@ def update_student_data(
             if existing_user and existing_user.id != student_to_update.id: # Aseguramos que no sea el mismo
                 raise HTTPException(status_code=400, detail="El nuevo DNI ya esta en uso por otro usuario.")
         
-        # is_active y nombre se actualizan aqui si estan presentes en update_data
+        # is_active y nombre se actualizan aquí si están presentes en update_data
         setattr(student_to_update, key, value)
         
     # 4. Guardar los cambios
@@ -812,9 +812,8 @@ def update_routine_full(
     db_routine.descripcion = routine_data.descripcion
     
     # 2. Eliminar todos los enlaces de ejercicios existentes para reemplazarlos
-    # FIX DEL ERROR: Usamos la sentencia delete de SQLAlchemy para eliminar enlaces
-    delete_links_statement = delete(RoutineExercise).where(RoutineExercise.routine_id == routine_id)
-    session.exec(delete_links_statement)
+    # Usamos .delete() directamente en el WHERE para eficiencia
+    session.exec(select(RoutineExercise).where(RoutineExercise.routine_id == routine_id)).delete()
     
     # 3. Crear los nuevos enlaces
     for exercise_link_data in routine_data.exercises:
@@ -878,9 +877,8 @@ def delete_routine(
         raise HTTPException(status_code=403, detail="No autorizado para eliminar esta rutina")
 
     # Eliminamos enlaces y asignaciones antes de eliminar la rutina (CRiTICO para evitar errores de Foreign Key)
-    # FIX DEL ERROR: Usamos la sentencia delete de SQLAlchemy
-    session.exec(delete(RoutineExercise).where(RoutineExercise.routine_id == routine_id))
-    session.exec(delete(RoutineAssignment).where(RoutineAssignment.routine_id == routine_id))
+    session.exec(select(RoutineExercise).where(RoutineExercise.routine_id == routine_id)).delete()
+    session.exec(select(RoutineAssignment).where(RoutineAssignment.routine_id == routine_id)).delete()
         
     session.delete(db_routine)
     session.commit()
@@ -907,7 +905,7 @@ def assign_routine_to_student(
         
     # 2. Verificar que el alumno exista
     student = session.get(User, assignment_data.student_id)
-    # ** Se deberia verificar tambien el estado `is_active` si fuera una restriccion aqui, pero se permite asignar a inactivos.
+    # ** Se debería verificar también el estado `is_active` si fuera una restricción aquí, pero se permite asignar a inactivos.
     if not student or student.rol != UserRole.STUDENT:
         raise HTTPException(status_code=404, detail="Alumno no encontrado")
         
@@ -964,8 +962,6 @@ def get_assignments_for_student_by_professor(
         )
         .order_by(desc(RoutineAssignment.assigned_at)) 
         .options(
-            # FIX PROFESOR: Asegura la carga del profesor creador del grupo
-            selectinload(RoutineAssignment.routine).selectinload(Routine.professor), 
             # CRiTICO: Asegura la carga del grupo para la logica de agrupamiento del frontend
             selectinload(RoutineAssignment.routine).selectinload(Routine.routine_group),
             selectinload(RoutineAssignment.routine).selectinload(Routine.exercise_links).selectinload(RoutineExercise.exercise),
@@ -991,7 +987,7 @@ def get_assignments_for_student_by_professor(
             .where(Routine.routine_group_id == routine_group_id)
             .order_by(Routine.id) # Ordena por ID (orden de creacion)
             .options(
-                # FIX: Cargamos el profesor dueno de la rutina (que es el creador del grupo)
+                # FIX: Cargamos el profesor dueño de la rutina (que es el creador del grupo)
                 selectinload(Routine.professor), 
                 selectinload(Routine.routine_group),
                 selectinload(Routine.exercise_links).selectinload(RoutineExercise.exercise)
@@ -1063,8 +1059,7 @@ def get_my_active_routine(
         )
         .order_by(desc(RoutineAssignment.assigned_at)) 
         .options(
-            # FIX PROFESOR: Cargar el profesor para que este disponible si el front lo necesita
-            selectinload(RoutineAssignment.routine).selectinload(Routine.professor), 
+            # ?? FIX L?GICO: Cargar la Rutina y su Grupo (CR?TICO) ??
             selectinload(RoutineAssignment.routine)
                 .selectinload(Routine.routine_group),
             selectinload(RoutineAssignment.routine)
