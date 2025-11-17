@@ -15,7 +15,6 @@ from passlib.context import CryptContext
 from jose import JWTError, jwt
 from dotenv import load_dotenv
 from pydantic import BaseModel # <--- ¡NUEVA IMPORTACIoN REQUERIDA!
-from .sync_crosshero import sync_users_from_crosshero # <--- ¡sync crosshero!
 
 # Importaciones de tu estructura y esquemas
 from database import create_db_and_tables, get_session
