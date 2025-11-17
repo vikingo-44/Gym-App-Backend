@@ -1,5 +1,5 @@
 import os
-from datetime import datetime, timedelta, timezone, date # ?? CRiTICO: Importar 'date'
+from datetime import datetime, timedelta, timezone, date # CRITICO: Importar 'date'
 from typing import Annotated, List, Optional
 from contextlib import asynccontextmanager
 
@@ -10,6 +10,7 @@ from sqlmodel import Session, select
 from sqlalchemy.orm import selectinload 
 from sqlalchemy import desc 
 from sqlalchemy import func # NECESARIO para usar func.lower() en validacion de email
+from sqlalchemy import delete # <--- ¡IMPORTACIoN CRiTICA AnADIDA!
 
 from passlib.context import CryptContext
 from jose import JWTError, jwt
@@ -28,7 +29,7 @@ from models import (
     RoutineAssignmentUpdate, 
     ChangePassword,
     RoutineCreateOrUpdate, 
-    # CRiTICO: Importaciones de Grupo y Transaccional
+    # CRITICO: Importaciones de Grupo y Transaccional
     RoutineGroup, RoutineGroupCreate, RoutineGroupRead, RoutineGroupCreateAndRoutines,
     UserUpdateByProfessor,
     RoutineCreateForTransactional # Nuevo esquema para usar en la transaccion
@@ -237,12 +238,12 @@ def login_for_access_token(
     if not user or not verify_password(form_data.password, user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="DNI o contrase?a incorrectos",
+            detail="DNI o contrasena incorrectos",
             headers={"WWW-Authenticate": "Bearer"},
         )
     
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    # CORRECCIoN CLAVE: Incluimos el nombre del usuario en el token.
+    # CORRECCION CLAVE: Incluimos el nombre del usuario en el token.
     access_token = create_access_token(
         data={"dni": user.dni, "rol": user.rol.value, "nombre": user.nombre}, 
         expires_delta=access_token_expires
@@ -260,31 +261,31 @@ def read_users_me(
     """Obtiene la informacion del usuario actualmente autenticado."""
     return current_user
 
-# RUTA: CAMBIO DE CONTRASE?A
+# RUTA: CAMBIO DE CONTRASEnA
 @app.post("/users/change-password", tags=["Usuarios"])
 def change_password(
     password_data: ChangePassword, # Usamos el nuevo esquema ChangePassword
     session: Annotated[Session, Depends(get_session)],
-    # Permite a profesores y alumnos cambiar su contrase?a
+    # Permite a profesores y alumnos cambiar su contrasena
     current_user: Annotated[User, Depends(get_current_user)]
 ):
     """
-    Permite a un usuario (Profesor o Alumno) cambiar su contrase?a.
-    Requiere la contrase?a antigua para la verificacion.
+    Permite a un usuario (Profesor o Alumno) cambiar su contrasena.
+    Requiere la contrasena antigua para la verificacion.
     """
     
-    # 1. Verificar la contrase?a antigua
+    # 1. Verificar la contrasena antigua
     if not verify_password(password_data.old_password, current_user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Contrase?a antigua incorrecta."
+            detail="Contrasena antigua incorrecta."
         )
 
-    # 2. Verificar la longitud de la nueva contrase?a (buena practica)
+    # 2. Verificar la longitud de la nueva contrasena (buena practica)
     if len(password_data.new_password) < 6:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="La nueva contrase?a debe tener al menos 6 caracteres."
+            detail="La nueva contrasena debe tener al menos 6 caracteres."
         )
 
     # 3. Generar el nuevo hash y actualizar el usuario
@@ -295,7 +296,7 @@ def change_password(
     session.commit()
     session.refresh(current_user)
     
-    return {"message": "Contrase?a actualizada exitosamente."}
+    return {"message": "Contrasena actualizada exitosamente."}
 
 
 @app.get("/users/students", response_model=List[UserReadSimple], tags=["Usuarios"])
@@ -438,7 +439,7 @@ def delete_exercise(
 
 
 # ----------------------------------------------------------------------
-# ?? RUTA TRANSACCIONAL DE CREACIoN DE GRUPO Y RUTINAS (CORREGIDA PARA USAR PAYLOAD DEL FRONTEND)
+# RUTA TRANSACCIONAL DE CREACION DE GRUPO Y RUTINAS (CORREGIDA PARA USAR PAYLOAD DEL FRONTEND)
 # ----------------------------------------------------------------------
 
 @app.post("/routines-group/create-transactional", response_model=List[RoutineAssignmentRead], tags=["Rutinas"])
@@ -518,7 +519,7 @@ def create_routine_group_and_routines(
             created_assignment_ids.append(assignment.id) 
             is_first_routine = False # El resto de las asignaciones son inactivas por defecto
 
-        # 4. COMMIT uNICO
+        # 4. COMMIT UNICO
         session.commit()
 
         # 5. Fetch todas las asignaciones recien creadas con las relaciones anidadas (codigo de lectura existente)
@@ -629,7 +630,7 @@ def read_routines(
     Obtiene una lista de todas las rutinas maestras creadas por el profesor.
     """
     try:
-        # CORRECCIoN/MEJORA: Forzamos la carga de relaciones anidadas (links + detalles del ejercicio + grupo)
+        # CORRECCION/MEJORA: Forzamos la carga de relaciones anidadas (links + detalles del ejercicio + grupo)
         statement = (
             select(Routine)
             .where(Routine.owner_id == current_professor.id)
@@ -660,7 +661,7 @@ def read_routine(
     current_user: Annotated[User, Depends(get_current_user)]
 ):
     """Obtiene una rutina especifica por su ID, incluyendo todos sus ejercicios."""
-    # CORRECCIoN/MEJORA: Forzamos la carga de relaciones anidadas (links + detalles del ejercicio + grupo)
+    # CORRECCION/MEJORA: Forzamos la carga de relaciones anidadas (links + detalles del ejercicio + grupo)
     statement = (
         select(Routine)
         .where(Routine.id == routine_id)
@@ -676,7 +677,7 @@ def read_routine(
     
     return routine
 
-# RUTA CRiTICA CORREGIDA: PATCH para cambiar el estado de activacion de una asignacion
+# RUTA CRITICA CORREGIDA: PATCH para cambiar el estado de activacion de una asignacion
 @app.patch("/assignments/{assignment_id}", response_model=RoutineAssignmentRead, tags=["Asignaciones"])
 def set_assignment_active_status(
     assignment_id: int,
@@ -690,7 +691,7 @@ def set_assignment_active_status(
     if not assignment:
         raise HTTPException(status_code=404, detail="Asignacion no encontrada.")
 
-    # Opcional: Verificar que el profesor sea due?o (basado en el profesor que la asigno)
+    # Opcional: Verificar que el profesor sea dueno (basado en el profesor que la asigno)
     if assignment.professor_id != current_professor.id:
         raise HTTPException(status_code=403, detail="No tienes permiso para modificar esta asignacion.")
         
@@ -712,7 +713,7 @@ def set_assignment_active_status(
             detail="Fallo al confirmar el cambio de estado en la base de datos."
         )
 
-    # CORRECCIoN CLAVE: Recargar la asignacion con todas las relaciones anidadas
+    # CORRECCION CLAVE: Recargar la asignacion con todas las relaciones anidadas
     statement_read = (
         select(RoutineAssignment)
         .where(RoutineAssignment.id == assignment_id)
@@ -772,7 +773,7 @@ def delete_assignment_group_for_student(
     
     return {"message": f"Se eliminaron {len(assignments_to_delete)} asignaciones de grupo para el alumno."}
 
-# RUTA ACTUALIZADA: EDICIoN COMPLETA (Metadata y Ejercicios)
+# RUTA ACTUALIZADA: EDICION COMPLETA (Metadata y Ejercicios)
 @app.patch("/routines/{routine_id}", response_model=RoutineRead, tags=["Rutinas"])
 def update_routine_full(
     routine_id: int,
@@ -793,8 +794,8 @@ def update_routine_full(
     db_routine.descripcion = routine_data.descripcion
     
     # 2. Eliminar todos los enlaces de ejercicios existentes para reemplazarlos
-    # Usamos .delete() directamente en el WHERE para eficiencia
-    session.exec(select(RoutineExercise).where(RoutineExercise.routine_id == routine_id)).delete()
+    # CORRECCIoN CLAVE: Usamos la funcion delete() de SQLAlchemy
+    session.exec(delete(RoutineExercise).where(RoutineExercise.routine_id == routine_id))
     
     # 3. Crear los nuevos enlaces
     for exercise_link_data in routine_data.exercises:
@@ -857,9 +858,10 @@ def delete_routine(
     if db_routine.owner_id != current_professor.id:
         raise HTTPException(status_code=403, detail="No autorizado para eliminar esta rutina")
 
-    # Eliminamos enlaces y asignaciones antes de eliminar la rutina (CRiTICO para evitar errores de Foreign Key)
-    session.exec(select(RoutineExercise).where(RoutineExercise.routine_id == routine_id)).delete()
-    session.exec(select(RoutineAssignment).where(RoutineAssignment.routine_id == routine_id)).delete()
+    # Eliminamos enlaces y asignaciones antes de eliminar la rutina (CRITICO para evitar errores de Foreign Key)
+    # CORRECCIoN: Usamos la funcion delete() de SQLAlchemy
+    session.exec(delete(RoutineExercise).where(RoutineExercise.routine_id == routine_id))
+    session.exec(delete(RoutineAssignment).where(RoutineAssignment.routine_id == routine_id))
         
     session.delete(db_routine)
     session.commit()
@@ -942,7 +944,7 @@ def get_assignments_for_student_by_professor(
         )
         .order_by(desc(RoutineAssignment.assigned_at)) 
         .options(
-            # CRiTICO: Asegura la carga del grupo para la logica de agrupamiento del frontend
+            # CRITICO: Asegura la carga del grupo para la logica de agrupamiento del frontend
             selectinload(RoutineAssignment.routine).selectinload(Routine.routine_group),
             selectinload(RoutineAssignment.routine).selectinload(Routine.exercise_links).selectinload(RoutineExercise.exercise),
             selectinload(RoutineAssignment.student),
@@ -988,7 +990,7 @@ def get_assignments_for_student_by_professor(
             assignment_id_to_use = real_assignment.id if real_assignment else active_anchor_assignment.id
             
             # Construimos el objeto de respuesta, asegurando que todos los campos del Assignment Read Model esten presentes.
-            # CRiTICO: Usamos el assigned_at del ancla si la asignacion real no existe, pero marcamos 'is_active' siempre como True 
+            # CRITICO: Usamos el assigned_at del ancla si la asignacion real no existe, pero marcamos 'is_active' siempre como True 
             # para que el frontend sepa que es la rutina que esta en curso.
             pseudo_assignment_data = RoutineAssignmentRead(
                 id=assignment_id_to_use, 
@@ -1038,7 +1040,7 @@ def get_my_active_routine(
         )
         .order_by(desc(RoutineAssignment.assigned_at)) 
         .options(
-            # ?? FIX L¨®GICO: Cargar la Rutina y su Grupo (CR¨ªTICO) ??
+            # FIX LoGICO: Cargar la Rutina y su Grupo (CRiTICO) 
             selectinload(RoutineAssignment.routine)
                 .selectinload(Routine.routine_group),
             selectinload(RoutineAssignment.routine)
