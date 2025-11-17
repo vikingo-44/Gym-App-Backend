@@ -3,7 +3,7 @@ from sqlmodel import Field, SQLModel, Relationship
 # AGREGADO: Importamos date para la fecha de vencimiento
 from datetime import datetime, timezone, date 
 from enum import Enum
-from pydantic import BaseModel # Necesario para los Schemas de lectura
+from pydantic import BaseModel, EmailStr # Importamos EmailStr para validación de email
 
 # ----------------------------------------------------------------------
 # Enums
@@ -21,318 +21,218 @@ class MuscleGroup(str, Enum):
     PIERNAS = "Piernas"
     HOMBRO = "Hombro"
     BRAZOS = "Brazos"
-    ABDOMEN = "Abdomen" # CORREGIDO/CONFIRMADO
-    GLUTEOS = "Gluteos" # NUEVA INCORPORACIÓN
+    ABDOMEN = "Abdomen"
+    GLUTEOS = "Gluteos" 
     CARDIO = "Cardio"
 
 # ----------------------------------------------------------------------
-# Modelos de Base de Datos (Tablas)
+# Modelos de Usuario
 # ----------------------------------------------------------------------
 
-# --- TABLA DE ENLACE (Rutina <-> Ejercicio) ---
-class RoutineExercise(SQLModel, table=True):
-    """Tabla de enlace Muchos-a-Muchos entre Rutinas y Ejercicios."""
-    __tablename__ = "ROUTINE_EXERCISES"
-    
-    # CRITICO: ID autoincremental para evitar NotNullViolation
-    id: Optional[int] = Field(default=None, primary_key=True)
-    routine_id: int = Field(foreign_key="ROUTINES.id", index=True)
-    exercise_id: int = Field(foreign_key="EXERCISES.id", index=True)
-    
-    sets: int
-    repetitions: str
-    # NUEVO CAMPO: Almacena el peso o tipo de resistencia 
-    peso: str = Field(default="N/A", max_length=50) 
-    order: int
-    
-    routine: "Routine" = Relationship(back_populates="exercise_links")
-    exercise: "Exercise" = Relationship(back_populates="routine_links")
-
-# --- TABLA DE ASIGNACION (Alumno <-> Rutina) ---
-class RoutineAssignment(SQLModel, table=True):
-    """Tabla de asignacion. Conecta a un Alumno (User) con una Rutina (Routine) y almacena quien la asigno (Profesor) y cuando."""
-    __tablename__ = "ROUTINE_ASSIGNMENTS"
-    
-    id: Optional[int] = Field(default=None, primary_key=True)
-    
-    # --- Relaciones (Claves Foraneas) ---
-    student_id: int = Field(foreign_key="USERS.id", index=True)
-    routine_id: int = Field(foreign_key="ROUTINES.id", index=True)
-    professor_id: int = Field(foreign_key="USERS.id", index=True) # El profesor que la asigno
-    
-    # --- Datos de la Asignacion ---
-    assigned_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), nullable=False)
-    is_active: bool = Field(default=True) # Para activar/desactivar rutinas
-
-    # --- Objetos de Relacion ---
-    student: "User" = Relationship(
-        back_populates="assignments_as_student",
-        sa_relationship_kwargs={"foreign_keys": "[RoutineAssignment.student_id]"}
-    )
-    routine: "Routine" = Relationship(back_populates="assignments")
-    professor: "User" = Relationship(
-        back_populates="assignments_as_professor",
-        sa_relationship_kwargs={"foreign_keys": "[RoutineAssignment.professor_id]"}
-    )
-
-
-# --- TABLA DE AGRUPACION DE RUTINAS (ROUTINES_GROUP) ---
-class RoutineGroup(SQLModel, table=True):
-    __tablename__ = "ROUTINES_GROUP"
-    
-    id: Optional[int] = Field(default=None, primary_key=True)
-    nombre: str = Field(index=True, max_length=100)
-    # ELIMINA: descripcion: Optional[str] = Field(default=None, max_length=500) 
-    fecha_creacion: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), nullable=False)
-    fecha_vencimiento: Optional[date] 
-    professor_id: int = Field(foreign_key="USERS.id")
-    
-    routines: List["Routine"] = Relationship(back_populates="routine_group")
-    professor: "User" = Relationship(back_populates="routine_groups")
-
-
-# --- TABLA DE USUARIOS ---
-class User(SQLModel, table=True):
-    """Representa la tabla 'USERS'."""
-    __tablename__ = "USERS" 
-
-    id: Optional[int] = Field(default=None, primary_key=True)
-    email: str = Field(index=True, unique=True, max_length=100)
-    
-    dni: str = Field(index=True, unique=True, max_length=50) # DNI para Login
-    
-    password_hash: str = Field(max_length=255)
-    nombre: str = Field(max_length=100)
-    rol: UserRole
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), nullable=False)
-    
-    # --- Relaciones del Usuario ---
-    created_routines: List["Routine"] = Relationship(back_populates="owner")
-    
-    assignments_as_student: List[RoutineAssignment] = Relationship(
-        back_populates="student",
-        sa_relationship_kwargs={"foreign_keys": "[RoutineAssignment.student_id]"}
-    )
-    
-    assignments_as_professor: List[RoutineAssignment] = Relationship(
-        back_populates="professor",
-        sa_relationship_kwargs={"foreign_keys": "[RoutineAssignment.professor_id]"}
-    )
-    # NUEVA RELACION: Grupos de Rutinas creados por el profesor
-    routine_groups: List[RoutineGroup] = Relationship(back_populates="professor")
-
-
-# --- TABLA DE EJERCICIOS ---
-class Exercise(SQLModel, table=True):
-    """Representa la tabla 'EXERCISES' (Catalogo)."""
-    __tablename__ = "EXERCISES"
-
-    id: Optional[int] = Field(default=None, primary_key=True)
-    nombre: str = Field(index=True, unique=True, max_length=100)
-    descripcion: str = Field(default="", max_length=500)
-    grupo_muscular: MuscleGroup = Field(index=True)
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), nullable=False)
-
-    routine_links: List[RoutineExercise] = Relationship(back_populates="exercise")
-
-
-# --- TABLA DE RUTINAS ---
-class Routine(SQLModel, table=True):
-    """Representa la tabla 'ROUTINES' (Rutina Maestra)."""
-    __tablename__ = "ROUTINES"
-    
-    id: Optional[int] = Field(default=None, primary_key=True)
-    nombre: str = Field(index=True, max_length=100)
-    descripcion: str = Field(default="", max_length=500)
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), nullable=False)
-
-    owner_id: int = Field(foreign_key="USERS.id")
-    owner: User = Relationship(back_populates="created_routines")
-    
-    # NUEVO CAMPO: Foreign Key a RoutineGroup (opcional para rutinas antiguas)
-    routine_group_id: Optional[int] = Field(default=None, foreign_key="ROUTINES_GROUP.id", index=True) 
-
-    # Relaciones con cascada para limpieza automatica
-    exercise_links: List[RoutineExercise] = Relationship(
-        back_populates="routine",
-        sa_relationship_kwargs={"cascade": "all, delete-orphan"}
-    )
-    
-    assignments: List[RoutineAssignment] = Relationship(
-        back_populates="routine",
-        sa_relationship_kwargs={"cascade": "all, delete-orphan"}
-    )
-    # NUEVA RELACION: Relacion inversa con RoutineGroup
-    routine_group: Optional[RoutineGroup] = Relationship(back_populates="routines")
-
-
-# ----------------------------------------------------------------------
-# Esquemas Pydantic (Para la API)
-# ----------------------------------------------------------------------
-
-# --- Esquemas de RoutineGroup ---
-class RoutineGroupCreate(BaseModel):
+class UserBase(SQLModel):
+    """Base para la creacion y lectura de usuario, sin ID ni hash."""
+    # CRÍTICO: Usamos EmailStr para validación automática de formato
+    email: EmailStr = Field(index=True, unique=True) # CRÍTICO: email ahora es único e indexado
     nombre: str
-    fecha_vencimiento: date 
-
-class RoutineGroupRead(BaseModel):
-    id: int
-    nombre: str
-    fecha_creacion: datetime
-    # CRITICO: Debe ser Optional en la lectura para manejar el valor NULL de la DB
-    fecha_vencimiento: Optional[date] 
-    professor_id: int
-    
-    class Config:
-        from_attributes = True
-
-# --- Esquema Transaccional ---
-class RoutineCreateForTransactional(BaseModel):
-    """Esquema para una rutina individual dentro de la transaccion grupal."""
-    nombre: str
-    descripcion: Optional[str] = None
-    exercises: List["RoutineExerciseCreate"] # Reusa el esquema de creacion de enlaces
-
-class RoutineGroupCreateAndRoutines(RoutineGroupCreate): 
-    """Esquema para crear el grupo y todas sus rutinas asociadas."""
-    student_id: int # A quien se le asignara
-    days: int # Cantidad de dias/rutinas a crear (del frontend, solo para validacion de esquema)
-    routines: List[RoutineCreateForTransactional] # Lista de rutinas con ejercicios (del frontend)
-
-
-# --- Esquemas de Usuario (Se mantienen) ---
-class UserCreate(BaseModel):
-    dni: str 
-    email: str
-    password: str
-    nombre: str
+    # 🚨 DNI ELIMINADO
     rol: UserRole
 
-class UserRead(BaseModel):
-    id: int
-    nombre: str
-    email: str
-    dni: str
-    rol: UserRole
-    created_at: datetime
+class User(UserBase, table=True):
+    """Modelo de Base de Datos para el Usuario."""
+    __tablename__ = "USERS"
+    id: Optional[int] = Field(default=None, primary_key=True)
+    password_hash: str # Solo para el hash de la contraseña (se mantiene)
     
-    class Config:
-        from_attributes = True
+    # Relaciones (Se mantienen)
+    assigned_routines: List["RoutineAssignment"] = Relationship(back_populates="student") # Si es Alumno
+    created_routines: List["Routine"] = Relationship(back_populates="owner") # Si es Profesor
+    created_assignments: List["RoutineAssignment"] = Relationship(back_populates="professor") # Si es Profesor
+    created_routine_groups: List["RoutineGroup"] = Relationship(back_populates="professor") # Si es Profesor
+    
+# Esquemas para interaccion con la API
 
-class UserReadSimple(BaseModel):
-    id: int
-    nombre: str
-    email: str
-    
-    class Config: 
-        from_attributes = True # Asegura que SQLModel pueda leerlo
+class UserCreate(UserBase):
+    """Esquema para crear un nuevo usuario. Requiere password."""
+    password: str # Contrasena en texto plano (se hashea en el backend)
 
 class UserLogin(BaseModel):
-    dni: str
+    """Esquema de login. Usa email/password."""
+    email: EmailStr # CRÍTICO: Cambiado de 'dni' a 'email'
     password: str
 
+class UserRead(UserBase):
+    """Esquema para leer datos completos del usuario."""
+    id: int
+    
+class UserReadSimple(BaseModel):
+    """Esquema para la lista simple de alumnos (Profesor)."""
+    id: int
+    email: EmailStr # CRÍTICO: Incluir Email
+    nombre: str
+    # 🚨 DNI ELIMINADO
+    
+class UserUpdateByProfessor(BaseModel):
+    """Esquema para que el Profesor actualice datos del Alumno (Nombre/Email)."""
+    nombre: Optional[str] = None
+    email: Optional[EmailStr] = None # CRÍTICO: Cambiado de 'dni' a 'email'
+
 class Token(BaseModel):
+    """Esquema para el token de acceso JWT."""
     access_token: str
-    token_type: str = "bearer"
+    token_type: str
 
-class TokenData(BaseModel):
-    dni: str 
-    rol: Optional[UserRole] = None
-
-# NUEVO: Esquema para el cambio de contrasena
 class ChangePassword(BaseModel):
+    """Esquema para el cambio de contraseña."""
     old_password: str
     new_password: str
 
-# --- Esquemas de Actualizacion de Usuario (Profesor) ---
-class UserUpdateByProfessor(BaseModel):
-    nombre: Optional[str] = None
-    email: Optional[str] = None
-    dni: Optional[str] = None
+# ----------------------------------------------------------------------
+# Modelos de Ejercicios (Exercise)
+# ----------------------------------------------------------------------
 
-
-# --- Esquemas de Ejercicio (Se mantienen) ---
-class ExerciseCreate(BaseModel):
+class ExerciseBase(SQLModel):
+    """Base para la creacion de Ejercicios."""
     nombre: str
     descripcion: Optional[str] = None
-    grupo_muscular: MuscleGroup
+    grupo_muscular: MuscleGroup # Usamos el Enum
 
-class ExerciseRead(BaseModel):
-    id: int
-    nombre: str
-    descripcion: Optional[str] = None
-    grupo_muscular: MuscleGroup
-    created_at: datetime
+class Exercise(ExerciseBase, table=True):
+    """Modelo de Base de Datos para el Ejercicio."""
+    __tablename__ = "EXERCISES"
+    id: Optional[int] = Field(default=None, primary_key=True)
     
-    class Config:
-        from_attributes = True
+    # Relaciones Muchos-a-Muchos a través de RoutineExercise
+    routine_links: List["RoutineExercise"] = Relationship(back_populates="exercise") 
 
+class ExerciseCreate(ExerciseBase):
+    pass
+    
 class ExerciseUpdate(BaseModel):
+    """Esquema de actualizacion para el ejercicio."""
     nombre: Optional[str] = None
     descripcion: Optional[str] = None
     grupo_muscular: Optional[MuscleGroup] = None
+    
+class ExerciseRead(ExerciseBase):
+    """Esquema de lectura para el ejercicio."""
+    id: int
 
-# --- Esquemas de Rutina ---
+# ----------------------------------------------------------------------
+# Modelos de Rutinas (Routine)
+# ----------------------------------------------------------------------
 
-# Schema para la relacion N:M (usado dentro de RoutineRead)
-class RoutineExerciseRead(BaseModel):
-    # Campos del enlace (series, repeticiones, orden)
+class RoutineBase(SQLModel):
+    """Base para la creacion de Rutinas."""
+    nombre: str
+    descripcion: Optional[str] = None
+    owner_id: int = Field(foreign_key="USERS.id") # ID del Profesor que la creo
+    routine_group_id: Optional[int] = Field(default=None, foreign_key="ROUTINE_GROUPS.id") # Nuevo: ID del grupo
+
+# Esquema para el enlace de ejercicios dentro de una rutina (creacion/edicion)
+class ExerciseLinkCreate(BaseModel):
+    """Define los detalles de un ejercicio dentro de una rutina."""
+    exercise_id: int
     sets: int
-    repetitions: str
-    # NUEVO: Campo para el peso
-    peso: str 
+    repetitions: int
+    peso: float # Nuevo campo para el peso
+    order: int = Field(default=1) # Orden del ejercicio en la rutina
+
+# Esquema para la creacion de una rutina (incluye enlaces)
+class RoutineCreate(RoutineBase):
+    """Esquema para crear una rutina maestra, incluyendo su lista de ejercicios."""
+    # Lista de objetos que definen el enlace (ID del ejercicio + sets/reps/peso)
+    exercises: List[ExerciseLinkCreate]
+    
+# Nuevo esquema para la transaccion de creacion de grupo (no incluye owner_id ni group_id)
+class RoutineCreateForTransactional(BaseModel):
+    """Esquema simplificado para creacion dentro de una transaccion de grupo."""
+    nombre: str
+    descripcion: Optional[str] = None
+    exercises: List[ExerciseLinkCreate]
+
+# Esquema para la edicion COMPLETA de una rutina maestra (incluye metadata y reemplaza ejercicios)
+class RoutineCreateOrUpdate(RoutineBase):
+    """Esquema para la actualizacion completa de una rutina (reemplaza links)."""
+    # Excluye owner_id y routine_group_id si viene de la DB
+    exercises: List[ExerciseLinkCreate]
+    
+class Routine(RoutineBase, table=True):
+    """Modelo de Base de Datos para la Rutina."""
+    __tablename__ = "ROUTINES"
+    id: Optional[int] = Field(default=None, primary_key=True)
+    
+    # Relaciones
+    owner: "User" = Relationship(back_populates="created_routines") # Profesor Creador
+    # Relaciones Muchos-a-Muchos a través de RoutineExercise
+    exercise_links: List["RoutineExercise"] = Relationship(back_populates="routine", sa_kwargs={"order_by": "RoutineExercise.order"}) 
+    # Relacion con el grupo
+    routine_group: Optional["RoutineGroup"] = Relationship(back_populates="routines")
+    # Relacion con asignaciones
+    assignments: List["RoutineAssignment"] = Relationship(back_populates="routine")
+
+# Esquema de lectura para el enlace de ejercicios (incluye el objeto Exercise)
+class ExerciseLinkRead(BaseModel):
+    """Define los detalles de lectura de un ejercicio dentro de una rutina."""
+    id: int
+    routine_id: int
+    exercise_id: int
+    sets: int
+    repetitions: int
+    peso: float
     order: int
+    exercise: ExerciseRead # CRITICO: Incluir los datos completos del ejercicio
+
+class RoutineRead(RoutineBase):
+    """Esquema para leer la rutina, incluyendo su ID, owner y ejercicios."""
+    id: int
+    # El grupo asociado (Puede ser None)
+    routine_group: Optional["RoutineGroupRead"] = None 
+    # Lista de enlaces (con el detalle del ejercicio)
+    exercise_links: List[ExerciseLinkRead]
     
-    # El ejercicio real al que enlaza (anidado)
-    exercise: ExerciseRead # Debe usar el schema ExerciseRead
-    
-    # CRITICO: Pydantic necesita la configuracion del ORM para este objeto anidado
     class Config:
         from_attributes = True
 
+# ----------------------------------------------------------------------
+# Modelos de Grupos de Rutinas (RoutineGroup)
+# ----------------------------------------------------------------------
 
-class RoutineExerciseCreate(BaseModel):
-    exercise_id: int
-    sets: int
-    repetitions: str
-    # NUEVO: Campo para el peso (Input)
-    peso: str
-    order: int
-
-class RoutineCreate(BaseModel):
+class RoutineGroupBase(SQLModel):
+    """Base para la creación de un grupo de rutinas."""
     nombre: str
-    descripcion: Optional[str] = None
-    exercises: List[RoutineExerciseCreate]
+    # La fecha de vencimiento es la fecha de FIN de la rutina/grupo
+    fecha_vencimiento: date 
+    professor_id: int = Field(foreign_key="USERS.id") # Profesor que creó el grupo
 
-# NUEVO: Esquema para la creacion/actualizacion COMPLETA de una rutina
-class RoutineCreateOrUpdate(BaseModel):
-    nombre: str
-    descripcion: Optional[str] = None
-    exercises: List[RoutineExerciseCreate] # Se envia la lista completa para reemplazar la anterior
+class RoutineGroup(RoutineGroupBase, table=True):
+    """Modelo de Base de Datos para el Grupo de Rutinas."""
+    __tablename__ = "ROUTINE_GROUPS"
+    id: Optional[int] = Field(default=None, primary_key=True)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), nullable=False)
+    
+    # Relaciones
+    professor: User = Relationship(back_populates="created_routine_groups")
+    routines: List[Routine] = Relationship(back_populates="routine_group")
 
-class RoutineUpdate(BaseModel):
-    nombre: Optional[str] = None
-    descripcion: Optional[str] = None
+class RoutineGroupCreate(RoutineGroupBase):
+    pass
 
-# CRITICO: La lectura de la rutina ahora incluye los enlaces y la configuracion del ORM
-class RoutineRead(BaseModel):
+class RoutineGroupRead(RoutineGroupBase):
     id: int
-    nombre: str
-    descripcion: Optional[str] = None
     created_at: datetime
-    owner_id: int
     
-    # AGREGADO: Incluir el grupo de rutina (CRITICO para la visualizacion en el profesor)
-    routine_group: Optional[RoutineGroupRead] = None
-    
-    # CRITICO: Incluir los links de ejercicio para la serializacion de la asignacion
-    exercise_links: List[RoutineExerciseRead]
-    
-    # Configuracion de Pydantic para manejar objetos ORM
-    class Config: 
+    class Config:
         from_attributes = True
+        
+# Esquema que viene del frontend para la transaccion de creacion de grupo
+class RoutineGroupCreateAndRoutines(RoutineGroupCreate):
+    """Esquema que agrupa el metadata del grupo y la lista de rutinas a crear."""
+    student_id: int # A quien se le asignara
+    routines: List[RoutineCreateForTransactional] # Las N rutinas (Dia 1, Dia 2...)
 
-# --- Esquemas de Asignacion (Se mantienen) ---
+
+# --- Esquemas de Asignacion (RoutineAssignment) ---
+
 class RoutineAssignmentCreate(BaseModel):
     """Esquema para ASIGNAR una rutina a un alumno."""
     routine_id: int
@@ -344,7 +244,7 @@ class RoutineAssignmentUpdate(BaseModel):
     """Esquema para ACTUALIZAR el estado activo/inactivo de una asignacion."""
     is_active: Optional[bool] = None
 
-# CRITICO: Esquema para LEER las asignaciones (Alumno)
+# CRITICO: Esquema para LEER las asignaciones
 class RoutineAssignmentRead(BaseModel):
     """Esquema para LEER las asignaciones (Alumno)."""
     id: int
@@ -354,15 +254,35 @@ class RoutineAssignmentRead(BaseModel):
     assigned_at: datetime
     is_active: bool
     
-    # CRITICO: Incluir la rutina completa, serializada con el esquema RoutineRead (con ejercicios y grupo)
+    # CRITICO: Incluir la rutina completa, serializada con el esquema RoutineRead
     routine: RoutineRead 
     
-    # El alumno que la recibe y el profesor que la asigno
-    student: UserReadSimple 
-    professor: UserReadSimple 
-    
-    class Config: 
+    # CRITICO: Incluir los datos de Usuario simples (sin password hash)
+    student: UserReadSimple
+    professor: UserReadSimple
+
+    class Config:
         from_attributes = True
 
-# Necesario para que la relacion recursiva funcione en RoutineGroupCreateAndRoutines
-RoutineGroupCreateAndRoutines.model_rebuild()
+# --- Tabla de Enlace de Asignacion ---
+class RoutineAssignment(SQLModel, table=True):
+    """Tabla de asignacion de Rutinas a Alumnos (relacion N:M)."""
+    __tablename__ = "ROUTINE_ASSIGNMENTS"
+    
+    id: Optional[int] = Field(default=None, primary_key=True)
+    routine_id: int = Field(foreign_key="ROUTINES.id")
+    student_id: int = Field(foreign_key="USERS.id")
+    professor_id: int = Field(foreign_key="USERS.id") # El profesor que hizo la asignacion
+    assigned_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), nullable=False)
+    is_active: bool = Field(default=True) # Solo una asignacion debe estar activa por alumno
+
+    # Relaciones
+    routine: Routine = Relationship(back_populates="assignments")
+    student: User = Relationship(back_populates="assigned_routines")
+    professor: User = Relationship(back_populates="created_assignments") # El profesor que asignó
+    
+# Necesario para que las referencias de tipo funcionen
+RoutineRead.model_rebuild()
+ExerciseLinkRead.model_rebuild()
+RoutineGroupRead.model_rebuild()
+RoutineAssignmentRead.model_rebuild()

@@ -18,6 +18,8 @@ from dotenv import load_dotenv
 
 # Importaciones de tu estructura y esquemas
 from database import create_db_and_tables, get_session
+# ?? NOTA IMPORTANTE: Se asume que los esquemas en 'models' (User, UserCreate, UserLogin, UserUpdateByProfessor) 
+# han sido modificados para ELIMINAR el campo 'dni'.
 from models import (
     User, UserCreate, UserRead, UserReadSimple, UserRole, UserLogin, Token,
     # Importaciones de EJERCICIOS
@@ -61,8 +63,8 @@ def create_access_token(data: dict, expires_delta: timedelta | None = None) -> s
     else:
         expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     
-    # Usamos 'dni' como 'sub' (subject) en el token
-    to_encode.update({"exp": expire, "sub": data["dni"]}) 
+    # ?? CAMBIO CRiTICO: Usamos 'email' como 'sub' (subject) en el token
+    to_encode.update({"exp": expire, "sub": data["email"]}) 
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
@@ -105,15 +107,16 @@ def get_current_user(
     )
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        # El DNI esta en el campo 'sub'
-        dni: str = payload.get("sub")
-        if dni is None:
+        # ?? CAMBIO CRiTICO: El identificador en el token ahora es el EMAIL
+        email: str = payload.get("sub")
+        if email is None:
             raise credentials_exception
     except JWTError:
         raise credentials_exception
     
-    # Buscar usuario por DNI
-    user = session.exec(select(User).where(User.dni == dni)).first()
+    # ?? CAMBIO CRiTICO: Buscar usuario por EMAIL
+    # Usamos func.lower para asegurar la busqueda sin distincion entre mayusculas y minusculas
+    user = session.exec(select(User).where(func.lower(User.email) == email.lower())).first()
     if user is None:
         raise credentials_exception
     
@@ -152,18 +155,12 @@ def register_student(
     user_data: UserCreate, # Se usa UserCreate, pero el rol se fuerza a Alumno
     session: Annotated[Session, Depends(get_session)]
 ):
-    """Permite el registro de nuevos usuarios con rol forzado a Alumno."""
+    """Permite el registro de nuevos usuarios con rol forzado a Alumno, usando Email/Password."""
     
-    # 1. Verificar si DNI ya existe
-    existing_dni = session.exec(select(User).where(User.dni == user_data.dni)).first()
-    if existing_dni:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="El DNI ya esta registrado."
-        )
+    # ?? ELIMINADA VALIDACIoN DE DNI. SOLO VALIDAMOS EMAIL.
     
-    # 2. Verificar si Email ya existe
-    existing_email = session.exec(select(User).where(User.email == user_data.email)).first()
+    # 1. Verificar si Email ya existe (usando func.lower para case-insensitivity)
+    existing_email = session.exec(select(User).where(func.lower(User.email) == user_data.email.lower())).first()
     if existing_email:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -174,7 +171,7 @@ def register_student(
     hashed_password = get_password_hash(user_data.password)
     new_user = User(
         email=user_data.email,
-        dni=user_data.dni, # Almacenar DNI
+        # ?? DNI ELIMINADO
         password_hash=hashed_password,
         nombre=user_data.nombre,
         rol=UserRole.STUDENT # Forzar rol a Alumno
@@ -189,18 +186,12 @@ def register_user(
     user_data: UserCreate,
     session: Annotated[Session, Depends(get_session)]
 ):
-    """Permite el registro de nuevos usuarios (Profesores o Alumnos)."""
+    """Permite el registro de nuevos usuarios (Profesores o Alumnos), usando Email/Password."""
     
-    # 1. Verificar si DNI ya existe
-    existing_dni = session.exec(select(User).where(User.dni == user_data.dni)).first()
-    if existing_dni:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="El DNI ya esta registrado."
-        )
+    # ?? ELIMINADA VALIDACIoN DE DNI. SOLO VALIDAMOS EMAIL.
         
-    # 2. Verificar si Email ya existe
-    existing_user = session.exec(select(User).where(User.email == user_data.email)).first()
+    # 1. Verificar si Email ya existe
+    existing_user = session.exec(select(User).where(func.lower(User.email) == user_data.email.lower())).first()
     if existing_user:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -211,7 +202,7 @@ def register_user(
     hashed_password = get_password_hash(user_data.password)
     new_user = User(
         email=user_data.email,
-        dni=user_data.dni, # Almacenar DNI
+        # ?? DNI ELIMINADO
         password_hash=hashed_password,
         nombre=user_data.nombre,
         rol=user_data.rol
@@ -223,29 +214,29 @@ def register_user(
 
 @app.post("/login", response_model=Token, tags=["Autenticacion"])
 def login_for_access_token(
-    form_data: UserLogin, # form_data tiene .dni y .password
+    # ?? form_data ahora se asume que contiene .email y .password
+    form_data: UserLogin, 
     session: Annotated[Session, Depends(get_session)]
 ):
-    """Verifica credenciales (Email/DNI y Password) y devuelve un JWT para la sesion."""
+    """Verifica credenciales (Email y Password) y devuelve un JWT para la sesion."""
     
-    # Busqueda por EMAIL (asumiendo que el campo 'dni' en el payload del frontend es el Email)
-    user = session.exec(select(User).where(User.email == form_data.dni)).first()
-    
-    # Si la busqueda por email falla, intentar por DNI (fallback)
-    if not user:
-        user = session.exec(select(User).where(User.dni == form_data.dni)).first()
+    # ?? CAMBIO CRiTICO: Buscar SOLAMENTE por EMAIL, usando form_data.email
+    # Asumimos que el esquema UserLogin ahora expone el campo 'email'. 
+    # Usamos form_data.dni si el esquema antiguo NO se pudo modificar. Aqui usamos 'email' por consistencia.
+    # Usamos func.lower para asegurar la busqueda sin distincion entre mayusculas y minusculas
+    user = session.exec(select(User).where(func.lower(User.email) == form_data.email.lower())).first() 
     
     if not user or not verify_password(form_data.password, user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="DNI o contrasena incorrectos",
+            detail="Email o contrasena incorrectos",
             headers={"WWW-Authenticate": "Bearer"},
         )
     
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    # CORRECCION CLAVE: Incluimos el nombre del usuario en el token.
+    # ?? CRiTICO: Usamos el EMAIL como el "sub" (subject) del token
     access_token = create_access_token(
-        data={"dni": user.dni, "rol": user.rol.value, "nombre": user.nombre}, 
+        data={"email": user.email, "rol": user.rol.value, "nombre": user.nombre}, 
         expires_delta=access_token_expires
     )
     return {"access_token": access_token, "token_type": "bearer"}
@@ -312,11 +303,11 @@ def read_students_list(
 @app.patch("/users/student/{student_id}", response_model=UserRead, tags=["Usuarios"])
 def update_student_data(
     student_id: int,
-    user_data: UserUpdateByProfessor, # Usamos el esquema importado
+    user_data: UserUpdateByProfessor, # Se asume que este esquema NO contiene DNI
     session: Annotated[Session, Depends(get_session)],
     current_professor: Annotated[User, Depends(get_current_professor)]
 ):
-    """(Profesor) Permite actualizar el nombre, email o DNI de un alumno especifico."""
+    """(Profesor) Permite actualizar el nombre o email de un alumno especifico."""
     
     # 1. Buscar al alumno
     student_to_update = session.get(User, student_id)
@@ -329,16 +320,13 @@ def update_student_data(
     
     # 3. Aplicar los cambios al objeto de la DB
     for key, value in update_data.items():
-        # Validar si el DNI o Email ya existen en OTRO usuario
+        # Validar si el Email ya existe en OTRO usuario
         if key == 'email' and value is not None and value.lower() != student_to_update.email.lower():
             existing_user = session.exec(select(User).where(func.lower(User.email) == value.lower())).first()
             if existing_user and existing_user.id != student_to_update.id: # Aseguramos que no sea el mismo
                 raise HTTPException(status_code=400, detail="El nuevo email ya esta en uso por otro usuario.")
         
-        if key == 'dni' and value is not None and value != student_to_update.dni:
-            existing_user = session.exec(select(User).where(User.dni == value)).first()
-            if existing_user and existing_user.id != student_to_update.id: # Aseguramos que no sea el mismo
-                raise HTTPException(status_code=400, detail="El nuevo DNI ya esta en uso por otro usuario.")
+        # ?? ELIMINADA VALIDACIoN DE DNI
                 
         setattr(student_to_update, key, value)
         
@@ -1040,7 +1028,7 @@ def get_my_active_routine(
         )
         .order_by(desc(RoutineAssignment.assigned_at)) 
         .options(
-            # FIX LoGICO: Cargar la Rutina y su Grupo (CRiTICO) 
+            # FIX LOGICO: Cargar la Rutina y su Grupo (CRiTICO) 
             selectinload(RoutineAssignment.routine)
                 .selectinload(Routine.routine_group),
             selectinload(RoutineAssignment.routine)
