@@ -41,7 +41,7 @@ class RoutineExercise(SQLModel, table=True):
     # Campos adicionales de la relación
     sets: int
     repetitions: int
-    peso: float # Nuevo campo para el peso
+    peso: float # Tipo FLOAT (Debería mapear a un NUMERIC/REAL estándar de PG)
     order: int # Para ordenar los ejercicios en la rutina
 
     # Relaciones Muchos-a-Uno
@@ -67,11 +67,11 @@ class User(UserBase, table=True):
     password_hash: str # Solo para el hash de la contraseña (se mantiene)
     
     # Relaciones (Se mantienen)
-    # 🚨 SOLUCIÓN AL InvalidRequestError: Especificar las foreign_keys
     
     # Relación 1: Rutinas ASIGNADAS A ESTE USUARIO (donde este User es el Student)
     assigned_routines: List["RoutineAssignment"] = Relationship(
         back_populates="student",
+        # 🚨 CORRECCIÓN: Usamos solo el nombre de la columna para la clave foránea.
         sa_relationship_kwargs={"foreign_keys": "RoutineAssignment.student_id"} 
     ) 
     
@@ -81,6 +81,7 @@ class User(UserBase, table=True):
     # Relación 3: ASIGNACIONES CREADAS POR ESTE USUARIO (donde este User es el Professor que asigna)
     created_assignments: List["RoutineAssignment"] = Relationship(
         back_populates="professor",
+        # 🚨 CORRECCIÓN: Usamos solo el nombre de la columna para la clave foránea.
         sa_relationship_kwargs={"foreign_keys": "RoutineAssignment.professor_id"}
     )
     
@@ -321,13 +322,13 @@ class RoutineAssignment(SQLModel, table=True):
     routine: Routine = Relationship(back_populates="assignments")
     student: User = Relationship(
         back_populates="assigned_routines",
-        # Aquí también es bueno especificar la relación para evitar ambigüedad futura
-        sa_relationship_kwargs={"foreign_keys": "[RoutineAssignment.student_id]"}
+        # SOLUCIÓN: Especificamos que esta relación usa el campo student_id
+        sa_relationship_kwargs={"foreign_keys": "RoutineAssignment.student_id"}
     )
     professor: User = Relationship(
         back_populates="created_assignments",
-        # Especificamos la relación para el profesor
-        sa_relationship_kwargs={"foreign_keys": "[RoutineAssignment.professor_id]"}
+        # SOLUCIÓN: Especificamos que esta relación usa el campo professor_id
+        sa_relationship_kwargs={"foreign_keys": "RoutineAssignment.professor_id"}
     )
     
 # Necesario para que las referencias de tipo funcionen
