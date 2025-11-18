@@ -10,7 +10,7 @@ from sqlmodel import Session, select
 from sqlalchemy.orm import selectinload 
 from sqlalchemy import desc 
 from sqlalchemy import func # NECESARIO para usar func.lower() en validacion de email
-from sqlalchemy import delete # <--- ¡IMPORTACIÓN CRÍTICA AÑADIDA!
+from sqlalchemy import delete # <--- ¡IMPORTACIoN CRiTICA AnADIDA!
 
 from passlib.context import CryptContext
 from jose import JWTError, jwt
@@ -18,22 +18,21 @@ from dotenv import load_dotenv
 
 # Importaciones de tu estructura y esquemas
 from database import create_db_and_tables, get_session
-# ?? CORRECCIÓN DEFINITIVA: Se agregó RoutineExercise y se eliminó RoutineUpdate.
 from models import (
     User, UserCreate, UserRead, UserReadSimple, UserRole, UserLogin, Token,
     # Importaciones de EJERCICIOS
     Exercise, ExerciseCreate, ExerciseRead, ExerciseUpdate, MuscleGroup,
-    # Importaciones de RUTINAS (sin RoutineUpdate)
-    Routine, RoutineCreate, RoutineRead, RoutineCreateOrUpdate, 
-    RoutineExercise, # <--- ¡AÑADIDO PARA SOLUCIONAR EL ImportError!
-    RoutineAssignment, 
-    RoutineAssignmentCreate, RoutineAssignmentRead, RoutineAssignmentUpdate, 
-    # Esquemas Generales
+    Routine, RoutineCreate, RoutineRead, RoutineUpdate,
+    RoutineExercise, RoutineAssignment, 
+    RoutineAssignmentCreate, RoutineAssignmentRead,
+    # Esquemas necesarios
+    RoutineAssignmentUpdate, 
     ChangePassword,
-    # Importaciones de Grupo y Transaccional
+    RoutineCreateOrUpdate, 
+    # CRITICO: Importaciones de Grupo y Transaccional
     RoutineGroup, RoutineGroupCreate, RoutineGroupRead, RoutineGroupCreateAndRoutines,
     UserUpdateByProfessor,
-    RoutineCreateForTransactional
+    RoutineCreateForTransactional # Nuevo esquema para usar en la transaccion
 )
 
 
@@ -62,8 +61,8 @@ def create_access_token(data: dict, expires_delta: timedelta | None = None) -> s
     else:
         expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     
-    # ?? CAMBIO CRÍTICO: Usamos 'email' como 'sub' (subject) en el token
-    to_encode.update({"exp": expire, "sub": data["email"]}) 
+    # Usamos 'dni' como 'sub' (subject) en el token
+    to_encode.update({"exp": expire, "sub": data["dni"]}) 
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
@@ -106,16 +105,15 @@ def get_current_user(
     )
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        # ?? CAMBIO CRÍTICO: El identificador en el token ahora es el EMAIL
-        email: str = payload.get("sub")
-        if email is None:
+        # El DNI esta en el campo 'sub'
+        dni: str = payload.get("sub")
+        if dni is None:
             raise credentials_exception
     except JWTError:
         raise credentials_exception
     
-    # ?? CAMBIO CRÍTICO: Buscar usuario por EMAIL
-    # Usamos func.lower para asegurar la búsqueda sin distinción entre mayúsculas y minúsculas
-    user = session.exec(select(User).where(func.lower(User.email) == email.lower())).first()
+    # Buscar usuario por DNI
+    user = session.exec(select(User).where(User.dni == dni)).first()
     if user is None:
         raise credentials_exception
     
@@ -154,12 +152,18 @@ def register_student(
     user_data: UserCreate, # Se usa UserCreate, pero el rol se fuerza a Alumno
     session: Annotated[Session, Depends(get_session)]
 ):
-    """Permite el registro de nuevos usuarios con rol forzado a Alumno, usando Email/Password."""
+    """Permite el registro de nuevos usuarios con rol forzado a Alumno."""
     
-    # ?? ELIMINADA VALIDACIÓN DE DNI. SOLO VALIDAMOS EMAIL.
+    # 1. Verificar si DNI ya existe
+    existing_dni = session.exec(select(User).where(User.dni == user_data.dni)).first()
+    if existing_dni:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="El DNI ya esta registrado."
+        )
     
-    # 1. Verificar si Email ya existe (usando func.lower para case-insensitivity)
-    existing_email = session.exec(select(User).where(func.lower(User.email) == user_data.email.lower())).first()
+    # 2. Verificar si Email ya existe
+    existing_email = session.exec(select(User).where(User.email == user_data.email)).first()
     if existing_email:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -170,7 +174,7 @@ def register_student(
     hashed_password = get_password_hash(user_data.password)
     new_user = User(
         email=user_data.email,
-        # ?? DNI ELIMINADO
+        dni=user_data.dni, # Almacenar DNI
         password_hash=hashed_password,
         nombre=user_data.nombre,
         rol=UserRole.STUDENT # Forzar rol a Alumno
@@ -185,12 +189,18 @@ def register_user(
     user_data: UserCreate,
     session: Annotated[Session, Depends(get_session)]
 ):
-    """Permite el registro de nuevos usuarios (Profesores o Alumnos), usando Email/Password."""
+    """Permite el registro de nuevos usuarios (Profesores o Alumnos)."""
     
-    # ?? ELIMINADA VALIDACIÓN DE DNI. SOLO VALIDAMOS EMAIL.
+    # 1. Verificar si DNI ya existe
+    existing_dni = session.exec(select(User).where(User.dni == user_data.dni)).first()
+    if existing_dni:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="El DNI ya esta registrado."
+        )
         
-    # 1. Verificar si Email ya existe
-    existing_user = session.exec(select(User).where(func.lower(User.email) == user_data.email.lower())).first()
+    # 2. Verificar si Email ya existe
+    existing_user = session.exec(select(User).where(User.email == user_data.email)).first()
     if existing_user:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -201,7 +211,7 @@ def register_user(
     hashed_password = get_password_hash(user_data.password)
     new_user = User(
         email=user_data.email,
-        # ?? DNI ELIMINADO
+        dni=user_data.dni, # Almacenar DNI
         password_hash=hashed_password,
         nombre=user_data.nombre,
         rol=user_data.rol
@@ -213,27 +223,29 @@ def register_user(
 
 @app.post("/login", response_model=Token, tags=["Autenticacion"])
 def login_for_access_token(
-    # ?? form_data ahora se asume que contiene .email y .password
-    form_data: UserLogin, 
+    form_data: UserLogin, # form_data tiene .dni y .password
     session: Annotated[Session, Depends(get_session)]
 ):
-    """Verifica credenciales (Email y Password) y devuelve un JWT para la sesion."""
+    """Verifica credenciales (Email/DNI y Password) y devuelve un JWT para la sesion."""
     
-    # ?? CAMBIO CRÍTICO: Buscar SOLAMENTE por EMAIL, usando form_data.email
-    # Usamos func.lower para asegurar la búsqueda sin distinción entre mayúsculas y minúsculas
-    user = session.exec(select(User).where(func.lower(User.email) == form_data.email.lower())).first() 
+    # Busqueda por EMAIL (asumiendo que el campo 'dni' en el payload del frontend es el Email)
+    user = session.exec(select(User).where(User.email == form_data.dni)).first()
+    
+    # Si la busqueda por email falla, intentar por DNI (fallback)
+    if not user:
+        user = session.exec(select(User).where(User.dni == form_data.dni)).first()
     
     if not user or not verify_password(form_data.password, user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Email o contrasena incorrectos",
+            detail="DNI o contrasena incorrectos",
             headers={"WWW-Authenticate": "Bearer"},
         )
     
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    # ?? CRÍTICO: Usamos el EMAIL como el "sub" (subject) del token
+    # CORRECCION CLAVE: Incluimos el nombre del usuario en el token.
     access_token = create_access_token(
-        data={"email": user.email, "rol": user.rol.value, "nombre": user.nombre}, 
+        data={"dni": user.dni, "rol": user.rol.value, "nombre": user.nombre}, 
         expires_delta=access_token_expires
     )
     return {"access_token": access_token, "token_type": "bearer"}
@@ -249,7 +261,7 @@ def read_users_me(
     """Obtiene la informacion del usuario actualmente autenticado."""
     return current_user
 
-# RUTA: CAMBIO DE CONTRASEÑA
+# RUTA: CAMBIO DE CONTRASEnA
 @app.post("/users/change-password", tags=["Usuarios"])
 def change_password(
     password_data: ChangePassword, # Usamos el nuevo esquema ChangePassword
@@ -300,11 +312,11 @@ def read_students_list(
 @app.patch("/users/student/{student_id}", response_model=UserRead, tags=["Usuarios"])
 def update_student_data(
     student_id: int,
-    user_data: UserUpdateByProfessor, # Se asume que este esquema NO contiene DNI
+    user_data: UserUpdateByProfessor, # Usamos el esquema importado
     session: Annotated[Session, Depends(get_session)],
     current_professor: Annotated[User, Depends(get_current_professor)]
 ):
-    """(Profesor) Permite actualizar el nombre o email de un alumno especifico."""
+    """(Profesor) Permite actualizar el nombre, email o DNI de un alumno especifico."""
     
     # 1. Buscar al alumno
     student_to_update = session.get(User, student_id)
@@ -317,13 +329,16 @@ def update_student_data(
     
     # 3. Aplicar los cambios al objeto de la DB
     for key, value in update_data.items():
-        # Validar si el Email ya existe en OTRO usuario
+        # Validar si el DNI o Email ya existen en OTRO usuario
         if key == 'email' and value is not None and value.lower() != student_to_update.email.lower():
             existing_user = session.exec(select(User).where(func.lower(User.email) == value.lower())).first()
             if existing_user and existing_user.id != student_to_update.id: # Aseguramos que no sea el mismo
                 raise HTTPException(status_code=400, detail="El nuevo email ya esta en uso por otro usuario.")
         
-        # ?? ELIMINADA VALIDACIÓN DE DNI
+        if key == 'dni' and value is not None and value != student_to_update.dni:
+            existing_user = session.exec(select(User).where(User.dni == value)).first()
+            if existing_user and existing_user.id != student_to_update.id: # Aseguramos que no sea el mismo
+                raise HTTPException(status_code=400, detail="El nuevo DNI ya esta en uso por otro usuario.")
                 
         setattr(student_to_update, key, value)
         
@@ -486,7 +501,7 @@ def create_routine_group_and_routines(
                     exercise_id=exercise.id,
                     sets=exercise_link_data.sets,
                     repetitions=exercise_link_data.repetitions,
-                    peso=exercise_link_data.peso,
+                    peso=exercise_link_data.peso, 
                     order=index + 1 # Usar el indice para el orden, asegurando que sea un entero
                 )
                 session.add(link)
@@ -779,7 +794,7 @@ def update_routine_full(
     db_routine.descripcion = routine_data.descripcion
     
     # 2. Eliminar todos los enlaces de ejercicios existentes para reemplazarlos
-    # CORRECCIÓN CLAVE: Usamos la funcion delete() de SQLAlchemy
+    # CORRECCIoN CLAVE: Usamos la funcion delete() de SQLAlchemy
     session.exec(delete(RoutineExercise).where(RoutineExercise.routine_id == routine_id))
     
     # 3. Crear los nuevos enlaces
@@ -844,7 +859,7 @@ def delete_routine(
         raise HTTPException(status_code=403, detail="No autorizado para eliminar esta rutina")
 
     # Eliminamos enlaces y asignaciones antes de eliminar la rutina (CRITICO para evitar errores de Foreign Key)
-    # CORRECCIÓN: Usamos la funcion delete() de SQLAlchemy
+    # CORRECCIoN: Usamos la funcion delete() de SQLAlchemy
     session.exec(delete(RoutineExercise).where(RoutineExercise.routine_id == routine_id))
     session.exec(delete(RoutineAssignment).where(RoutineAssignment.routine_id == routine_id))
         
@@ -973,9 +988,10 @@ def get_assignments_for_student_by_professor(
 
             # Para garantizar que siempre tengamos un ID de asignacion real o pseudo-ID.
             assignment_id_to_use = real_assignment.id if real_assignment else active_anchor_assignment.id
-            is_active_status = real_assignment.is_active if real_assignment else True
-
-            # Creamos un objeto RoutineAssignmentRead para cada rutina en el grupo
+            
+            # Construimos el objeto de respuesta, asegurando que todos los campos del Assignment Read Model esten presentes.
+            # CRITICO: Usamos el assigned_at del ancla si la asignacion real no existe, pero marcamos 'is_active' siempre como True 
+            # para que el frontend sepa que es la rutina que esta en curso.
             pseudo_assignment_data = RoutineAssignmentRead(
                 id=assignment_id_to_use, 
                 routine_id=routine.id,
@@ -1024,7 +1040,7 @@ def get_my_active_routine(
         )
         .order_by(desc(RoutineAssignment.assigned_at)) 
         .options(
-            # FIX LOGICO: Cargar la Rutina y su Grupo (CRÍTICO) 
+            # FIX LoGICO: Cargar la Rutina y su Grupo (CRiTICO) 
             selectinload(RoutineAssignment.routine)
                 .selectinload(Routine.routine_group),
             selectinload(RoutineAssignment.routine)
