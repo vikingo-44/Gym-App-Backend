@@ -26,6 +26,29 @@ class MuscleGroup(str, Enum):
     CARDIO = "Cardio"
 
 # ----------------------------------------------------------------------
+# Modelos de Base de Datos (Tablas)
+# ----------------------------------------------------------------------
+
+# --- TABLA DE ENLACE (Rutina <-> Ejercicio) ---
+class RoutineExercise(SQLModel, table=True):
+    """Tabla de enlace Muchos-a-Muchos entre Rutinas y Ejercicios."""
+    __tablename__ = "ROUTINE_EXERCISES"
+    
+    # CRITICO: Claves primarias compuestas
+    routine_id: int = Field(foreign_key="ROUTINES.id", primary_key=True)
+    exercise_id: int = Field(foreign_key="EXERCISES.id", primary_key=True)
+    
+    # Campos adicionales de la relación
+    sets: int
+    repetitions: int
+    peso: float # Nuevo campo para el peso
+    order: int # Para ordenar los ejercicios en la rutina
+
+    # Relaciones Muchos-a-Uno
+    routine: "Routine" = Relationship(back_populates="exercise_links")
+    exercise: "Exercise" = Relationship(back_populates="routine_links")
+
+# ----------------------------------------------------------------------
 # Modelos de Usuario
 # ----------------------------------------------------------------------
 
@@ -164,8 +187,6 @@ class Routine(RoutineBase, table=True):
     # Relaciones
     owner: "User" = Relationship(back_populates="created_routines") # Profesor Creador
     # Relaciones Muchos-a-Muchos a través de RoutineExercise
-    # 🚨 CORRECCIÓN FINAL: Eliminamos 'order_by' para evitar el TypeError.
-    # La ordenación se manejará en las consultas de FastAPI (main.py) usando order_by.
     exercise_links: List["RoutineExercise"] = Relationship(
         back_populates="routine"
     ) 

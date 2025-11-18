@@ -18,24 +18,22 @@ from dotenv import load_dotenv
 
 # Importaciones de tu estructura y esquemas
 from database import create_db_and_tables, get_session
-# ?? NOTA IMPORTANTE: Se asume que los esquemas en 'models' (User, UserCreate, UserLogin, UserUpdateByProfessor) 
-# han sido modificados para ELIMINAR el campo 'dni'.
+# ?? CORRECCIÓN DEFINITIVA: Se agregó RoutineExercise y se eliminó RoutineUpdate.
 from models import (
     User, UserCreate, UserRead, UserReadSimple, UserRole, UserLogin, Token,
     # Importaciones de EJERCICIOS
     Exercise, ExerciseCreate, ExerciseRead, ExerciseUpdate, MuscleGroup,
-    Routine, RoutineCreate, RoutineRead, 
-    # ?? CORRECCIÓN FINAL: Eliminado RoutineUpdate
-    RoutineExercise, RoutineAssignment, 
-    RoutineAssignmentCreate, RoutineAssignmentRead,
-    # Esquemas necesarios
-    RoutineAssignmentUpdate, 
+    # Importaciones de RUTINAS (sin RoutineUpdate)
+    Routine, RoutineCreate, RoutineRead, RoutineCreateOrUpdate, 
+    RoutineExercise, # <--- ¡AÑADIDO PARA SOLUCIONAR EL ImportError!
+    RoutineAssignment, 
+    RoutineAssignmentCreate, RoutineAssignmentRead, RoutineAssignmentUpdate, 
+    # Esquemas Generales
     ChangePassword,
-    RoutineCreateOrUpdate, 
-    # CRITICO: Importaciones de Grupo y Transaccional
+    # Importaciones de Grupo y Transaccional
     RoutineGroup, RoutineGroupCreate, RoutineGroupRead, RoutineGroupCreateAndRoutines,
     UserUpdateByProfessor,
-    RoutineCreateForTransactional # Nuevo esquema para usar en la transaccion
+    RoutineCreateForTransactional
 )
 
 
@@ -975,10 +973,9 @@ def get_assignments_for_student_by_professor(
 
             # Para garantizar que siempre tengamos un ID de asignacion real o pseudo-ID.
             assignment_id_to_use = real_assignment.id if real_assignment else active_anchor_assignment.id
-            
-            # Construimos el objeto de respuesta, asegurando que todos los campos del Assignment Read Model esten presentes.
-            # CRITICO: Usamos el assigned_at del ancla si la asignacion real no existe, pero marcamos 'is_active' siempre como True 
-            # para que el frontend sepa que es la rutina que esta en curso.
+            is_active_status = real_assignment.is_active if real_assignment else True
+
+            # Creamos un objeto RoutineAssignmentRead para cada rutina en el grupo
             pseudo_assignment_data = RoutineAssignmentRead(
                 id=assignment_id_to_use, 
                 routine_id=routine.id,
