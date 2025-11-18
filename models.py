@@ -67,10 +67,25 @@ class User(UserBase, table=True):
     password_hash: str # Solo para el hash de la contraseña (se mantiene)
     
     # Relaciones (Se mantienen)
-    assigned_routines: List["RoutineAssignment"] = Relationship(back_populates="student") # Si es Alumno
-    created_routines: List["Routine"] = Relationship(back_populates="owner") # Si es Profesor
-    created_assignments: List["RoutineAssignment"] = Relationship(back_populates="professor") # Si es Profesor
-    created_routine_groups: List["RoutineGroup"] = Relationship(back_populates="professor") # Si es Profesor
+    # 🚨 SOLUCIÓN AL InvalidRequestError: Especificar las foreign_keys
+    
+    # Relación 1: Rutinas ASIGNADAS A ESTE USUARIO (donde este User es el Student)
+    assigned_routines: List["RoutineAssignment"] = Relationship(
+        back_populates="student",
+        sa_relationship_kwargs={"foreign_keys": "RoutineAssignment.student_id"} 
+    ) 
+    
+    # Relación 2: Rutinas CREADAS POR ESTE USUARIO (donde este User es el Professor/Owner)
+    created_routines: List["Routine"] = Relationship(back_populates="owner") 
+    
+    # Relación 3: ASIGNACIONES CREADAS POR ESTE USUARIO (donde este User es el Professor que asigna)
+    created_assignments: List["RoutineAssignment"] = Relationship(
+        back_populates="professor",
+        sa_relationship_kwargs={"foreign_keys": "RoutineAssignment.professor_id"}
+    )
+    
+    # Relación 4: Grupos CREADOS POR ESTE USUARIO (donde este User es el Professor)
+    created_routine_groups: List["RoutineGroup"] = Relationship(back_populates="professor")
     
 # Esquemas para interaccion con la API
 
@@ -295,6 +310,7 @@ class RoutineAssignment(SQLModel, table=True):
     __tablename__ = "ROUTINE_ASSIGNMENTS"
     
     id: Optional[int] = Field(default=None, primary_key=True)
+    # 🚨 CRÍTICO: Necesitamos las referencias de columna en el modelo para usarlas en la relación User
     routine_id: int = Field(foreign_key="ROUTINES.id")
     student_id: int = Field(foreign_key="USERS.id")
     professor_id: int = Field(foreign_key="USERS.id") # El profesor que hizo la asignacion
@@ -303,8 +319,16 @@ class RoutineAssignment(SQLModel, table=True):
 
     # Relaciones
     routine: Routine = Relationship(back_populates="assignments")
-    student: User = Relationship(back_populates="assigned_routines")
-    professor: User = Relationship(back_populates="created_assignments") # El profesor que asignó
+    student: User = Relationship(
+        back_populates="assigned_routines",
+        # Aquí también es bueno especificar la relación para evitar ambigüedad futura
+        sa_relationship_kwargs={"foreign_keys": "[RoutineAssignment.student_id]"}
+    )
+    professor: User = Relationship(
+        back_populates="created_assignments",
+        # Especificamos la relación para el profesor
+        sa_relationship_kwargs={"foreign_keys": "[RoutineAssignment.professor_id]"}
+    )
     
 # Necesario para que las referencias de tipo funcionen
 RoutineRead.model_rebuild()
