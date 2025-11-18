@@ -164,10 +164,10 @@ class Routine(RoutineBase, table=True):
     # Relaciones
     owner: "User" = Relationship(back_populates="created_routines") # Profesor Creador
     # Relaciones Muchos-a-Muchos a través de RoutineExercise
-    # 🚨 CORRECCIÓN DE ERROR: Eliminado 'sa_kwargs'
+    # 🚨 CORRECCIÓN FINAL: Eliminamos 'order_by' para evitar el TypeError.
+    # La ordenación se manejará en las consultas de FastAPI (main.py) usando order_by.
     exercise_links: List["RoutineExercise"] = Relationship(
-        back_populates="routine", 
-        order_by="RoutineExercise.order" # Usamos 'order_by' directamente
+        back_populates="routine"
     ) 
     # Relacion con el grupo
     routine_group: Optional["RoutineGroup"] = Relationship(back_populates="routines")
