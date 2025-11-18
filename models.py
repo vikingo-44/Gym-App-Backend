@@ -157,14 +157,18 @@ class RoutineCreateOrUpdate(RoutineBase):
     exercises: List[ExerciseLinkCreate]
     
 class Routine(RoutineBase, table=True):
-    """Modelo de Base de Datos para la Rutina."""
+    """Modelo de Base de Datos para el Rutina."""
     __tablename__ = "ROUTINES"
     id: Optional[int] = Field(default=None, primary_key=True)
     
     # Relaciones
     owner: "User" = Relationship(back_populates="created_routines") # Profesor Creador
     # Relaciones Muchos-a-Muchos a través de RoutineExercise
-    exercise_links: List["RoutineExercise"] = Relationship(back_populates="routine", sa_kwargs={"order_by": "RoutineExercise.order"}) 
+    # 🚨 CORRECCIÓN DE ERROR: Eliminado 'sa_kwargs'
+    exercise_links: List["RoutineExercise"] = Relationship(
+        back_populates="routine", 
+        order_by="RoutineExercise.order" # Usamos 'order_by' directamente
+    ) 
     # Relacion con el grupo
     routine_group: Optional["RoutineGroup"] = Relationship(back_populates="routines")
     # Relacion con asignaciones
