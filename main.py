@@ -10,7 +10,7 @@ from sqlmodel import Session, select
 from sqlalchemy.orm import selectinload 
 from sqlalchemy import desc 
 from sqlalchemy import func # NECESARIO para usar func.lower() en validacion de email
-from sqlalchemy import delete # <--- ¡IMPORTACIoN CRiTICA AnADIDA!
+from sqlalchemy import delete # <--- ¡IMPORTACIÓN CRÍTICA AÑADIDA!
 
 from passlib.context import CryptContext
 from jose import JWTError, jwt
@@ -24,7 +24,8 @@ from models import (
     User, UserCreate, UserRead, UserReadSimple, UserRole, UserLogin, Token,
     # Importaciones de EJERCICIOS
     Exercise, ExerciseCreate, ExerciseRead, ExerciseUpdate, MuscleGroup,
-    Routine, RoutineCreate, RoutineRead, RoutineUpdate,
+    Routine, RoutineCreate, RoutineRead, 
+    # ?? CORRECCIÓN FINAL: Eliminado RoutineUpdate
     RoutineExercise, RoutineAssignment, 
     RoutineAssignmentCreate, RoutineAssignmentRead,
     # Esquemas necesarios
@@ -63,7 +64,7 @@ def create_access_token(data: dict, expires_delta: timedelta | None = None) -> s
     else:
         expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     
-    # ?? CAMBIO CRiTICO: Usamos 'email' como 'sub' (subject) en el token
+    # ?? CAMBIO CRÍTICO: Usamos 'email' como 'sub' (subject) en el token
     to_encode.update({"exp": expire, "sub": data["email"]}) 
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
@@ -107,15 +108,15 @@ def get_current_user(
     )
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        # ?? CAMBIO CRiTICO: El identificador en el token ahora es el EMAIL
+        # ?? CAMBIO CRÍTICO: El identificador en el token ahora es el EMAIL
         email: str = payload.get("sub")
         if email is None:
             raise credentials_exception
     except JWTError:
         raise credentials_exception
     
-    # ?? CAMBIO CRiTICO: Buscar usuario por EMAIL
-    # Usamos func.lower para asegurar la busqueda sin distincion entre mayusculas y minusculas
+    # ?? CAMBIO CRÍTICO: Buscar usuario por EMAIL
+    # Usamos func.lower para asegurar la búsqueda sin distinción entre mayúsculas y minúsculas
     user = session.exec(select(User).where(func.lower(User.email) == email.lower())).first()
     if user is None:
         raise credentials_exception
@@ -157,7 +158,7 @@ def register_student(
 ):
     """Permite el registro de nuevos usuarios con rol forzado a Alumno, usando Email/Password."""
     
-    # ?? ELIMINADA VALIDACIoN DE DNI. SOLO VALIDAMOS EMAIL.
+    # ?? ELIMINADA VALIDACIÓN DE DNI. SOLO VALIDAMOS EMAIL.
     
     # 1. Verificar si Email ya existe (usando func.lower para case-insensitivity)
     existing_email = session.exec(select(User).where(func.lower(User.email) == user_data.email.lower())).first()
@@ -188,7 +189,7 @@ def register_user(
 ):
     """Permite el registro de nuevos usuarios (Profesores o Alumnos), usando Email/Password."""
     
-    # ?? ELIMINADA VALIDACIoN DE DNI. SOLO VALIDAMOS EMAIL.
+    # ?? ELIMINADA VALIDACIÓN DE DNI. SOLO VALIDAMOS EMAIL.
         
     # 1. Verificar si Email ya existe
     existing_user = session.exec(select(User).where(func.lower(User.email) == user_data.email.lower())).first()
@@ -220,10 +221,8 @@ def login_for_access_token(
 ):
     """Verifica credenciales (Email y Password) y devuelve un JWT para la sesion."""
     
-    # ?? CAMBIO CRiTICO: Buscar SOLAMENTE por EMAIL, usando form_data.email
-    # Asumimos que el esquema UserLogin ahora expone el campo 'email'. 
-    # Usamos form_data.dni si el esquema antiguo NO se pudo modificar. Aqui usamos 'email' por consistencia.
-    # Usamos func.lower para asegurar la busqueda sin distincion entre mayusculas y minusculas
+    # ?? CAMBIO CRÍTICO: Buscar SOLAMENTE por EMAIL, usando form_data.email
+    # Usamos func.lower para asegurar la búsqueda sin distinción entre mayúsculas y minúsculas
     user = session.exec(select(User).where(func.lower(User.email) == form_data.email.lower())).first() 
     
     if not user or not verify_password(form_data.password, user.password_hash):
@@ -234,7 +233,7 @@ def login_for_access_token(
         )
     
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    # ?? CRiTICO: Usamos el EMAIL como el "sub" (subject) del token
+    # ?? CRÍTICO: Usamos el EMAIL como el "sub" (subject) del token
     access_token = create_access_token(
         data={"email": user.email, "rol": user.rol.value, "nombre": user.nombre}, 
         expires_delta=access_token_expires
@@ -252,7 +251,7 @@ def read_users_me(
     """Obtiene la informacion del usuario actualmente autenticado."""
     return current_user
 
-# RUTA: CAMBIO DE CONTRASEnA
+# RUTA: CAMBIO DE CONTRASEÑA
 @app.post("/users/change-password", tags=["Usuarios"])
 def change_password(
     password_data: ChangePassword, # Usamos el nuevo esquema ChangePassword
@@ -326,7 +325,7 @@ def update_student_data(
             if existing_user and existing_user.id != student_to_update.id: # Aseguramos que no sea el mismo
                 raise HTTPException(status_code=400, detail="El nuevo email ya esta en uso por otro usuario.")
         
-        # ?? ELIMINADA VALIDACIoN DE DNI
+        # ?? ELIMINADA VALIDACIÓN DE DNI
                 
         setattr(student_to_update, key, value)
         
@@ -489,7 +488,7 @@ def create_routine_group_and_routines(
                     exercise_id=exercise.id,
                     sets=exercise_link_data.sets,
                     repetitions=exercise_link_data.repetitions,
-                    peso=exercise_link_data.peso, 
+                    peso=exercise_link_data.peso,
                     order=index + 1 # Usar el indice para el orden, asegurando que sea un entero
                 )
                 session.add(link)
@@ -782,7 +781,7 @@ def update_routine_full(
     db_routine.descripcion = routine_data.descripcion
     
     # 2. Eliminar todos los enlaces de ejercicios existentes para reemplazarlos
-    # CORRECCIoN CLAVE: Usamos la funcion delete() de SQLAlchemy
+    # CORRECCIÓN CLAVE: Usamos la funcion delete() de SQLAlchemy
     session.exec(delete(RoutineExercise).where(RoutineExercise.routine_id == routine_id))
     
     # 3. Crear los nuevos enlaces
@@ -847,7 +846,7 @@ def delete_routine(
         raise HTTPException(status_code=403, detail="No autorizado para eliminar esta rutina")
 
     # Eliminamos enlaces y asignaciones antes de eliminar la rutina (CRITICO para evitar errores de Foreign Key)
-    # CORRECCIoN: Usamos la funcion delete() de SQLAlchemy
+    # CORRECCIÓN: Usamos la funcion delete() de SQLAlchemy
     session.exec(delete(RoutineExercise).where(RoutineExercise.routine_id == routine_id))
     session.exec(delete(RoutineAssignment).where(RoutineAssignment.routine_id == routine_id))
         
@@ -1028,7 +1027,7 @@ def get_my_active_routine(
         )
         .order_by(desc(RoutineAssignment.assigned_at)) 
         .options(
-            # FIX LOGICO: Cargar la Rutina y su Grupo (CRiTICO) 
+            # FIX LOGICO: Cargar la Rutina y su Grupo (CRÍTICO) 
             selectinload(RoutineAssignment.routine)
                 .selectinload(Routine.routine_group),
             selectinload(RoutineAssignment.routine)
