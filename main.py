@@ -147,7 +147,7 @@ def read_root():
     return {"message": "API del Gestor de Rutinas de Gimnasio activa."}
 
 # NUEVA RUTA: Registro solo de Alumnos
-@app.post("/register/student", response_model=UserRead, status_code=status.HTTP_201_CREATED, tags=["Autenticacion"])
+@app.post("/register/student", response_model=List[UserRead], status_code=status.HTTP_201_CREATED, tags=["Autenticacion"])
 def register_student(
     user_data: UserCreate, # Se usa UserCreate, pero el rol se fuerza a Alumno
     session: Annotated[Session, Depends(get_session)]
