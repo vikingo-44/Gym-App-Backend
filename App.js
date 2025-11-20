@@ -2,7 +2,7 @@ import React, { useState, useEffect, createContext, useContext, useMemo } from '
 import { 
     StyleSheet, Text, View, ActivityIndicator, 
     SafeAreaView, ScrollView, StatusBar, TouchableOpacity, Modal, 
-    useColorScheme, // ?? IMPORTACI®ÆN CLAVE: Para detectar el modo del sistema
+    useColorScheme, // Importaci√≥n clave: Para detectar el modo del sistema
     Button
 } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
@@ -16,19 +16,25 @@ import CustomLoginScreen from './screens/CustomLoginScreen';
 import RoutineCreationScreen from './screens/RoutineCreationScreen';
 import ChangePasswordScreen from './screens/ChangePasswordScreen'; 
 import StudentDetailsScreen from './screens/StudentDetailsScreen';
-// ?? PANTALLAS DE PROFESOR
-import AddStudentScreen from './screens/AddStudentScreen'; // <--- ?NUEVA IMPORTACI®ÆN!
-// ?? PANTALLAS DE ALUMNO
+// Rutas de Profesor
+import AddStudentScreen from './screens/AddStudentScreen'; 
+import ExercisesAdd from './screens/ExercisesAdd';
+import RoutineEditScreen from './screens/RoutineEditScreen'; 
+// Rutas de Alumno
 import StudentRoutineScreen from './screens/StudentRoutineScreen'; 
-// ?? IMPORTACI®ÆN CLAVE: Importamos el ThemeProvider y el hook 
+// Importaci√≥n clave: Importamos el ThemeProvider y el hook 
 import { ThemeProvider, useTheme } from './ThemeContext'; 
 
+// üö® NUEVA IMPORTACI√ìN: Pantalla de recuperaci√≥n de contrase√±a
+import ForgotPasswordScreen from './screens/ForgotPasswordScreen'; 
+
+
 // ----------------------------------------------------------------------
-// Funci®Æn para decodificar el token y obtener el rol
+// Funci√≥n para decodificar el token y obtener el rol
 const decodeToken = (token) => {
     try {
         const decoded = jwtDecode(token);
-        // Si el token tiene el nombre, podemos devolverlo tambi®¶n para el contexto
+        // Si el token tiene el nombre, podemos devolverlo tambi√©n para el contexto
         return { rol: decoded.rol, nombre: decoded.nombre };
     } catch (e) {
         console.error("Error decodificando token:", e);
@@ -36,17 +42,17 @@ const decodeToken = (token) => {
     }
 }
 // ----------------------------------------------------------------------
-// URL p®≤blica del backend
+// URL p√∫blica del backend
 // ----------------------------------------------------------------------
 const API_URL = "https://gym-app-backend-e9bn.onrender.com"; 
 // ----------------------------------------------------------------------
 
-// 1. Creamos un Contexto de Autenticaci®Æn
+// 1. Creamos un Contexto de Autenticaci√≥n
 export const AuthContext = createContext();
 
 // --- PANTALLA DE LOGIN (Llama al componente personalizado) ---
 function LoginScreen() {
-    // El useTheme no es necesario aqu®™ si solo se usa en CustomLoginScreen
+    // El useTheme no es necesario aqu√≠ si solo se usa en CustomLoginScreen
     const { signIn } = useContext(AuthContext); 
     
     return (
@@ -127,23 +133,23 @@ export default function App() {
 
     if (isLoading) {
         return (
-            // Usamos colores din®¢micos para el cargador inicial
+            // Usamos colores din√°micos para el cargador inicial
             <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: backgroundColor }}>
                 <ActivityIndicator size="large" color={primaryColor} />
             </View>
         );
     }
 
-    // L®Ægica de navegaci®Æn basada en roles
+    // L√≥gica de navegaci√≥n basada en roles
     const initialRouteName = userToken == null ? "Login" : (userRole === "Profesor" ? "ProfessorPanel" : "StudentRoutine");
 
-    // El cerebro de la navegaci®Æn
+    // El cerebro de la navegaci√≥n
     return (
         <AuthContext.Provider value={authContext}>
             {/* ENVOLVEMOS EL NAVEGADOR CON EL CONTEXTO DE TEMA */}
             <ThemeProvider> 
                 <NavigationContainer>
-                    {/* Usamos colores din®¢micos para el header global */}
+                    {/* Usamos colores din√°micos para el header global */}
                     <Stack.Navigator screenOptions={{ 
                         headerShown: true, 
                         headerTintColor: primaryColor, // Color del texto y flecha
@@ -152,11 +158,19 @@ export default function App() {
                     }} 
                     initialRouteName={initialRouteName}>
                         {userToken == null ? (
-                            <Stack.Screen 
-                                name="Login" 
-                                component={LoginScreen} 
-                                options={{ title: 'Ingresar', headerShown: false }}
-                            />
+                            <>
+                                <Stack.Screen 
+                                    name="Login" 
+                                    component={LoginScreen} 
+                                    options={{ title: 'Ingresar', headerShown: false }}
+                                />
+                                {/* üö® RUTA AGREGADA: Olvidaste Contrase√±a */}
+                                <Stack.Screen 
+                                    name="ForgotPassword" 
+                                    component={ForgotPasswordScreen} 
+                                    options={{ title: 'Olvid√© mi Contrase√±a', headerShown: false }}
+                                />
+                            </>
                         ) : userRole === "Profesor" ? (
                             <>
                                 <Stack.Screen 
@@ -177,18 +191,28 @@ export default function App() {
                                 <Stack.Screen 
                                     name="ChangePassword" 
                                     component={ChangePasswordScreen} 
-                                    options={{ title: 'Cambiar Contrase?a' }}
+                                    options={{ title: 'Cambiar Contrase√±a' }}
                                 />
-                                {/* <--- ?NUEVA RUTA AGREGADA! ---> */}
                                 <Stack.Screen 
                                     name="AddStudent" 
                                     component={AddStudentScreen} 
                                     options={{ title: 'Registrar Alumno', headerShown: false }} // Usamos el header interno
                                 />
-                                
+                                <Stack.Screen 
+                                    name="ExercisesAdd" 
+                                    component={ExercisesAdd} 
+                                    options={{ title: 'A√±adir Ejercicio', headerShown: false }} // Usamos el header interno del componente
+                                />
+                                {/* <--- ¬°RUTA DE EDICI√ìN DE RUTINA A√ëADIDA! ---> */}
+                                <Stack.Screen 
+                                    name="RoutineEditScreen" 
+                                    component={RoutineEditScreen} 
+                                    // Esta pantalla probablemente usa los mismos par√°metros de creaci√≥n para editar
+                                    options={{ title: 'Editar Rutina', headerShown: false }} 
+                                />
                             </>
                         ) : (
-                            // Rutas del Alumno (CORREGIDO para usar el componente externo)
+                            // Rutas del Alumno
                             <>
                                 <Stack.Screen 
                                     name="StudentRoutine" 
@@ -198,7 +222,7 @@ export default function App() {
                                 <Stack.Screen 
                                     name="ChangePassword" 
                                     component={ChangePasswordScreen} 
-                                    options={{ title: 'Cambiar Contrase?a' }}
+                                    options={{ title: 'Cambiar Contrase√±a' }}
                                 />
                             </>
                         )}
@@ -210,6 +234,6 @@ export default function App() {
 }
 
 // ----------------------------------------------------------------------
-// Estilos vac®™os. La l®Ægica de estilo del alumno ahora est®¢ en StudentRoutineScreen.js
+// Estilos vac√≠os. La l√≥gica de estilo del alumno ahora est√° en StudentRoutineScreen.js
 // ----------------------------------------------------------------------
 const styles = StyleSheet.create({});
