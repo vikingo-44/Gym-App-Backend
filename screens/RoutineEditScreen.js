@@ -1,35 +1,35 @@
-import React, { useState, useEffect, useContext, useCallback } from 'react';
+import React, { useState, useEffect, useContext } from 'react';
 import { 
-    StyleSheet, Text, View, TextInput, Button, SafeAreaView, 
+    StyleSheet, Text, View, TextInput, SafeAreaView, 
     ScrollView, TouchableOpacity, Alert, KeyboardAvoidingView, Platform, ActivityIndicator
 } from 'react-native';
 import { useRoute } from '@react-navigation/native';
 import axios from 'axios';
 import { AuthContext } from '../App'; 
 import { useTheme } from '../ThemeContext'; 
-import { Save, XCircle, PlusCircle, Trash2, Search, Zap, Loader } from 'lucide-react-native';
+import { Save, XCircle, PlusCircle, Trash2, Zap, ArrowLeft } from 'lucide-react-native'; // Añadimos ArrowLeft por si acaso
 
 // ----------------------------------------------------------------------
-// API Configuration
+// API Configuration (Must match App.js)
 // ----------------------------------------------------------------------
 const API_URL = "https://gym-app-backend-e9bn.onrender.com"; 
 
 // ----------------------------------------------------------------------
-// Dynamic Exercise Styles Generator - ESTILO PEAKFIT
+// Dynamic Exercise Styles Generator
 // ----------------------------------------------------------------------
 const getExerciseStyles = (colors) => StyleSheet.create({
     card: {
-        backgroundColor: '#1C1C1E', // PEAKFIT Card Dark Gray
-        borderRadius: 10, 
+        backgroundColor: colors.card,
+        borderRadius: 12,
         padding: 15,
         marginBottom: 15,
         borderLeftWidth: 5,
-        borderLeftColor: '#3ABFBC', // PEAKFIT Accent Green
+        borderLeftColor: colors.primary,
         elevation: 4,
-        shadowColor: '#000',
+        shadowColor: colors.isDark ? '#000' : '#444',
         shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.8,
-        shadowRadius: 5,
+        shadowOpacity: colors.isDark ? 0.3 : 0.1,
+        shadowRadius: 3,
     },
     header: {
         flexDirection: 'row',
@@ -40,14 +40,14 @@ const getExerciseStyles = (colors) => StyleSheet.create({
     title: {
         fontSize: 16,
         fontWeight: '700',
-        color: 'white', // PEAKFIT Text White
-        opacity: 1, 
+        color: colors.textPrimary,
+        opacity: 0.7,
     },
     deleteButton: {
         padding: 5,
     },
     selectButton: {
-        backgroundColor: '#1C1C1E', // Base color dark gray 
+        backgroundColor: colors.highlight,
         borderRadius: 8,
         paddingHorizontal: 15,
         paddingVertical: 12,
@@ -55,11 +55,9 @@ const getExerciseStyles = (colors) => StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'flex-start',
-        borderWidth: 1,
-        borderColor: colors.divider, // Borde sutil
     },
     selectButtonText: {
-        color: 'white', // PEAKFIT Text White
+        color: colors.textPrimary, 
         fontSize: 17,
         fontWeight: '600',
         marginLeft: 10,
@@ -72,7 +70,7 @@ const getExerciseStyles = (colors) => StyleSheet.create({
     },
     compactLabel: {
         fontSize: 12,
-        color: '#A9A9A9', // PEAKFIT Secondary Text Gray
+        color: colors.textSecondary,
         marginBottom: 3,
         fontWeight: 'bold',
         textAlign: 'center',
@@ -84,13 +82,13 @@ const getExerciseStyles = (colors) => StyleSheet.create({
     },
     input: {
         height: 40,
-        backgroundColor: 'black', // PEAKFIT Darker Input
+        backgroundColor: colors.background,
         borderColor: colors.divider, 
         borderWidth: 1,
-        borderRadius: 8,
+        borderRadius: 6,
         paddingHorizontal: 5,
         fontSize: 14,
-        color: 'white', // PEAKFIT Text White
+        color: colors.textPrimary,
         textAlign: 'center',
         width: '100%',
     },
@@ -107,14 +105,10 @@ const ExerciseItem = ({ index, exercise, updateExercise, removeExercise, toggleS
         updateExercise(index, field, value);
     };
 
-    const placeholderColor = '#A9A9A9';
-
-    // Determina el color del botón de selección (verde si está seleccionado, rojo si no)
-    const buttonColor = exercise.exercise_id ? '#3ABFBC' : themeColors.danger;
-    
-    // Fondo más oscuro para el botón si está seleccionado, o usa el color de la tarjeta
-    const buttonBgColor = exercise.exercise_id ? '#1C1C1E' : '#1C1C1E'; 
-    // El indicador visual es el color del texto/icono, no el fondo.
+    const placeholderColor = themeColors.isDark ? themeColors.textSecondary : '#A0A0A0';
+    // Determina el color del botón de selección (rojo si no hay exercise_id)
+    const buttonColor = exercise.exercise_id ? themeColors.primary : themeColors.danger;
+    const buttonBgColor = exercise.exercise_id ? themeColors.highlight : (themeColors.isDark ? '#2D2D2D' : '#FEECEC');
 
 
     return (
@@ -133,11 +127,12 @@ const ExerciseItem = ({ index, exercise, updateExercise, removeExercise, toggleS
             <TouchableOpacity 
                 style={[
                     exerciseStyles.selectButton, 
-                    {backgroundColor: buttonBgColor}
+                    // Si no está seleccionado, forzamos un borde y fondo de advertencia.
+                    !exercise.exercise_id && {borderColor: themeColors.danger, backgroundColor: buttonBgColor},
                 ]} 
                 onPress={() => toggleSelector(index)} 
             >
-                {/* Icono usa el color determinado (verde/rojo) */}
+                {/* Usamos el color determinado */}
                 <Zap size={20} color={buttonColor} /> 
                 <Text 
                     style={[
@@ -198,30 +193,30 @@ const ExerciseItem = ({ index, exercise, updateExercise, removeExercise, toggleS
 };
 
 // ----------------------------------------------------------------------
-// Dynamic Screen Styles Generator - ESTILO PEAKFIT
+// Dynamic Screen Styles Generator
 // ----------------------------------------------------------------------
 const getStyles = (colors) => StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: 'black', // 🚨 PEAKFIT: Fondo Negro
+        backgroundColor: colors.background,
     },
     loadingContainer: {
         flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
-        backgroundColor: 'black', // 🚨 PEAKFIT: Fondo Negro
+        backgroundColor: colors.background,
     },
     content: {
         padding: 20,
-        paddingBottom: 100, 
+        paddingBottom: 100, // Space for FAB
     },
     subHeader: {
         flexDirection: 'row',
-        justifyContent: 'space-between', 
+        justifyContent: 'space-between',
         alignItems: 'center',
         paddingHorizontal: 20,
         paddingVertical: 10,
-        backgroundColor: 'black', // 🚨 PEAKFIT: Header Negro
+        backgroundColor: colors.card,
         borderBottomWidth: 1,
         borderBottomColor: colors.divider,
     },
@@ -230,47 +225,48 @@ const getStyles = (colors) => StyleSheet.create({
         alignItems: 'center',
         paddingVertical: 10,
         paddingHorizontal: 15,
-        borderRadius: 10, // Más redondeado
+        borderRadius: 8,
         justifyContent: 'center',
-        width: '48%',
+        width: '48%', 
     },
+    actionButtonText: {
+        color: colors.card,
+        fontWeight: 'bold',
+        marginLeft: 8,
+        fontSize: 14,
+    },
+    // Estilo para el botón de Agregar dentro del modal
     selectorActionButton: { 
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: '#3ABFBC', // 🚨 PEAKFIT: Verde Brillante
-        borderRadius: 10,
+        backgroundColor: colors.success, // Usamos success para el botón de adición
+        borderRadius: 8,
         paddingVertical: 10,
         marginHorizontal: 20,
         marginTop: 10,
         marginBottom: 15,
     },
-    actionButtonText: {
-        color: 'black', // 🚨 PEAKFIT: Texto Negro en botones de acción
-        fontWeight: 'bold',
-        marginLeft: 8,
-        fontSize: 14,
-    },
     cancelButton: {
-        backgroundColor: colors.danger, // Mantenemos el color de peligro
+        backgroundColor: colors.danger,
     },
     label: {
         fontSize: 16,
         fontWeight: '600',
-        color: 'white', // 🚨 PEAKFIT: Texto Blanco
+        color: colors.textPrimary,
         marginBottom: 5,
         marginTop: 15,
     },
     input: {
         height: 50,
-        backgroundColor: '#1C1C1E', // 🚨 PEAKFIT: Input Dark Gray
+        backgroundColor: colors.highlight, 
         borderColor: colors.divider,
         borderWidth: 1,
-        borderRadius: 10, // Más redondeado
+        borderRadius: 8,
         paddingHorizontal: 15,
         fontSize: 16,
         marginBottom: 15,
-        color: 'white', // 🚨 PEAKFIT: Texto Blanco
+        color: colors.textPrimary,
     },
     textArea: {
         height: 80,
@@ -280,7 +276,7 @@ const getStyles = (colors) => StyleSheet.create({
     sectionTitle: {
         fontSize: 20,
         fontWeight: 'bold',
-        color: 'white', // 🚨 PEAKFIT: Texto Blanco
+        color: colors.textPrimary,
         marginTop: 25,
         marginBottom: 15,
     },
@@ -288,26 +284,26 @@ const getStyles = (colors) => StyleSheet.create({
         position: 'absolute',
         bottom: 20,
         right: 20,
-        backgroundColor: '#3ABFBC', // 🚨 PEAKFIT: Verde Brillante
+        backgroundColor: colors.success,
         padding: 15,
-        borderRadius: 30,
+        borderRadius: 50,
         flexDirection: 'row',
         alignItems: 'center',
-        elevation: 8,
-        shadowColor: '#3ABFBC', // Sombra Verde
+        elevation: 6,
+        shadowColor: colors.success,
         shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.8,
-        shadowRadius: 5,
+        shadowOpacity: 0.3,
+        shadowRadius: 4,
     },
     floatingButtonText: {
-        color: 'black', // 🚨 PEAKFIT: Texto Negro
+        color: colors.card,
         fontWeight: 'bold',
         marginLeft: 8,
         fontSize: 16,
     },
     selectorContainer: {
         flex: 1,
-        backgroundColor: 'black', // 🚨 PEAKFIT: Fondo Negro
+        backgroundColor: colors.background,
         paddingTop: Platform.OS === 'android' ? 40 : 0, 
     },
     selectorHeader: {
@@ -317,27 +313,27 @@ const getStyles = (colors) => StyleSheet.create({
         padding: 15,
         borderBottomWidth: 1,
         borderBottomColor: colors.divider,
-        backgroundColor: 'black', // 🚨 PEAKFIT: Header Negro
+        backgroundColor: colors.card,
     },
     selectorTitle: {
         fontSize: 20,
         fontWeight: 'bold',
-        color: 'white', // 🚨 PEAKFIT: Texto Blanco
+        color: colors.textPrimary,
         flex: 1, 
         textAlign: 'center',
     },
     selectorSearchInput: {
         height: 45,
-        backgroundColor: '#1C1C1E', // 🚨 PEAKFIT: Input Dark Gray
+        backgroundColor: colors.highlight,
         borderColor: colors.divider,
         borderWidth: 1,
-        borderRadius: 10,
-        paddingHorizontal: 15,
+        borderRadius: 25,
+        paddingHorizontal: 20,
         marginHorizontal: 20,
         marginTop: 10,
         marginBottom: 15,
         fontSize: 16,
-        color: 'white', // 🚨 PEAKFIT: Texto Blanco
+        color: colors.textPrimary,
     },
     selectorList: {
         paddingHorizontal: 0, 
@@ -351,17 +347,16 @@ const getStyles = (colors) => StyleSheet.create({
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        backgroundColor: 'black', 
     },
     selectorItemName: {
         fontSize: 17,
         fontWeight: '600',
-        color: 'white', // 🚨 PEAKFIT: Texto Blanco
+        color: colors.textPrimary,
         flexShrink: 1, 
     },
     selectorItemGroup: {
         fontSize: 14,
-        color: '#A9A9A9', // 🚨 PEAKFIT: Secondary Text Gray
+        color: colors.textSecondary,
         marginLeft: 10,
     },
     closeSelectorButton: {
@@ -370,59 +365,37 @@ const getStyles = (colors) => StyleSheet.create({
     screenHeader: {
         flexDirection: 'row',
         alignItems: 'center',
-        justifyContent: 'center', 
+        justifyContent: 'center',
         paddingHorizontal: 20,
         paddingVertical: 10,
-        backgroundColor: 'black', // 🚨 PEAKFIT: Header Negro
+        backgroundColor: colors.card,
         borderBottomWidth: 1,
         borderBottomColor: colors.divider,
     },
     screenTitle: {
         fontSize: 18, 
         fontWeight: 'bold',
-        color: 'white', // 🚨 PEAKFIT: Texto Blanco
+        color: colors.textPrimary, 
         textAlign: 'center',
     },
-    addExerciseButtonText: {
-        color: 'black',
-        fontWeight: 'bold',
-        marginLeft: 8,
-        fontSize: 16,
-    }
 });
 
 // ----------------------------------------------------------------------
-// Main Routine Creation / Edition Screen
+// Main Routine EDIT Screen
 // ----------------------------------------------------------------------
-export default function RoutineCreationScreenV3({ navigation }) {
+export default function RoutineEditScreen({ navigation }) {
     
     const { colors: themeColors } = useTheme();
     const styles = getStyles(themeColors);
 
-    // Route parameters
+    // Route parameters: ONLY routineId is required here
     const route = useRoute();
-    const { studentId, studentName, routineId, routineMetadata } = route.params || {};
+    const { routineId } = route.params || {};
     
-    const isEditMode = !!routineId; 
+    // In this dedicated screen, isEditMode is ALWAYS TRUE
+    const isEditMode = true; 
     
-    // State for multi-day routine management
-    const totalDays = isEditMode ? 1 : (routineMetadata?.days || 1);
-    const baseName = isEditMode ? '' : (routineMetadata?.nombre || 'Nueva Rutina');
-
-    const [currentDay, setCurrentDay] = useState(1);
-    
-    // Stores data for all N routines
-    const [allRoutinesData, setAllRoutinesData] = useState(() => 
-        isEditMode ? [] : Array.from({ length: totalDays }, (_, i) => ({
-            day: i + 1,
-            name: `${baseName} - Día ${i + 1}`,
-            description: '', 
-            exercises: [],
-        }))
-    );
-
-    // Current routine data for UI
-    const currentRoutine = allRoutinesData[currentDay - 1] || { exercises: [], name: '', description: '' };
+    const [routine, setRoutine] = useState({ name: '', description: '', exercises: [] });
     
     // UI and data states
     const [availableExercises, setAvailableExercises] = useState([]); 
@@ -441,35 +414,29 @@ export default function RoutineCreationScreenV3({ navigation }) {
     // Helper Functions
     // ------------------------------------------------------------------
     
-    const setRoutineData = (field, value) => {
-        setAllRoutinesData(prev => {
-            const newRoutines = [...prev];
-            if (newRoutines[currentDay - 1]) {
-                newRoutines[currentDay - 1][field] = value;
-            }
-            return newRoutines;
-        });
+    const updateRoutineData = (field, value) => {
+        setRoutine(prev => ({ ...prev, [field]: value }));
     };
 
     const updateExercise = (index, field, value) => {
-        setAllRoutinesData(prev => {
-            const newRoutines = [...prev];
-            const currentExercises = [...(newRoutines[currentDay - 1]?.exercises || [])];
+        setRoutine(prev => {
+            const currentExercises = [...prev.exercises];
             
             if (currentExercises[index]) {
                 currentExercises[index] = { ...currentExercises[index], [field]: value };
             }
             
-            if (newRoutines[currentDay - 1]) {
-                // En modo edición (newRoutines.length es 1) o creación, esto siempre apunta al día correcto
-                newRoutines[currentDay - 1].exercises = currentExercises; 
-            }
-            return newRoutines;
+            return { ...prev, exercises: currentExercises };
         });
     };
     
-    // Función de carga de ejercicios (Ahora envuelta en useCallback)
-    const fetchExercises = useCallback(async () => {
+    const fetchData = async () => {
+        if (!routineId) {
+            setFetchError("Error: ID de rutina no proporcionado para edición.");
+            setIsLoading(false);
+            return;
+        }
+
         setIsLoading(true);
         setFetchError(null);
         try {
@@ -480,87 +447,52 @@ export default function RoutineCreationScreenV3({ navigation }) {
             const exercisesResponse = await axios.get(`${API_URL}/exercises/`, { headers });
             setAvailableExercises(exercisesResponse.data);
             
-            // 2. Load Routine Data if in Edit Mode (Solo se ejecuta si es modo edición y no se ha cargado)
-            if (isEditMode && routineId && allRoutinesData.length === 0) {
-                const routineResponse = await axios.get(`${API_URL}/routines/${routineId}`, { headers });
-                const routineData = routineResponse.data;
+            // 2. Load Routine Data 
+            const routineResponse = await axios.get(`${API_URL}/routines/${routineId}`, { headers });
+            const routineData = routineResponse.data;
 
-                const loadedExercises = routineData.exercise_links
-                    .sort((a, b) => a.order - b.order) 
-                    .map(link => ({
-                        exercise_id: link.exercise_id, 
-                        name: link.exercise?.nombre || 'Ejercicio Desconocido',
-                        // CORRECCIÓN PARA CARGA: Aseguramos que los valores sean string o cadena vacía, NO "null" literal.
-                        series: String(link.sets || ''), 
-                        repetitions: String(link.repetitions || ''), 
-                        peso: String(link.peso || ''), // Aseguramos que sea string
-                    }));
-                
-                // Aseguramos que solo haya un elemento en modo edición
-                setAllRoutinesData([{
-                    day: 1,
-                    name: routineData.nombre,
-                    // CORRECCIÓN: Si la descripción viene nula, la establecemos como cadena vacía.
-                    description: routineData.descripcion || '', 
-                    exercises: loadedExercises,
-                }]);
-                
-            } 
-
+            const loadedExercises = routineData.exercise_links
+                .sort((a, b) => a.order - b.order) 
+                .map(link => ({
+                    exercise_id: link.exercise_id, 
+                    name: link.exercise?.nombre || 'Ejercicio Desconocido',
+                    // CORRECCIÓN CLAVE: Aseguramos que los valores sean string o cadena vacía, NO "null" literal.
+                    series: String(link.sets || ''), 
+                    repetitions: String(link.repetitions || ''), 
+                    peso: link.peso || '', 
+                }));
+            
+            // Set single routine data
+            setRoutine({
+                name: routineData.nombre,
+                description: routineData.descripcion || '', // Handle null/undefined description
+                exercises: loadedExercises,
+            });
+            
         } catch (e) {
             console.error("Error loading data:", e.response ? e.response.data : e.message);
-            setFetchError(`Error de conexión al cargar datos. ${isEditMode ? 'Rutina no encontrada.' : ''}`); 
+            setFetchError(`Error de conexión al cargar datos. Rutina con ID ${routineId} no encontrada.`); 
         } finally {
             setIsLoading(false);
         }
-    }, [isEditMode, routineId, getToken, allRoutinesData.length]);
-
-
-    // ------------------------------------------------------------------
-    // Effectos y Handlers de Navegación
-    // ------------------------------------------------------------------
-
-    // 1. Carga inicial de datos y Configuración del encabezado
-    useEffect(() => {
-        fetchExercises();
-        
-        // CORRECCIÓN DE UNIFICACIÓN: Eliminamos el botón de regreso nativo
-        navigation.setOptions({ 
-            headerLeft: () => null, // Esto elimina la flecha de volver atrás
-            title: isEditMode ? `Editar: ${route.params?.routineMetadata?.nombre || 'Rutina'}` : `Creación: ${baseName}`,
-        });
-        
-    }, [routineId, fetchExercises]); 
-    
-    // 2. RECARGA al volver de ExercisesAdd.js (por el focus)
-    useEffect(() => {
-        const unsubscribe = navigation.addListener('focus', () => {
-             // Siempre recargamos los ejercicios al volver de cualquier otra pantalla para refrescar el catálogo
-             fetchExercises();
-        });
-
-        return unsubscribe;
-    }, [navigation, fetchExercises]);
-
-
-    // 3. NUEVO HANDLER: Navegar a la pantalla de adición de ejercicios
-    const handleNavigateToAddExercise = () => {
-        // Cerramos el selector si estuviera abierto y navegamos a la pantalla de adición
-        setIsExerciseSelectorOpen(false); 
-        // ¡Esta es la navegación que necesita la nueva pantalla en App.js!
-        navigation.navigate('ExercisesAdd'); 
     };
+
+    useEffect(() => {
+        fetchData();
+        // Remove native back button
+        navigation.setOptions({ headerLeft: () => null });
+    }, [routineId]); 
 
     // Exercise management
     const addExercise = () => {
-        const newExercises = [...currentRoutine.exercises, { 
+        const newExercises = [...routine.exercises, { 
             exercise_id: null, 
             name: '', 
             series: '', 
             repetitions: '', 
             peso: '', 
         }];
-        setRoutineData('exercises', newExercises);
+        updateRoutineData('exercises', newExercises);
     };
 
     const removeExercise = (index) => {
@@ -573,8 +505,8 @@ export default function RoutineCreationScreenV3({ navigation }) {
                     text: "Eliminar", 
                     style: "destructive", 
                     onPress: () => {
-                        const newExercises = currentRoutine.exercises.filter((_, i) => i !== index);
-                        setRoutineData('exercises', newExercises);
+                        const newExercises = routine.exercises.filter((_, i) => i !== index);
+                        updateRoutineData('exercises', newExercises);
                     }
                 }
             ]
@@ -585,12 +517,11 @@ export default function RoutineCreationScreenV3({ navigation }) {
     const toggleExerciseSelector = (index) => {
         setCurrentExerciseIndex(index);
         setIsExerciseSelectorOpen(true);
-        setSearchQuery(''); // Limpiamos la búsqueda al abrir
     };
     
     const handleSelectExercise = (exerciseId, exerciseName) => {
         if (currentExerciseIndex !== null) {
-            const isDuplicate = currentRoutine.exercises.some((ex, i) => i !== currentExerciseIndex && ex.exercise_id === exerciseId);
+            const isDuplicate = routine.exercises.some((ex, i) => i !== currentExerciseIndex && ex.exercise_id === exerciseId);
             if (isDuplicate) {
                 Alert.alert("Advertencia", "Este ejercicio ya está en la rutina. Puedes editar sus series/repeticiones."); 
             }
@@ -602,22 +533,28 @@ export default function RoutineCreationScreenV3({ navigation }) {
         setSearchQuery(''); 
         setCurrentExerciseIndex(null);
     };
+
+    // 🚨 NUEVO HANDLER: Navegar a la pantalla de adición de ejercicios
+    const handleNavigateToAddExercise = () => {
+        setIsExerciseSelectorOpen(false); 
+        navigation.navigate('ExercisesAdd'); 
+    };
     
     // ------------------------------------------------------------------
-    // Validation and Save Logic (VALIDACIÓN REFORZADA)
+    // Validation and Save Logic 
     // ------------------------------------------------------------------
     const validateCurrentRoutine = () => {
-        if (!currentRoutine.name.trim()) {
+        if (!routine.name.trim()) {
             Alert.alert("Error", `El nombre de la rutina no puede estar vacío.`); 
             return false;
         }
         
-        if (currentRoutine.exercises.length === 0) {
-            Alert.alert("Error", `La rutina "${currentRoutine.name}" debe tener al menos un ejercicio.`);
+        if (routine.exercises.length === 0) {
+            Alert.alert("Error", `La rutina "${routine.name}" debe tener al menos un ejercicio.`);
             return false;
         }
         
-        const invalidExercise = currentRoutine.exercises.find(ex => {
+        const invalidExercise = routine.exercises.find(ex => {
             // 1. Exercise must be selected
             if (!ex.exercise_id) return true;
             
@@ -625,7 +562,6 @@ export default function RoutineCreationScreenV3({ navigation }) {
             const seriesTrimmed = ex.series ? ex.series.trim() : '';
             const seriesNumber = parseInt(seriesTrimmed);
             
-            // Falla si es NaN (e.g., "a"), o si es <= 0, o si el string es vacío (seriesTrimmed.length === 0)
             if (isNaN(seriesNumber) || seriesNumber <= 0) return true;
 
             // 3. Repetitions validation: must be non-empty string
@@ -637,81 +573,12 @@ export default function RoutineCreationScreenV3({ navigation }) {
         });
 
         if (invalidExercise) {
-            Alert.alert("Error de Validación", `En "${currentRoutine.name}": Todos los ejercicios deben estar seleccionados y tener Series (entero positivo) y Repeticiones no vacías.`); 
+            Alert.alert("Error de Validación", `En "${routine.name}": Todos los ejercicios deben estar seleccionados y tener Series (entero positivo) y Repeticiones no vacías.`); 
             return false;
         }
         return true;
     };
     
-    const handleNextRoutineOrSaveAll = async () => {
-        if (!validateCurrentRoutine()) return;
-
-        if (currentDay < totalDays) {
-            setCurrentDay(currentDay + 1);
-            Alert.alert("Rutina Guardada Temporalmente", `¡Rutina "${currentRoutine.name}" completada! Editando el Día ${currentDay + 1}.`, [{ text: "OK" }]); 
-        } else {
-            // Este modo (transaccional) solo se usa en creación
-            await handleSaveTransaction();
-        }
-    };
-
-    const handleSaveTransaction = async () => {
-        if (isSaving) return;
-        setIsSaving(true);
-        
-        const expirationDate = routineMetadata?.expirationDate; // YYYY-MM-DD
-
-        const payload = {
-            nombre: baseName, 
-            descripcion: routineMetadata?.descripcion || null, 
-            fecha_vencimiento: expirationDate,
-            student_id: studentId,
-            days: totalDays, 
-            routines: allRoutinesData.map((routine, index) => ({
-                nombre: routine.name, 
-                // Aseguramos que la descripción sea string vacío si está vacía, no null (por si el backend lo requiere)
-                descripcion: routine.description.trim() || '', 
-                exercises: routine.exercises.map((ex, exIndex) => ({
-                    exercise_id: ex.exercise_id,
-                    sets: parseInt(ex.series.trim()), // Aseguramos el parseo (debe ser un entero)
-                    repetitions: ex.repetitions.trim(), // Aseguramos que sea string
-                    peso: ex.peso.trim() || 'N/A', 
-                    order: exIndex + 1
-                }))
-            }))
-        };
-
-        try {
-            const token = await getToken();
-            const headers = { 'Authorization': `Bearer ${token}` };
-
-            // Endpoint para la creación transaccional de Grupo y Rutinas
-            await axios.post(`${API_URL}/routines-group/create-transactional`, payload, { headers });
-            
-            Alert.alert(
-                "Éxito Total!", 
-                `Se creó la agrupación "${baseName}" con ${totalDays} rutinas y fue asignada a ${studentName}.`
-            );
-            
-            navigation.goBack(); 
-            
-        } catch (e) {
-            console.error("Error saving transaction (API):", e.response ? e.response.data : e.message);
-            
-            let errorMessage = "Fallo desconocido al guardar la transacción."; 
-            if (e.response && e.response.data && e.response.data.detail) {
-                if (Array.isArray(e.response.data.detail) || typeof e.response.data.detail === 'string') {
-                    errorMessage = `Error de FastAPI: ${JSON.stringify(e.response.data.detail)}`;
-                }
-            }
-            
-            Alert.alert("Error de Guardado", errorMessage);
-        } finally {
-            setIsSaving(false);
-        }
-    };
-
-
     const handleSaveSingleRoutine = async () => {
         if (!validateCurrentRoutine()) return;
 
@@ -720,26 +587,21 @@ export default function RoutineCreationScreenV3({ navigation }) {
             const token = await getToken();
             const headers = { 'Authorization': `Bearer ${token}` };
             
-            // En modo edición, solo hay una rutina en allRoutinesData[0]
-            const routineToSave = currentRoutine; 
-
             const routineData = {
-                nombre: routineToSave.name.trim(),
-                // CORRECCIÓN CLAVE: Si la descripción está vacía, enviamos "" en lugar de null
-                descripcion: routineToSave.description.trim() || '', 
-                exercises: routineToSave.exercises.map((ex, index) => ({ 
+                nombre: routine.name.trim(),
+                descripcion: routine.description.trim() || '', 
+                exercises: routine.exercises.map((ex, index) => ({ 
                     exercise_id: ex.exercise_id, 
-                    sets: parseInt(ex.series.trim()), // Aseguramos el parseo (debe ser un entero)
-                    repetitions: ex.repetitions.trim(), // Aseguramos que sea string
+                    sets: parseInt(ex.series.trim()),
+                    repetitions: ex.repetitions.trim(), 
                     peso: ex.peso.trim() || 'N/A', 
                     order: index + 1 
                 }))
             };
 
-            // Usamos el endpoint PATCH /routines/{routine_id}
             await axios.patch(`${API_URL}/routines/${routineId}`, routineData, { headers });
             
-            Alert.alert("Éxito de Edición", `Rutina "${routineToSave.name.trim()}" actualizada exitosamente.`); 
+            Alert.alert("Éxito de Edición", `Rutina "${routine.name.trim()}" actualizada exitosamente.`); 
             navigation.goBack(); 
             
         } catch (e) {
@@ -747,23 +609,18 @@ export default function RoutineCreationScreenV3({ navigation }) {
             
             let errorMessage = "Fallo desconocido al guardar la rutina.";
              if (e.response && e.response.data && e.response.data.detail) {
-                // Captura el mensaje de error detallado del backend
                 if (Array.isArray(e.response.data.detail) || typeof e.response.data.detail === 'string') {
-                    // Si el backend es el que lanza el error, mostramos su detalle
                     errorMessage = `Error de FastAPI: ${JSON.stringify(e.response.data.detail)}`;
                 }
             } else if (e.message === "Network Error") {
                  errorMessage = "Error de red: No se pudo conectar al servidor API.";
             }
 
-            // Aquí alertamos el error. El error de Render es provocado por esta llamada fallida.
             Alert.alert("Error de Edición", errorMessage); 
         } finally {
             setIsSaving(false);
         }
     };
-    
-    const handleMainSaveAction = isEditMode ? handleSaveSingleRoutine : handleNextRoutineOrSaveAll;
     
     const filteredExercises = availableExercises.filter(ex => 
         ex.nombre.toLowerCase().includes(searchQuery.toLowerCase()) || 
@@ -771,25 +628,32 @@ export default function RoutineCreationScreenV3({ navigation }) {
     );
 
     // UI Status Views
-    if (isLoading || (allRoutinesData.length === 0 && !isEditMode && !fetchError)) {
+    if (isLoading) {
         return (
             <View style={styles.loadingContainer}>
-                <ActivityIndicator size="large" color={'#3ABFBC'} />
-                <Text style={{marginTop: 10, color: themeColors.textSecondary}}>Cargando datos...</Text>
+                <ActivityIndicator size="large" color={themeColors.primary} />
+                <Text style={{marginTop: 10, color: themeColors.textSecondary}}>Cargando datos de edición...</Text>
+            </View>
+        );
+    }
+
+    if (fetchError) {
+        return (
+            <View style={styles.loadingContainer}>
+                <Text style={{color: themeColors.danger, textAlign: 'center', margin: 20}}>
+                    {fetchError}
+                </Text>
+                <TouchableOpacity 
+                    onPress={() => navigation.goBack()}
+                    style={[styles.actionButton, styles.cancelButton, {backgroundColor: themeColors.primary, width: 150}]}
+                >
+                    <Text style={styles.actionButtonText}>Volver</Text>
+                </TouchableOpacity>
             </View>
         );
     }
     
-    // Placeholder color for inputs
-    const placeholderColor = '#A9A9A9';
-
-    // Main button texts and colors
-    const mainButtonText = isEditMode ? "Guardar Cambios" : (
-        currentDay < totalDays ? `Siguiente (Día ${currentDay + 1})` : "Guardar Todo"
-    );
-    const mainButtonColor = isEditMode ? themeColors.warning : (
-        currentDay < totalDays ? '#3ABFBC' : '#3ABFBC' // Siempre verde en creación
-    );
+    const placeholderColor = themeColors.isDark ? themeColors.textSecondary : '#A0A0A0';
 
     // ------------------------------------------------------------------
     // Exercise Selector Modal View
@@ -811,21 +675,22 @@ export default function RoutineCreationScreenV3({ navigation }) {
                 <TextInput
                     style={styles.selectorSearchInput}
                     placeholder="Buscar (Nombre o Grupo Muscular)"
-                    placeholderTextColor={placeholderColor}
+                    placeholderTextColor={themeColors.textSecondary}
                     value={searchQuery}
                     onChangeText={setSearchQuery}
                 />
-                
-                {/* --- BOTÓN AGREGAR NUEVO EJERCICIO --- */}
+               
+                {/* 🚨 BOTÓN AGREGAR NUEVO EJERCICIO (Igual que en RoutineCreationScreen) */}
                 <TouchableOpacity 
                     onPress={handleNavigateToAddExercise} 
-                    style={[styles.selectorActionButton, { backgroundColor: '#3ABFBC'}]} 
+                    style={[styles.selectorActionButton, { backgroundColor: themeColors.success}]}
                     disabled={isSaving}
                 >
-                    <PlusCircle size={18} color={'black'} />
-                    <Text style={styles.addExerciseButtonText}>Agregar Nuevo Ejercicio al Catálogo</Text>
+                    <PlusCircle size={18} color={themeColors.card} />
+                    <Text style={styles.actionButtonText}>Agregar Nuevo Ejercicio al Catálogo</Text>
                 </TouchableOpacity>
                 {/* ------------------------------------------------------------------------- */}
+
 
                 <ScrollView contentContainerStyle={styles.selectorList}>
                     {filteredExercises.length > 0 ? (
@@ -857,35 +722,35 @@ export default function RoutineCreationScreenV3({ navigation }) {
             {/* Encabezado Personalizado (Reemplaza la barra de navegación nativa) */}
             <View style={styles.screenHeader}>
                 <Text style={styles.screenTitle}>
-                    {isEditMode ? `Editar Rutina: ${currentRoutine.name}` : `Creación: ${currentRoutine.name}`}
+                    Editar Rutina: {routine.name}
                 </Text>
             </View>
             
             {/* Top Action Bar (Guardar/Cancelar) */}
             <View style={styles.subHeader}>
-                {/* BOTÓN CANCELAR (Ahora es el único botón de navegación de salida) */}
+                {/* BOTÓN CANCELAR (Única forma de salir) */}
                 <TouchableOpacity 
                     onPress={() => navigation.goBack()}
                     style={[styles.actionButton, styles.cancelButton]}
                     disabled={isSaving}
                 >
-                    <XCircle size={18} color={'black'} />
+                    <XCircle size={18} color={themeColors.card} />
                     <Text style={styles.actionButtonText}>Cancelar</Text>
                 </TouchableOpacity>
 
-                {/* BOTÓN PRINCIPAL DE ACCIÓN (Siguiente/Guardar) */}
+                {/* BOTÓN GUARDAR CAMBIOS */}
                 <TouchableOpacity 
-                    onPress={handleMainSaveAction}
-                    style={[styles.actionButton, {backgroundColor: mainButtonColor}]}
-                    disabled={isSaving || !currentRoutine.name.trim() || currentRoutine.exercises.length === 0}
+                    onPress={handleSaveSingleRoutine}
+                    style={[styles.actionButton, {backgroundColor: themeColors.warning}]}
+                    disabled={isSaving || !routine.name.trim() || routine.exercises.length === 0}
                 >
                     {isSaving ? (
-                        <ActivityIndicator size="small" color={'black'} />
+                        <ActivityIndicator size="small" color={themeColors.card} />
                     ) : (
-                        <Save size={18} color={'black'} />
+                        <Save size={18} color={themeColors.card} />
                     )}
                     <Text style={styles.actionButtonText}>
-                        {isSaving ? "Guardando..." : mainButtonText}
+                        {isSaving ? "Guardando..." : "Guardar Cambios"}
                     </Text>
                 </TouchableOpacity>
             </View>
@@ -898,13 +763,13 @@ export default function RoutineCreationScreenV3({ navigation }) {
                 <ScrollView contentContainerStyle={styles.content}>
                     
                     {/* Routine Name Input */}
-                    <Text style={styles.label}>Nombre de la Rutina (Día {currentDay}):</Text>
+                    <Text style={styles.label}>Nombre de la Rutina:</Text>
                     <TextInput
                         style={styles.input} 
                         placeholder="Ej: Rutina Hipertrofia Día A"
                         placeholderTextColor={placeholderColor}
-                        value={currentRoutine.name}
-                        onChangeText={(text) => setRoutineData('name', text)}
+                        value={routine.name}
+                        onChangeText={(text) => updateRoutineData('name', text)}
                         editable={!isSaving}
                     />
                     
@@ -914,20 +779,19 @@ export default function RoutineCreationScreenV3({ navigation }) {
                         style={[styles.input, styles.textArea]}
                         placeholder="Ej: Fase de volumen 4 semanas"
                         placeholderTextColor={placeholderColor}
-                        value={currentRoutine.description}
-                        onChangeText={(text) => setRoutineData('description', text)}
+                        value={routine.description}
+                        onChangeText={(text) => updateRoutineData('description', text)}
                         multiline
                         editable={!isSaving}
                     />
                     
                     {/* Exercise List Section */}
                     <Text style={styles.sectionTitle}>
-                        Ejercicios ({currentRoutine.exercises.length}):
+                        Ejercicios ({routine.exercises.length}):
                     </Text>
-                    
-                    {/* Aquí ahora va directamente la lista de ejercicios: */}
+
                     <View>
-                        {currentRoutine.exercises.map((exercise, index) => (
+                        {routine.exercises.map((exercise, index) => (
                             <ExerciseItem 
                                 key={index.toString()}
                                 index={index}
@@ -943,13 +807,13 @@ export default function RoutineCreationScreenV3({ navigation }) {
                 </ScrollView>
             </KeyboardAvoidingView>
 
-            {/* FAB: Floating Action Button to Add Exercise ITEM to the current routine */}
+            {/* FAB: Floating Action Button to Add Exercise */}
             <TouchableOpacity 
                 onPress={addExercise} 
                 style={styles.floatingButton} 
                 disabled={isSaving || fetchError || availableExercises.length === 0}
             >
-                <PlusCircle size={24} color={'black'} />
+                <PlusCircle size={24} color={themeColors.card} />
                 <Text style={styles.floatingButtonText}>Añadir Ejercicio</Text>
             </TouchableOpacity>
         </SafeAreaView>

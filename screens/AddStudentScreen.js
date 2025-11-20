@@ -16,11 +16,11 @@ import { User, Mail, Lock, CheckCircle, ArrowLeft, CreditCard } from 'lucide-rea
 const API_URL = "https://gym-app-backend-e9bn.onrender.com"; 
 // ----------------------------------------------------------------------
 
-// Esquema de estilos dinámico
+// Esquema de estilos dinámico - ESTILO PEAKFIT
 const getStyles = (colors) => StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: colors.background,
+        backgroundColor: 'black', // Fondo negro
     },
     scrollContainer: {
         flexGrow: 1,
@@ -32,7 +32,7 @@ const getStyles = (colors) => StyleSheet.create({
         justifyContent: 'flex-start',
         alignItems: 'center',
         padding: 15,
-        backgroundColor: colors.card,
+        backgroundColor: '#1C1C1E', // Fondo de tarjeta oscuro
         borderBottomWidth: 1,
         borderBottomColor: colors.divider,
     },
@@ -44,7 +44,7 @@ const getStyles = (colors) => StyleSheet.create({
     title: {
         fontSize: 24,
         fontWeight: 'bold',
-        color: colors.primary,
+        color: '#3ABFBC', // Título Verde
     },
     inputContainer: {
         width: '100%',
@@ -54,90 +54,92 @@ const getStyles = (colors) => StyleSheet.create({
     label: {
         fontSize: 16,
         fontWeight: '600',
-        color: colors.textPrimary,
+        color: 'white', // Texto de label blanco
         marginBottom: 8,
     },
     inputWrapper: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: colors.card,
+        backgroundColor: '#1C1C1E', // Fondo de input oscuro
         borderRadius: 10,
         borderWidth: 1,
-        borderColor: colors.divider,
+        borderColor: 'transparent', // Sin borde visible
         paddingHorizontal: 15,
     },
     input: {
         flex: 1,
         height: 50,
         fontSize: 16,
-        color: colors.textPrimary,
+        color: 'white', // Texto de input blanco
         marginLeft: 10,
     },
     buttonContainer: {
         width: '100%',
         marginTop: 30,
-        alignItems: 'center', // Alinea el ActivityIndicator y el botón
+        alignItems: 'center',
     },
     loadingText: {
         marginTop: 10,
-        color: colors.textSecondary,
+        color: '#A9A9A9', // Gris claro
     },
     successMessage: {
         fontSize: 18,
         fontWeight: 'bold',
-        color: colors.success,
+        color: '#3ABFBC', // Verde
         textAlign: 'center',
         marginTop: 40,
     },
     icon: {
+        // Los iconos usan color secundario para los inputs
         marginRight: 5,
     },
     
     // ------------------------------------------------
-    // --- ESTILOS DE BOTONES MODERNOS APLICADOS ---
+    // --- ESTILOS DE BOTONES PEAKFIT ---
     // ------------------------------------------------
     customButton: {
         paddingVertical: 12,
         paddingHorizontal: 20,
-        borderRadius: 10, // Bordes redondeados
+        borderRadius: 10, 
         alignItems: 'center',
         justifyContent: 'center',
         minWidth: '100%', 
-        // Sombra para darle profundidad
         shadowColor: "#000",
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.2,
-        shadowRadius: 3,
-        elevation: 4,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.6,
+        shadowRadius: 5,
+        elevation: 6,
     },
     buttonPrimary: {
-        // Usamos el color 'success' (verde) para el botón de registro
-        backgroundColor: colors.success, 
+        // Usamos el color verde brillante
+        backgroundColor: '#3ABFBC', 
     },
     buttonText: {
         fontSize: 16,
         fontWeight: 'bold',
-        color: colors.card, // Texto blanco/claro
+        color: 'black', // Texto negro
     },
-    // ------------------------------------------------
 });
 
 /**
  * Pantalla para que el Profesor dé de alta un nuevo Alumno.
- * Requiere nombre, email, DNI y contraseña. El rol se fija como 'Alumno'.
  */
 export default function AddStudentScreen({ navigation }) {
     const { colors: themeColors } = useTheme();
     const styles = getStyles(themeColors);
-    const { getToken } = useContext(AuthContext);
 
     const [nombre, setNombre] = useState('');
     const [email, setEmail] = useState('');
-    const [dni, setDni] = useState(''); // <--- NUEVO ESTADO PARA DNI
+    const [dni, setDni] = useState('');
     const [password, setPassword] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [isSuccess, setIsSuccess] = useState(false);
 
+    // Placeholder Color (Gris Claro)
+    const placeholderColor = '#A9A9A9';
+    // Icon Color (Gris Claro)
+    const iconColor = '#A9A9A9';
+    
     // Reinicia el formulario y el estado
     const resetForm = () => {
         setNombre('');
@@ -149,7 +151,7 @@ export default function AddStudentScreen({ navigation }) {
     };
 
     const handleRegisterStudent = async () => {
-        // Validación de campos obligatorios
+        // --- VALIDACIONES (Se mantienen) ---
         if (!nombre.trim() || !email.trim() || !dni.trim() || !password.trim()) {
             Alert.alert("Error", "Todos los campos son obligatorios.");
             return;
@@ -166,30 +168,25 @@ export default function AddStudentScreen({ navigation }) {
             return;
         }
         
-        // Validación de DNI: solo números
         if (!/^\d+$/.test(dni.trim())) {
-             Alert.alert("Error", "El DNI solo debe contener números.");
-             return;
+            Alert.alert("Error", "El DNI solo debe contener números.");
+            return;
         }
+        // --- FIN VALIDACIONES ---
 
         setIsLoading(true);
 
         try {
-            const token = await getToken(); // Obtiene el token del profesor
-            const headers = { 'Authorization': `Bearer ${token}` };
-
-            // Endpoint de registro
+            // Se usa el endpoint de registro público.
             const response = await axios.post(
-                `${API_URL}/users/`,
+                `${API_URL}/register/student`,
                 {
                     nombre: nombre.trim(),
                     email: email.trim(),
-                    dni: dni.trim(), // <--- ENVÍO DEL DNI
+                    dni: dni.trim(),
                     password: password.trim(),
-                    // CRÍTICO: Se fuerza el rol a "Alumno"
-                    role: "Alumno" 
-                },
-                { headers } // Se envía el token de autenticación del profesor
+                    rol: "Alumno" // <--- CRÍTICO: Añadido para que coincida con el payload del RegisterModal.
+                }
             );
 
             // Si el registro es exitoso
@@ -202,9 +199,19 @@ export default function AddStudentScreen({ navigation }) {
 
         } catch (e) {
             console.error("Error al registrar alumno:", e.response ? e.response.data : e.message);
-            const detail = e.response?.data?.detail || "Error desconocido al registrar.";
+            const detail = e.response?.data?.detail;
             
-            Alert.alert("Error de Registro", `Fallo al dar de alta al alumno. Detalle: ${detail}`);
+            let msg = detail && typeof detail === 'string' ? detail : "Fallo desconocido en el servidor.";
+
+            if (msg.includes("DNI ya esta registrado")) {
+                msg = "El DNI proporcionado ya se encuentra registrado.";
+            } else if (msg.includes("El email ya esta registrado")) {
+                msg = "El Email proporcionado ya se encuentra registrado.";
+            } else if (e.message === 'Network Error') {
+                msg = `Error de Conexión. Asegúrate de que el servidor de FastAPI esté activo.`;
+            }
+            
+            Alert.alert("Error de Registro", `Fallo al dar de alta el alumno. Detalle: ${msg}`);
 
         } finally {
             setIsLoading(false);
@@ -220,7 +227,7 @@ export default function AddStudentScreen({ navigation }) {
         <SafeAreaView style={styles.container}>
             <View style={styles.header}>
                 <TouchableOpacity onPress={handleGoBack} style={styles.backButton} disabled={isLoading}>
-                    <ArrowLeft size={24} color={themeColors.textPrimary} />
+                    <ArrowLeft size={24} color={'white'} />
                 </TouchableOpacity>
                 <Text style={styles.title}>Alta de Nuevo Alumno</Text>
             </View>
@@ -234,7 +241,7 @@ export default function AddStudentScreen({ navigation }) {
                     
                     {isSuccess ? (
                         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-                            <CheckCircle size={80} color={themeColors.success} />
+                            <CheckCircle size={80} color={'#3ABFBC'} />
                             <Text style={styles.successMessage}>
                                 ¡Alumno '{nombre}' dado de alta con éxito!
                             </Text>
@@ -245,11 +252,11 @@ export default function AddStudentScreen({ navigation }) {
                             <View style={styles.inputContainer}>
                                 <Text style={styles.label}>Nombre Completo:</Text>
                                 <View style={styles.inputWrapper}>
-                                    <User size={20} color={themeColors.textSecondary} style={styles.icon} />
+                                    <User size={20} color={iconColor} style={styles.icon} />
                                     <TextInput
                                         style={styles.input}
                                         placeholder="Nombre y apellido del alumno"
-                                        placeholderTextColor={themeColors.textSecondary}
+                                        placeholderTextColor={placeholderColor}
                                         value={nombre}
                                         onChangeText={setNombre}
                                         keyboardType="default"
@@ -262,11 +269,11 @@ export default function AddStudentScreen({ navigation }) {
                             <View style={styles.inputContainer}>
                                 <Text style={styles.label}>Correo Electrónico (Email):</Text>
                                 <View style={styles.inputWrapper}>
-                                    <Mail size={20} color={themeColors.textSecondary} style={styles.icon} />
+                                    <Mail size={20} color={iconColor} style={styles.icon} />
                                     <TextInput
                                         style={styles.input}
                                         placeholder="ejemplo@correo.com"
-                                        placeholderTextColor={themeColors.textSecondary}
+                                        placeholderTextColor={placeholderColor}
                                         value={email}
                                         onChangeText={setEmail}
                                         keyboardType="email-address"
@@ -280,11 +287,11 @@ export default function AddStudentScreen({ navigation }) {
                             <View style={styles.inputContainer}>
                                 <Text style={styles.label}>DNI (Documento Nacional de Identidad):</Text>
                                 <View style={styles.inputWrapper}>
-                                    <CreditCard size={20} color={themeColors.textSecondary} style={styles.icon} />
+                                    <CreditCard size={20} color={iconColor} style={styles.icon} />
                                     <TextInput
                                         style={styles.input}
                                         placeholder="Solo números"
-                                        placeholderTextColor={themeColors.textSecondary}
+                                        placeholderTextColor={placeholderColor}
                                         value={dni}
                                         onChangeText={setDni}
                                         keyboardType="numeric"
@@ -297,11 +304,11 @@ export default function AddStudentScreen({ navigation }) {
                             <View style={styles.inputContainer}>
                                 <Text style={styles.label}>Contraseña Inicial:</Text>
                                 <View style={styles.inputWrapper}>
-                                    <Lock size={20} color={themeColors.textSecondary} style={styles.icon} />
+                                    <Lock size={20} color={iconColor} style={styles.icon} />
                                     <TextInput
                                         style={styles.input}
                                         placeholder="Mínimo 6 caracteres"
-                                        placeholderTextColor={themeColors.textSecondary}
+                                        placeholderTextColor={placeholderColor}
                                         value={password}
                                         onChangeText={setPassword}
                                         secureTextEntry
@@ -310,7 +317,7 @@ export default function AddStudentScreen({ navigation }) {
                                 </View>
                             </View>
 
-                            {/* BOTÓN REGISTRAR ALUMNO (MODIFICADO) */}
+                            {/* BOTÓN REGISTRAR ALUMNO */}
                             <View style={styles.buttonContainer}>
 								<TouchableOpacity
 									style={[
@@ -323,7 +330,7 @@ export default function AddStudentScreen({ navigation }) {
 								>
 									<Text style={styles.buttonText}>{isLoading ? "Registrando..." : "Registrar Alumno"}</Text>
 								</TouchableOpacity>
-								{isLoading && <ActivityIndicator size="small" color={themeColors.primary} style={{ marginTop: 15 }} />}
+								{isLoading && <ActivityIndicator size="small" color={'#3ABFBC'} style={{ marginTop: 15 }} />}
 							</View>
                         </>
                     )}

@@ -26,8 +26,8 @@ const AccountSettingsModal = ({ isVisible, onClose, navigation, signOut, themeCo
 
     const handleLogout = () => {
         Alert.alert(
-            "Cerrar Sesion",
-            "¿Estas seguro que quieres cerrar sesion?",
+            "Cerrar Sesión",
+            "¿Estás seguro que quieres cerrar sesión?",
             [
                 { text: "Cancelar", style: "cancel" },
                 { text: "Cerrar", onPress: signOut, style: "destructive" },
@@ -50,10 +50,10 @@ const AccountSettingsModal = ({ isVisible, onClose, navigation, signOut, themeCo
                 {/* 🚨 Contenedor del Drawer (posicionado a la izquierda) */}
                 <View style={styles.menuContainer}>
                     {/* 🚨 SafeAreaView para respetar la barra de estado del celular */}
-                    <SafeAreaView style={{ flex: 1, backgroundColor: themeColors.card }}>
+                    <SafeAreaView style={{ flex: 1, backgroundColor: '#1C1C1E' }}> {/* 🚨 PEAKFIT: Fondo oscuro */}
                         <ScrollView contentContainerStyle={styles.menuScroll}>
                             
-                            <Text style={[styles.menuTitle, {color: themeColors.primary, borderBottomColor: themeColors.divider}]}>
+                            <Text style={[styles.menuTitle, {color: '#3ABFBC', borderBottomColor: themeColors.divider}]}> {/* 🚨 PEAKFIT: Título Verde */}
                                 Menú de Alumno
                             </Text>
                             
@@ -62,8 +62,8 @@ const AccountSettingsModal = ({ isVisible, onClose, navigation, signOut, themeCo
                                 style={[styles.menuItem, {borderBottomColor: themeColors.divider}]} 
                                 onPress={handleChangePassword}
                             >
-                                <Key size={18} color={themeColors.primary} />
-                                <Text style={[styles.menuItemText, {color: themeColors.textPrimary}]}>Cambiar Contraseña</Text>
+                                <Key size={18} color={'white'} /> {/* 🚨 PEAKFIT: Icono Blanco */}
+                                <Text style={[styles.menuItemText, {color: 'white'}]}>Cambiar Contraseña</Text> {/* 🚨 PEAKFIT: Texto Blanco */}
                             </TouchableOpacity>
                             
                             {/* Opcion 2: Cerrar Sesion */}
@@ -72,7 +72,7 @@ const AccountSettingsModal = ({ isVisible, onClose, navigation, signOut, themeCo
                                 onPress={handleLogout}
                             >
                                 <LogOut size={18} color={themeColors.danger} />
-                                <Text style={[styles.menuItemTextLogout, {color: themeColors.danger}]}>Cerrar Sesion</Text>
+                                <Text style={[styles.menuItemTextLogout, {color: themeColors.danger}]}>Cerrar Sesión</Text>
                             </TouchableOpacity>
                             
                         </ScrollView>
@@ -83,7 +83,7 @@ const AccountSettingsModal = ({ isVisible, onClose, navigation, signOut, themeCo
                         style={[styles.menuItemClose, {backgroundColor: themeColors.divider}]} 
                         onPress={onClose}
                     >
-                        <Text style={styles.menuItemTextClose}>Cerrar Menu</Text>
+                        <Text style={styles.menuItemTextClose}>Cerrar Menú</Text>
                     </TouchableOpacity>
 
                 </View>
@@ -104,7 +104,7 @@ const CollapsibleRoutineCard = ({ assignment, styles, themeColors }) => {
     const linkCount = routine?.exercise_links ? routine.exercise_links.length : 0;
     
     // Logica de Estado (Barra Lateral)
-    const statusColor = assignment.is_active ? themeColors.success : themeColors.warning;
+    const statusColor = assignment.is_active ? '#3ABFBC' : themeColors.warning; // 🚨 PEAKFIT Success Green
     const statusText = assignment.is_active ? 'ACTIVA' : 'INACTIVA';
 
     // Formateo de fecha
@@ -112,9 +112,24 @@ const CollapsibleRoutineCard = ({ assignment, styles, themeColors }) => {
         ? `Vence: ${new Date(routine.routine_group.fecha_vencimiento).toLocaleDateString('es-AR')}` 
         : 'Vencimiento: N/A';
 
+    // 🚨 Lógica para obtener el nombre limpio de la rutina
+    const groupName = routine?.routine_group?.nombre;
+    let displayRoutineName = routine?.nombre ?? 'Rutina Sin Titulo';
+    
+    if (groupName && displayRoutineName.startsWith(groupName)) {
+        displayRoutineName = displayRoutineName.substring(groupName.length).trim();
+        if (displayRoutineName.startsWith('-')) {
+            displayRoutineName = displayRoutineName.substring(1).trim();
+        }
+        if (displayRoutineName === '') {
+             displayRoutineName = routine?.descripcion?.match(/Día (\d+)/)?.[0] || 'Día de Entrenamiento';
+        }
+    }
+    // 🚨 FIN LÓGICA DE TÍTULO
+
     const renderExercises = () => (
         <View style={styles.exerciseListContainer}>
-            <Text style={{ fontSize: 13, fontWeight: 'bold', color: themeColors.textPrimary, marginBottom: 10 }}>Detalle de Ejercicios:</Text>
+            <Text style={{ fontSize: 13, fontWeight: 'bold', color: 'white', marginBottom: 10 }}>Detalle de Ejercicios:</Text>
             {routine.exercise_links
                 .sort((a, b) => a.order - b.order)
                 .map((link, exIndex) => (
@@ -128,19 +143,19 @@ const CollapsibleRoutineCard = ({ assignment, styles, themeColors }) => {
                             {/* Sets */}
                             <View style={styles.detailItem}>
                                 <Text style={styles.detailLabel}>Sets:</Text>
-                                <Text style={[styles.detailValue, {color: themeColors.primaryDark}]}>{link.sets}</Text>
+                                <Text style={[styles.detailValue, {color: '#3ABFBC'}]}>{link.sets}</Text>
                             </View>
 
                             {/* Reps */}
                             <View style={styles.detailItem}>
                                 <Text style={styles.detailLabel}>Reps:</Text>
-                                <Text style={[styles.detailValue, {color: themeColors.primaryDark}]}>{link.repetitions}</Text>
+                                <Text style={[styles.detailValue, {color: '#3ABFBC'}]}>{link.repetitions}</Text>
                             </View>
 
                             {/* Peso */}
                             <View style={styles.detailItem}>
                                 <Text style={styles.detailLabel}>Peso:</Text>
-                                <Text style={[styles.detailValue, {color: themeColors.primaryDark}]}>{link.peso || '-'}</Text>
+                                <Text style={[styles.detailValue, {color: '#3ABFBC'}]}>{link.peso || '-'}</Text>
                             </View>
                         </View>
                     </View>
@@ -153,7 +168,8 @@ const CollapsibleRoutineCard = ({ assignment, styles, themeColors }) => {
             
             {/* 1. BARRA LATERAL DE ESTADO */}
             <View style={[styles.statusBar, { backgroundColor: statusColor }]}>
-                <Text style={styles.statusText}>{statusText}</Text>
+                {/* 🚨 StatusText Color: Negro si el fondo es claro (warning), blanco si es oscuro (success/danger) */}
+                <Text style={[styles.statusText, {color: statusColor === themeColors.warning ? 'black' : 'white'}]}>{statusText}</Text>
             </View>
 
             {/* 🚨 2. CONTENIDO PRINCIPAL Y COLAPSABLE: Ahora es el área de toque */}
@@ -166,15 +182,10 @@ const CollapsibleRoutineCard = ({ assignment, styles, themeColors }) => {
                 {/* CABECERA (Contiene todos los detalles y el icono de flecha) */}
                 <View style={styles.cardHeader}>
                     <View style={{flex: 1}}>
-                        {/* NUEVO: Nombre del Grupo de Rutinas Destacado */}
-                        {routine?.routine_group?.nombre && (
-                            <Text style={[styles.groupNameSubtitle, { color: themeColors.primary }]}>
-                                {routine.routine_group.nombre}
-                            </Text>
-                        )}
-
+                        
+                        {/* Nombre de la Rutina Limpio (ES EL ÚNICO TÍTULO DENTRO DE LA TARJETA) */}
                         <Text style={styles.routineTitle}>
-                            {routine?.nombre ?? 'Rutina Sin Titulo'}
+                            {displayRoutineName}
                         </Text>
                         
                         {/* Vencimiento */}
@@ -186,15 +197,15 @@ const CollapsibleRoutineCard = ({ assignment, styles, themeColors }) => {
                         </Text>
                         
                         {/* Indicador de cantidad de ejercicios (TEXTO SIN FLECHAS) */}
-                        <Text style={{ marginTop: 5, color: themeColors.textSecondary, fontSize: 13, fontWeight: '500'}}>
+                        <Text style={{ marginTop: 5, color: '#A9A9A9', fontSize: 13, fontWeight: '500'}}>
                             {linkCount} EJERCICIOS
                         </Text>
                     </View>
                     
-                    {/* 🚨 ICONO DE EXPANSION (Movido directamente al cardHeader) */}
+                    {/* 🚨 ICONO DE EXPANSION */}
                     {isExpanded ? 
-                        <ChevronUp size={24} color={themeColors.primaryDark} /> : 
-                        <ChevronDown size={24} color={themeColors.primaryDark} />
+                        <ChevronUp size={24} color={'#3ABFBC'} /> : 
+                        <ChevronDown size={24} color={'#3ABFBC'} />
                     }
                 </View>
 
@@ -257,8 +268,8 @@ export default function StudentRoutineScreen({ navigation }) {
             if (e.response && (e.response.status === 404 || e.response.data?.detail === "No tienes ninguna rutina activa asignada.")) {
                 setError("No tienes ninguna rutina activa asignada.");
             } else {
-                Alert.alert("Error de Conexion", "Fallo al cargar la rutina. Verifica tu conexion o backend.");
-                setError("Error al cargar la rutina. Revisa tu conexion.");
+                Alert.alert("Error de Conexión", "Fallo al cargar la rutina. Verifica tu conexión o backend.");
+                setError("Error al cargar la rutina. Revisa tu conexión.");
             }
         } finally {
             setTimeout(() => setIsLoading(false), 300); 
@@ -266,17 +277,42 @@ export default function StudentRoutineScreen({ navigation }) {
     };
 
     useEffect(() => {
+        // Recarga la rutina al enfocarse la pantalla
+        const unsubscribeFocus = navigation.addListener('focus', () => {
+             fetchRoutine();
+        });
         fetchRoutine();
+        return unsubscribeFocus;
     }, []);
 
     const handleRefresh = () => {
         fetchRoutine();
     };
+    
+    // 🚨 PASO 1: Agrupar asignaciones por grupo (routine_group.id)
+    const groupedAssignments = useMemo(() => {
+        const groups = {};
+        activeAssignments.forEach(assignment => {
+            const routine = assignment.routine;
+            const groupId = routine?.routine_group?.id || 'NoGroup';
+            const groupName = routine?.routine_group?.nombre || 'Rutinas Individuales';
+            
+            if (!groups[groupId]) {
+                groups[groupId] = {
+                    groupName: groupName,
+                    assignments: []
+                };
+            }
+            groups[groupId].assignments.push(assignment);
+        });
+        return groups;
+    }, [activeAssignments]);
+
 
     if (isLoading) {
         return (
             <SafeAreaView style={styles.loadingContainer}>
-                <ActivityIndicator size="large" color={themeColors.primary} />
+                <ActivityIndicator size="large" color={'#3ABFBC'} />
                 <Text style={{ marginTop: 10, color: themeColors.textSecondary }}>Cargando tus rutinas...</Text>
             </SafeAreaView>
         );
@@ -302,7 +338,7 @@ export default function StudentRoutineScreen({ navigation }) {
                     onPress={() => setIsMenuVisible(true)} 
                     style={styles.iconButton}
                 >
-                    <Menu size={24} color={themeColors.primaryDark} /> 
+                    <Menu size={24} color={'white'} /> 
                 </TouchableOpacity>
 
                 {/* TITULO DINAMICO */}
@@ -317,7 +353,7 @@ export default function StudentRoutineScreen({ navigation }) {
                         style={styles.iconButton}
                         disabled={isLoading}
                     >
-                        <RefreshCcw size={24} color={themeColors.primaryDark} /> 
+                        <RefreshCcw size={24} color={'#3ABFBC'} /> 
                     </TouchableOpacity>
                     {/* Boton de Ajustes ELIMINADO */}
                 </View>
@@ -327,24 +363,35 @@ export default function StudentRoutineScreen({ navigation }) {
                 
                 <View style={styles.mainContentHeader}>
                     <Text style={styles.mainTitle}>Mi Plan de Entrenamiento</Text>
-                    <Text style={{color: themeColors.textSecondary}}>Rutinas Activas ({activeAssignments.length})</Text>
+                    <Text style={{color: '#A9A9A9'}}>Rutinas Activas ({activeAssignments.length})</Text>
                     {error && error !== "No tienes ninguna rutina activa asignada." && <Text style={styles.errorText}>{error}</Text>}
                 </View>
 
                 {activeAssignments.length > 0 ? (
-                    activeAssignments.map((assignment, assignmentIndex) => (
-                        <CollapsibleRoutineCard 
-                            key={assignment.id?.toString() ?? assignmentIndex.toString()} 
-                            assignment={assignment}
-                            styles={styles}
-                            themeColors={themeColors}
-                        />
+                    // 🚨 PASO 2: Iterar sobre los grupos
+                    Object.entries(groupedAssignments).map(([groupId, groupData]) => (
+                        <View key={groupId}>
+                            {/* TÍTULO DEL GRUPO (UNA SOLA VEZ, GRANDE) */}
+                            <Text style={styles.groupHeaderTitle}>
+                                {groupData.groupName} ({groupData.assignments.length} Rutinas)
+                            </Text>
+                            
+                            {/* Rutinas dentro del grupo */}
+                            {groupData.assignments.map((assignment, assignmentIndex) => (
+                                <CollapsibleRoutineCard 
+                                    key={assignment.id?.toString() ?? assignmentIndex.toString()} 
+                                    assignment={assignment}
+                                    styles={styles}
+                                    themeColors={themeColors}
+                                />
+                            ))}
+                        </View>
                     ))
                 ) : (
                     // Mensaje cuando no hay rutina activa
                     <View style={styles.noRoutineContainer}>
                         <Text style={styles.noRoutineText}>¡Libre de Rutinas!</Text>
-                        <Text style={styles.noRoutineSubText}>Pidele a tu profesor que te asigne un nuevo plan.</Text>
+                        <Text style={styles.noRoutineSubText}>Pídele a tu profesor que te asigne un nuevo plan.</Text>
                     </View>
                 )}
             </ScrollView>
@@ -353,18 +400,18 @@ export default function StudentRoutineScreen({ navigation }) {
 }
 
 // ----------------------------------------------------------------------
-// GENERADOR DE ESTILOS DINÁMICOS (CON ESTILOS MODERNOS DE PROFESSOR SCREEN)
+// GENERADOR DE ESTILOS DINÁMICOS (PEAKFIT)
 // ----------------------------------------------------------------------
 const getStudentStyles = (colors) => StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: colors.background,
+        backgroundColor: 'black', // 🚨 PEAKFIT: Fondo Negro
     },
     loadingContainer: {
         flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
-        backgroundColor: colors.background,
+        backgroundColor: 'black', // 🚨 PEAKFIT: Fondo Negro
     },
     // --- Cabecera ---
     header: {
@@ -372,19 +419,18 @@ const getStudentStyles = (colors) => StyleSheet.create({
         justifyContent: 'space-between',
         alignItems: 'center',
         padding: 15,
-        // 🚨 FIX ANDROID: Añade padding extra arriba para evitar la superposición con la barra de estado
         paddingTop: Platform.OS === 'android' ? 40 : 15,
-        backgroundColor: colors.card,
+        backgroundColor: 'black', // 🚨 PEAKFIT: Header Negro
         borderBottomWidth: 1,
         borderBottomColor: colors.divider,
-        elevation: 2,
+        elevation: 0, // Quitamos sombra en fondo oscuro
     },
     headerTitle: {
         fontSize: 18, 
         fontWeight: 'bold',
-        color: colors.textPrimary, // Cambiado a textPrimary para que resalte más
+        color: 'white', // 🚨 PEAKFIT: Título Blanco
         flex: 1, 
-        textAlign: 'center', // Para que el título esté centrado entre los botones
+        textAlign: 'center',
         paddingHorizontal: 10,
     },
     headerButtons: {
@@ -396,7 +442,7 @@ const getStudentStyles = (colors) => StyleSheet.create({
         borderRadius: 8,
         justifyContent: 'center',
         alignItems: 'center',
-        backgroundColor: colors.highlight,
+        backgroundColor: '#1C1C1E', // 🚨 PEAKFIT: Botón Dark Gray
     },
     content: {
         flexGrow: 1, 
@@ -408,15 +454,25 @@ const getStudentStyles = (colors) => StyleSheet.create({
     mainTitle: {
         fontSize: 24,
         fontWeight: 'bold',
-        color: colors.textPrimary,
+        color: 'white', // 🚨 PEAKFIT: Título Blanco
         marginBottom: 5,
+    },
+    groupHeaderTitle: {
+        fontSize: 22,
+        fontWeight: 'bold',
+        color: '#3ABFBC', // 🚨 PEAKFIT: Título Verde
+        marginTop: 20,
+        marginBottom: 10,
+        borderBottomWidth: 1, 
+        borderBottomColor: colors.divider,
+        paddingBottom: 5,
     },
     errorText: {
         color: colors.danger,
         fontWeight: '600',
         marginTop: 10,
         textAlign: 'center',
-        backgroundColor: colors.isDark ? colors.danger + '30' : '#FFEBEE',
+        backgroundColor: colors.danger + '30',
         padding: 10,
         borderRadius: 8,
         marginBottom: 20,
@@ -426,8 +482,8 @@ const getStudentStyles = (colors) => StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
         padding: 40,
-        backgroundColor: colors.card,
-        borderRadius: 12,
+        backgroundColor: '#1C1C1E', // 🚨 PEAKFIT: Card Dark Gray
+        borderRadius: 10,
         marginTop: 50,
         borderWidth: 1,
         borderColor: colors.warning,
@@ -441,20 +497,20 @@ const getStudentStyles = (colors) => StyleSheet.create({
     },
     noRoutineSubText: {
         fontSize: 16,
-        color: colors.textSecondary,
+        color: '#A9A9A9',
         textAlign: 'center',
     },
     // --- Estilos de la Tarjeta Colapsable ---
     routineCardContainer: {
         flexDirection: 'row',
-        backgroundColor: colors.card,
+        backgroundColor: '#1C1C1E', // 🚨 PEAKFIT: Card Dark Gray
         borderRadius: 10,
         marginBottom: 15,
-        shadowColor: colors.isDark ? '#000' : '#444',
+        shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: colors.isDark ? 0.3 : 0.1,
-        shadowRadius: 3,
-        elevation: 3,
+        shadowOpacity: 0.8,
+        shadowRadius: 5,
+        elevation: 5,
         overflow: 'hidden',
     },
     statusBar: {
@@ -464,17 +520,15 @@ const getStudentStyles = (colors) => StyleSheet.create({
         paddingVertical: 10,
     },
     statusText: {
-        fontSize: 10,
+        fontSize: 14,
         fontWeight: 'bold',
-        color: 'white',
+        color: 'white', // Color que se ajusta en el componente
         transform: [{ rotate: '-90deg' }], 
         width: 100, 
         textAlign: 'center',
     },
-    // 🚨 assignmentContent ahora es el TouchableOpacity
     assignmentContent: {
         flex: 1,
-        // Eliminamos el padding aquí ya que lo daremos en cardHeader
     },
     cardHeader: {
         padding: 15,
@@ -483,26 +537,20 @@ const getStudentStyles = (colors) => StyleSheet.create({
         alignItems: 'center',
         flex: 1,
     },
-    // 🚨 expandButton ELIMINADO: Ya no es necesario como Touchable
-    groupNameSubtitle: {
-        fontSize: 16,
-        fontWeight: 'bold',
-        marginBottom: 4,
-    },
     routineTitle: {
-        fontSize: 18,
-        fontWeight: '700',
-        color: colors.textPrimary,
+        fontSize: 18, 
+        fontWeight: 'bold',
+        color: 'white', // 🚨 PEAKFIT: Texto Blanco
         marginBottom: 5,
     },
     routineGroup: {
         fontSize: 13, 
-        color: colors.textSecondary,
+        color: '#A9A9A9', // 🚨 PEAKFIT: Texto Secundario Gris
         marginBottom: 2,
     },
     assignedBy: {
         fontSize: 12,
-        color: colors.textSecondary,
+        color: '#A9A9A9',
         fontStyle: 'italic',
         marginTop: 5,
     },
@@ -512,21 +560,21 @@ const getStudentStyles = (colors) => StyleSheet.create({
         paddingBottom: 15,
         borderTopWidth: 1,
         borderTopColor: colors.divider,
-        backgroundColor: colors.isDark ? colors.card : '#1F2937', 
+        backgroundColor: 'black', // 🚨 PEAKFIT: Contenido Interno Negro
     },
     exerciseItem: {
         paddingLeft: 10,
         paddingVertical: 8,
         borderLeftWidth: 2,
-        borderLeftColor: colors.highlight,
+        borderLeftColor: '#3ABFBC', // 🚨 PEAKFIT: Línea de acento verde
         marginBottom: 8,
-        backgroundColor: colors.card, 
+        backgroundColor: '#1C1C1E', // 🚨 PEAKFIT: Fondo de ítem (más claro que el fondo)
         borderRadius: 5, 
     },
     exerciseName: {
         fontSize: 16,
         fontWeight: '700',
-        color: colors.textPrimary,
+        color: 'white',
         marginBottom: 5,
     },
     detailsRow: {
@@ -538,39 +586,39 @@ const getStudentStyles = (colors) => StyleSheet.create({
     detailItem: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: colors.highlight,
+        backgroundColor: 'black', // 🚨 PEAKFIT: Fondo del detalle más oscuro
         borderRadius: 6,
         paddingHorizontal: 8,
         paddingVertical: 4,
     },
     detailLabel: {
         fontSize: 12,
-        color: colors.textPrimary, 
+        color: '#A9A9A9', 
         marginRight: 4,
         fontWeight: '500',
     },
     detailValue: {
         fontSize: 14,
         fontWeight: 'bold',
-        color: colors.primaryDark,
+        color: '#3ABFBC', // 🚨 PEAKFIT: Valor verde
     },
     // --- ESTILOS DEL DRAWER ---
     modalOverlay: {
         flex: 1,
-        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        backgroundColor: 'rgba(0, 0, 0, 0.7)', // Más oscuro
         justifyContent: 'flex-start', 
         alignItems: 'flex-start', 
     },
     menuContainer: {
         width: 280, 
         height: '100%', 
-        backgroundColor: colors.card,
+        backgroundColor: '#1C1C1E', // 🚨 PEAKFIT: Drawer Dark Gray
         position: 'absolute', 
         left: 0,              
         top: 0,               
-        shadowColor: colors.isDark ? '#000' : '#000',
+        shadowColor: '#000',
         shadowOffset: { width: 2, height: 0 }, 
-        shadowOpacity: colors.isDark ? 0.8 : 0.2,
+        shadowOpacity: 1, // Sombra más fuerte para contraste
         shadowRadius: 5,
         elevation: 10,
     },
@@ -583,6 +631,8 @@ const getStudentStyles = (colors) => StyleSheet.create({
         paddingVertical: 10,
         marginBottom: 10,
         borderBottomWidth: 1,
+        borderBottomColor: colors.divider,
+        color: '#3ABFBC', // 🚨 PEAKFIT: Título Verde
         paddingHorizontal: 15,
     },
     menuItem: {
@@ -606,7 +656,7 @@ const getStudentStyles = (colors) => StyleSheet.create({
     menuItemText: {
         fontSize: 15,
         fontWeight: '600',
-        color: colors.textPrimary,
+        color: 'white', // 🚨 PEAKFIT: Texto Blanco
     },
     menuItemTextLogout: {
         fontSize: 15,
@@ -616,6 +666,6 @@ const getStudentStyles = (colors) => StyleSheet.create({
     menuItemTextClose: {
         fontSize: 15,
         fontWeight: '600',
-        color: colors.textPrimary,
+        color: 'white', // 🚨 PEAKFIT: Texto Blanco
     },
 });

@@ -12,12 +12,11 @@ import { useTheme } from '../ThemeContext';
 // ----------------------------------------------------------------------
 // URIs de Imagenes del Gimnasio
 // ----------------------------------------------------------------------
-const LOGO_SOURCE = require('../assets/logoND.jpg'); 
+const LOGO_SOURCE = require('../assets/logoND.png'); 
 const BACKGROUND_SOURCE = require('../assets/wallpaper.jpg'); 
 
-
 // ----------------------------------------------------------------------
-// Componente de Registro de Alumno (Modal)
+// Componente de Registro de Alumno (Modal) - SE MANTIENE IGUAL
 // ----------------------------------------------------------------------
 function RegisterModal({ isVisible, onClose, API_URL, themeColors }) {
     const [nombre, setNombre] = useState('');
@@ -75,32 +74,32 @@ function RegisterModal({ isVisible, onClose, API_URL, themeColors }) {
             visible={isVisible}
             onRequestClose={onClose}
         >
-            <SafeAreaView style={[styles.modalContainer, {backgroundColor: themeColors.background}]}>
+            <SafeAreaView style={[styles.modalContainer, {backgroundColor: 'black'}]}>
                 <ScrollView contentContainerStyle={styles.modalContent}>
-                    <Text style={[styles.modalTitle, {color: themeColors.textPrimary}]}>Registro de Alumno</Text>
+                    <Text style={[styles.modalTitle, {color: 'white'}]}>Registro de Alumno</Text>
                     
-                    {error && <Text style={[styles.errorText, {color: themeColors.danger}]}>{error}</Text>}
-                    {success && <Text style={[styles.successText, {color: themeColors.success}]}>¡Registro exitoso! Ya puedes ingresar con tu DNI y contraseña.</Text>}
+                    {error && <Text style={[styles.errorText, {color: 'white', backgroundColor: '#B91C1CAB'}]}>{error}</Text>}
+                    {success && <Text style={[styles.successText, {color: '#3ABFBC'}]}>¡Registro exitoso! Ya puedes ingresar con tu DNI y contraseña.</Text>}
 
                     <TextInput
                         style={[styles.input, {
-                            backgroundColor: themeColors.inputBackground, 
-                            color: themeColors.textPrimary,
-                            borderColor: themeColors.inputBorder,
+                            backgroundColor: '#1C1C1E', 
+                            color: 'white',
+                            borderColor: '#1C1C1E',
                         }]}
                         placeholder="Nombre completo"
-                        placeholderTextColor={themeColors.textSecondary}
+                        placeholderTextColor={'#A9A9A9'}
                         value={nombre}
                         onChangeText={setNombre}
                     />
                     <TextInput
                         style={[styles.input, {
-                            backgroundColor: themeColors.inputBackground, 
-                            color: themeColors.textPrimary,
-                            borderColor: themeColors.inputBorder,
+                            backgroundColor: '#1C1C1E', 
+                            color: 'white',
+                            borderColor: '#1C1C1E',
                         }]}
                         placeholder="Email"
-                        placeholderTextColor={themeColors.textSecondary}
+                        placeholderTextColor={'#A9A9A9'}
                         value={email}
                         onChangeText={setEmail}
                         keyboardType="email-address"
@@ -108,45 +107,48 @@ function RegisterModal({ isVisible, onClose, API_URL, themeColors }) {
                     />
                     <TextInput
                         style={[styles.input, {
-                            backgroundColor: themeColors.inputBackground, 
-                            color: themeColors.textPrimary,
-                            borderColor: themeColors.inputBorder,
+                            backgroundColor: '#1C1C1E', 
+                            color: 'white',
+                            borderColor: '#1C1C1E',
                         }]}
                         placeholder="Numero de Documento (DNI)"
-                        placeholderTextColor={themeColors.textSecondary}
+                        placeholderTextColor={'#A9A9A9'}
                         value={dni}
                         onChangeText={setDni}
                         keyboardType="numeric"
                     />
                     <TextInput
                         style={[styles.input, {
-                            backgroundColor: themeColors.inputBackground, 
-                            color: themeColors.textPrimary,
-                            borderColor: themeColors.inputBorder,
+                            backgroundColor: '#1C1C1E', 
+                            color: 'white',
+                            borderColor: '#1C1C1E',
                         }]}
                         placeholder="Contraseña"
-                        placeholderTextColor={themeColors.textSecondary}
+                        placeholderTextColor={'#A9A9A9'}
                         value={password}
                         onChangeText={setPassword}
                         secureTextEntry 
                     />
                     
-                    {isLoading ? (
-                        <ActivityIndicator size="large" color={themeColors.primary} />
-                    ) : (
-                        <Button 
-                            title="Registrarse como Alumno" 
-                            onPress={handleRegister} 
-                            color={themeColors.success} 
-                        />
-                    )}
+                    <TouchableOpacity
+                        style={[styles.customButton, styles.buttonSuccess, { opacity: isLoading ? 0.6 : 1, marginTop: 30 }]}
+                        onPress={handleRegister}
+                        disabled={isLoading}
+                    >
+                        {isLoading ? (
+                            <ActivityIndicator size="small" color={'black'} />
+                        ) : (
+                            <Text style={styles.buttonText}>REGISTRARSE</Text>
+                        )}
+                    </TouchableOpacity>
                     
                     <View style={{marginTop: 20}}>
-                        <Button 
-                            title="Volver a Ingresar" 
-                            onPress={onClose} 
-                            color={themeColors.textSecondary}
-                        />
+                        <TouchableOpacity
+                            style={[styles.customButton, styles.buttonSecondary, {marginTop: 0}]}
+                            onPress={onClose}
+                        >
+                            <Text style={styles.buttonTextSecondary}>VOLVER A INGRESAR</Text>
+                        </TouchableOpacity>
                     </View>
                 </ScrollView>
             </SafeAreaView>
@@ -155,7 +157,7 @@ function RegisterModal({ isVisible, onClose, API_URL, themeColors }) {
 }
 
 // ----------------------------------------------------------------------
-// Funcion de Login Personalizada 
+// Funcion de Login Personalizada (Estilo PEAKFIT final)
 // ----------------------------------------------------------------------
 export default function CustomLoginScreen({ signIn, API_URL }) {
     const { colors: themeColors, isDark, toggleTheme } = useTheme(); 
@@ -208,10 +210,10 @@ export default function CustomLoginScreen({ signIn, API_URL }) {
     return (
         <ImageBackground 
             source={BACKGROUND_SOURCE} 
-            style={styles.container}
-            resizeMode="cover" 
+            style={styles.backgroundImagePeakfit}
+            imageStyle={styles.backgroundImageStylePeakfit} 
         >
-            <SafeAreaView style={{ flex: 1 }}>
+            <SafeAreaView style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)' }}> 
                 <KeyboardAvoidingView 
                     style={{ flex: 1 }} 
                     behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -224,65 +226,76 @@ export default function CustomLoginScreen({ signIn, API_URL }) {
                         themeColors={themeColors}
                     />
 
-                    <ScrollView contentContainerStyle={styles.contentTransparent}>
+                    <ScrollView contentContainerStyle={styles.contentLogin}>
                         
-                        <View style={styles.header}>
-                            <Image 
-                                source={LOGO_SOURCE} 
-                                style={styles.logo} // Estilo 'logo' con efecto
-                                resizeMode="contain"
-                            />
-                            {/* 🚨 APLICA SOMBRA DE TEXTO Y COLOR BLANCO */}
-                            <Text style={styles.slogan}>Es hora de llegar muy lejos</Text>
+                        <View style={styles.headerPeakfit}>
+                            {/* Logo */}
+                            <Image source={LOGO_SOURCE} style={styles.logoImagePeakfit} />
+                            {/* Lema */}
+                            <Text style={styles.sloganText}>Es hora de llegar muy lejos</Text>
                         </View>
 
-                        {/* Cambio: Ajustar el color de fondo de error para que funcione sobre cualquier fondo */}
-                        {error && <Text style={[styles.errorText, {color: themeColors.danger, backgroundColor: isDark ? '#B91C1CAB' : '#FFEBEEAA'}]}>{error}</Text>}
+                        {/* Título en español */}
+                        <Text style={styles.titlePeakfit}>Iniciar Sesión</Text>
                         
+                        {error && <Text style={styles.errorText}>{error}</Text>}
+                        
+                        {/* INPUT: Email o DNI */}
+                        <Text style={styles.inputLabelPeakfit}>Email o DNI</Text>
                         <TextInput
-                            style={[styles.input, {
-                                backgroundColor: themeColors.inputBackground, 
-                                color: themeColors.textPrimary,
-                                borderColor: themeColors.inputBorder,
+                            style={[styles.inputPeakfit, {
+                                backgroundColor: '#1C1C1E', 
+                                color: 'white',
                             }]}
-                            placeholder="Numero de Documento (DNI)"
-                            placeholderTextColor={themeColors.textSecondary}
-                            value={dni}
+                            placeholder="Email o DNI"
+                            placeholderTextColor={'#A9A9A9'}
+                            value={dni} 
                             onChangeText={setDni}
-                            keyboardType="numeric" 
+                            keyboardType="email-address"
                             autoCapitalize="none"
                         />
-                        <TextInput
-                            style={[styles.input, {
-                                backgroundColor: themeColors.inputBackground, 
-                                color: themeColors.textPrimary,
-                                borderColor: themeColors.inputBorder,
-                            }]}
-                            placeholder="Contraseña"
-                            placeholderTextColor={themeColors.textSecondary}
-                            value={password}
-                            onChangeText={setPassword}
-                            secureTextEntry 
-                        />
+                        
+                        {/* INPUT: Contraseña */}
+                        <Text style={styles.inputLabelPeakfit}>Contraseña</Text>
+                        <View style={styles.passwordContainerPeakfit}>
+                            <TextInput
+                                style={[styles.inputPeakfit, styles.passwordInputPeakfit, {
+                                    backgroundColor: '#1C1C1E', 
+                                    color: 'white',
+                                }]}
+                                placeholder="Contraseña"
+                                placeholderTextColor={'#A9A9A9'}
+                                value={password}
+                                onChangeText={setPassword}
+                                secureTextEntry
+                            />
+                            <Text style={styles.passwordIconPeakfit}>👁️</Text>
+                        </View>
+
+                        {/* 🚨 ELIMINAMOS: utilityRowPeakfit (Mantener sesión y Olvidaste contraseña) */}
                         
                         {isLoading ? (
-                            <ActivityIndicator size="large" color={themeColors.primary} />
+                            <ActivityIndicator size="large" color={'#3ABFBC'} style={{marginTop: 25}}/>
                         ) : (
                             <>
-                                <Button 
-                                    title="Ingresar" 
-                                    onPress={handleLogin} 
-                                    color={themeColors.primary}
-                                />
-                                <View style={{marginTop: 20}}>
-                                    <Button
-                                        title="Registrarse como Alumno"
-                                        onPress={() => setIsRegisterVisible(true)}
-                                        color={themeColors.warning} 
-                                    />
-                                </View>
+                                {/* BOTÓN INICIAR SESIÓN */}
+                                <TouchableOpacity
+                                    style={[styles.customButtonPeakfit, styles.buttonPrimaryPeakfit, {marginTop: 30}]}
+                                    onPress={handleLogin}
+                                >
+                                    <Text style={styles.buttonTextPeakfit}>INICIAR SESIÓN</Text>
+                                </TouchableOpacity>
                             </>
                         )}
+                        
+                        {/* Enlace de registro (Sign Up) */}
+                        <View style={styles.signUpContainerPeakfit}>
+                            <Text style={styles.signUpTextPeakfit}>¿No tienes una cuenta? </Text>
+                            <TouchableOpacity onPress={() => setIsRegisterVisible(true)}>
+                                <Text style={styles.signUpLinkPeakfit}>Registrarse</Text>
+                            </TouchableOpacity>
+                        </View>
+
                     </ScrollView>
                 </KeyboardAvoidingView>
             </SafeAreaView>
@@ -291,87 +304,143 @@ export default function CustomLoginScreen({ signIn, API_URL }) {
 }
 
 // ----------------------------------------------------------------------
-// Funcion que genera los estilos basicos estaticos
+// Funcion que genera los estilos del nuevo diseño "Peakfit"
 // ----------------------------------------------------------------------
 const getStyles = (colors) => StyleSheet.create({
-    container: {
+    // -------------------------------------------------------------------
+    // ESTILOS BASE PEAKFIT 
+    // -------------------------------------------------------------------
+    backgroundImagePeakfit: {
         flex: 1,
     },
-    // Contenedor principal transparente
-    contentTransparent: {
-        padding: 30,
+    backgroundImageStylePeakfit: {
+        opacity: 0.4, 
+    },
+    contentLogin: {
+        paddingHorizontal: 25,
+        paddingVertical: 50, 
         flexGrow: 1,
-        justifyContent: 'center', 
-        backgroundColor: 'transparent', 
-        borderRadius: 20, 
-        marginHorizontal: 20,
-        paddingVertical: 50,
-        alignSelf: 'center',
-        width: Platform.OS === 'web' ? '40%' : '100%', 
-        maxWidth: 400,
-        shadowColor: 'transparent',
-        elevation: 0,
+        justifyContent: 'center',
     },
-    themeToggleContainer: {
-        position: 'absolute',
-        top: 20,
-        right: 20,
-        padding: 10,
-        zIndex: 10, 
-    },
-    themeToggleText: {
-        fontSize: 14,
-        fontWeight: 'bold',
-    },
-    header: {
+
+    // Logo y Encabezado
+    headerPeakfit: {
         alignItems: 'center',
-        marginBottom: 30, 
+        marginBottom: 20,
     },
-    logo: {
-        // Estilos del logo (Se mantienen)
-        width: 180, 
-        height: 120, 
-        borderRadius: 20, 
-        marginBottom: 15,
-        alignSelf: 'center', 
-        overflow: 'hidden', 
-        // Efecto de sombra sutil pero estético (Se mantiene)
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 6 },
-        shadowOpacity: 0.4,
-        shadowRadius: 8,
-        elevation: 12, 
+    logoImagePeakfit: {
+        width: 200, 
+        height: 200, 
+        resizeMode: 'contain',
     },
-    // 🚨 MODIFICACIÓN: Estilo del eslogan con Text Shadow para mejorar contraste
-    slogan: {
-        fontSize: 16,
+    sloganText: {
+        fontSize: 14,
+        color: '#A9A9A9',
         fontStyle: 'italic',
-        color: 'white', // Color blanco para el texto
-        marginTop: 15,
-        // Sombra de texto para crear un contorno negro y aumentar la legibilidad
-        textShadowColor: 'rgba(0, 0, 0, 0.75)',
-        textShadowOffset: { width: 1, height: 1 },
-        textShadowRadius: 3,
+        marginTop: -20, 
+        marginBottom: 20,
     },
-    input: {
+    
+    // Títulos y Subtítulos
+    titlePeakfit: {
+        fontSize: 30,
+        fontWeight: 'bold',
+        color: 'white',
+        marginBottom: 15, 
+    },
+
+    // Inputs
+    inputLabelPeakfit: {
+        fontSize: 14,
+        color: '#A9A9A9',
+        marginBottom: 8,
+    },
+    inputPeakfit: {
         height: 50,
-        borderWidth: 1,
+        backgroundColor: '#1C1C1E', 
+        color: 'white',
         borderRadius: 10,
         paddingHorizontal: 15,
         marginBottom: 20,
         fontSize: 16,
+        borderWidth: 0, 
     },
+
+    // Password con Icono 
+    passwordContainerPeakfit: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        // 🚨 CAMBIO: Se ajusta el margen inferior para alinearse con el diseño sin utilityRow
+        marginBottom: 0, 
+    },
+    passwordInputPeakfit: {
+        flex: 1,
+        marginBottom: 0,
+    },
+    passwordIconPeakfit: {
+        position: 'absolute',
+        right: 15,
+        color: '#A9A9A9',
+        fontSize: 18,
+    },
+
+    // 🚨 ELIMINAMOS: utilityRowPeakfit, checkboxContainerPeakfit, checkboxPeakfit, checkboxTextPeakfit, forgotPasswordPeakfit.
+
+    // Botones Principales
+    customButtonPeakfit: {
+        paddingVertical: 15,
+        borderRadius: 10,
+        alignItems: 'center',
+        justifyContent: 'center',
+        shadowColor: '#3ABFBC',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 5,
+        elevation: 8,
+    },
+    buttonPrimaryPeakfit: {
+        backgroundColor: '#3ABFBC', 
+    },
+    buttonTextPeakfit: {
+        fontSize: 18,
+        fontWeight: 'bold',
+        color: 'black', 
+    },
+
+    // Enlace de Registro (Sign Up)
+    signUpContainerPeakfit: {
+        flexDirection: 'row',
+        justifyContent: 'center',
+        marginTop: 40, 
+    },
+    signUpTextPeakfit: {
+        color: '#A9A9A9',
+        fontSize: 14,
+    },
+    signUpLinkPeakfit: {
+        color: '#3ABFBC', 
+        fontSize: 14,
+        fontWeight: 'bold',
+    },
+    
+    // Estilo de error modificado
     errorText: {
         marginBottom: 15,
         textAlign: 'center',
         padding: 10,
         borderRadius: 8,
         fontWeight: '600',
+        color: 'white', 
+        backgroundColor: '#B91C1CAB', 
     },
-    // Estilos del Modal de Registro
+
+    // -------------------------------------------------------------------
+    // ESTILOS DEL MODAL DE REGISTRO
+    // -------------------------------------------------------------------
     modalContainer: {
         flex: 1,
         paddingTop: 40,
+        backgroundColor: 'black', 
     },
     modalContent: {
         padding: 30,
@@ -383,10 +452,49 @@ const getStyles = (colors) => StyleSheet.create({
         fontWeight: 'bold',
         textAlign: 'center',
         marginBottom: 30,
+        color: 'white', 
+    },
+    input: { 
+        height: 50,
+        backgroundColor: '#1C1C1E', 
+        color: 'white',
+        borderRadius: 10,
+        paddingHorizontal: 15,
+        marginBottom: 20,
+        fontSize: 16,
+        borderWidth: 0,
+    },
+    customButton: { 
+        paddingVertical: 14,
+        paddingHorizontal: 20,
+        borderRadius: 10, 
+        alignItems: 'center',
+        justifyContent: 'center',
+        minWidth: 100,
+        marginTop: 15,
+    },
+    buttonSuccess: {
+        backgroundColor: '#3ABFBC', 
+    },
+    buttonSecondary: {
+        backgroundColor: '#1C1C1E', 
+        borderColor: '#A9A9A9',
+        borderWidth: 1,
+    },
+    buttonText: { 
+        fontSize: 16,
+        fontWeight: 'bold',
+        color: 'black', 
+    },
+    buttonTextSecondary: { 
+        fontSize: 16,
+        fontWeight: 'bold',
+        color: 'white', 
     },
     successText: {
         marginBottom: 15,
         textAlign: 'center',
         fontWeight: 'bold',
+        color: '#3ABFBC',
     }
 });
