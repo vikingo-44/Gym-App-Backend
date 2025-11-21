@@ -159,7 +159,7 @@ def register_student(
     user_data: List[UserCreate], 
     session: Annotated[Session, Depends(get_session)]
 ):
-    """Permite el registro de uno o más usuarios con rol forzado a Alumno."""
+    """Permite el registro de uno o mas usuarios con rol forzado a Alumno."""
     
     # ----------------------------------------------------------------------
     # LISTA PARA ALMACENAR LOS USUARIOS CREADOS
