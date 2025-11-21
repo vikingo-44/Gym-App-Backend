@@ -92,8 +92,8 @@ app = FastAPI(
 # ----------------------------------------------------------------------
 # Configuracion CORS (CRiTICO para el frontend web)
 # ----------------------------------------------------------------------
-# Permite que la aplicación web (el archivo index.html) acceda a esta API.
-# NOTA: "*" es útil para desarrollo, pero en producción deberías usar la URL exacta de tu frontend en Render.
+# Permite que la aplicacion web (el archivo index.html) acceda a esta API.
+# NOTA: "*" es util para desarrollo, pero en produccion deberias usar la URL exacta de tu frontend en Render.
 origins = [
     "http://localhost",
     "http://localhost:8080",
@@ -222,7 +222,7 @@ def register_student(
         created_users.append(new_user) # Almacenamos el nuevo usuario para la respuesta de lista
         
     # ----------------------------------------------------------------------
-    # COMMIT Y REFRESH (Se realiza una única vez para toda la transacción)
+    # COMMIT Y REFRESH (Se realiza una unica vez para toda la transaccion)
     # ----------------------------------------------------------------------
     session.commit()
     
@@ -232,7 +232,7 @@ def register_student(
         
     # ?? AJUSTE OBLIGATORIO: Ya que el endpoint ahora acepta y procesa una lista,
     # debe devolver una lista para satisfacer el contrato (response_model=List[UserRead]).
-    # De lo contrario, FastAPI fallará al intentar convertir un solo objeto a una lista.
+    # De lo contrario, FastAPI fallara al intentar convertir un solo objeto a una lista.
     return created_users
 
 @app.post("/register", response_model=UserRead, status_code=status.HTTP_201_CREATED, tags=["Autenticacion"])
