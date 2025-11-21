@@ -28,7 +28,9 @@
       "package": "com.vikingo44.GymApp"
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/favicon.png",
+	  "bundler": "webpack",
+	  "output": "static"
     },
     "extra": {
       "eas": {
