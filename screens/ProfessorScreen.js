@@ -1740,7 +1740,7 @@ export default function ProfessorScreen({ navigation }) {
     // ----------------------------------------------------------------
     // FUNCION PRINCIPAL: CARGA DATOS
     // ----------------------------------------------------------------
-    const fetchData = async () => {
+    const fetchData = useCallback(async () => {
         setIsLoading(true);
         setDataError(null); 
         try {
