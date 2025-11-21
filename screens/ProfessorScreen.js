@@ -1770,7 +1770,7 @@ export default function ProfessorScreen({ navigation }) {
         } finally {
             setIsLoading(false);
         }
-    }; [getToken, signOut]);
+    }, [getToken, signOut]);
     
     // ----------------------------------------------------------------
     // FUNCIÓN: NAVEGAR A EDICIÓN DE DETALLES DEL ALUMNO
