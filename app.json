@@ -3,6 +3,11 @@
     "name": "GymApp",
     "slug": "GymApp",
     "version": "1.0.0",
+    "platforms": [
+      "ios",
+      "android",
+      "web"
+    ],
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -29,8 +34,8 @@
     },
     "web": {
       "favicon": "./assets/favicon.png",
-	  "bundler": "webpack",
-	  "output": "static"
+      "bundler": "webpack",
+      "output": "static"
     },
     "extra": {
       "eas": {
