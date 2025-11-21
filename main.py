@@ -4,12 +4,11 @@ from typing import Annotated, List, Optional
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Depends, HTTPException, status
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from fastapi.middleware.cors import CORSMiddleware # <--- ¡IMPORTACIoN CRiTICA AnADIDA!
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials 
 from sqlmodel import Session, select
 # Importamos selectinload para forzar la carga de relaciones anidadas
-from sqlalchemy.orm import selectinload
-from sqlalchemy import desc
+from sqlalchemy.orm import selectinload 
+from sqlalchemy import desc 
 from sqlalchemy import func # NECESARIO para usar func.lower() en validacion de email
 from sqlalchemy import delete # <--- ¡IMPORTACIoN CRiTICA AnADIDA!
 
@@ -24,12 +23,12 @@ from models import (
     # Importaciones de EJERCICIOS
     Exercise, ExerciseCreate, ExerciseRead, ExerciseUpdate, MuscleGroup,
     Routine, RoutineCreate, RoutineRead, RoutineUpdate,
-    RoutineExercise, RoutineAssignment,
+    RoutineExercise, RoutineAssignment, 
     RoutineAssignmentCreate, RoutineAssignmentRead,
     # Esquemas necesarios
-    RoutineAssignmentUpdate,
+    RoutineAssignmentUpdate, 
     ChangePassword,
-    RoutineCreateOrUpdate,
+    RoutineCreateOrUpdate, 
     # CRITICO: Importaciones de Grupo y Transaccional
     RoutineGroup, RoutineGroupCreate, RoutineGroupRead, RoutineGroupCreateAndRoutines,
     UserUpdateByProfessor,
@@ -88,28 +87,6 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan
 )
-
-# ----------------------------------------------------------------------
-# Configuracion CORS (CRiTICO para el frontend web)
-# ----------------------------------------------------------------------
-# Permite que la aplicacion web (el archivo index.html) acceda a esta API.
-# NOTA: "*" es util para desarrollo, pero en produccion deberias usar la URL exacta de tu frontend en Render.
-origins = [
-    "http://localhost",
-    "http://localhost:8080",
-    "http://127.0.0.1:5500",
-    "*"  # Permite cualquier origen (temporalmente, para desarrollo web)
-    # Ejemplo de URL de Render: "https://your-frontend-app.onrender.com"
-]
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
 
 # ----------------------------------------------------------------------
 # Dependencias de Autenticacion y Autorizacion
@@ -222,7 +199,7 @@ def register_student(
         created_users.append(new_user) # Almacenamos el nuevo usuario para la respuesta de lista
         
     # ----------------------------------------------------------------------
-    # COMMIT Y REFRESH (Se realiza una unica vez para toda la transaccion)
+    # COMMIT Y REFRESH (Se realiza una única vez para toda la transacción)
     # ----------------------------------------------------------------------
     session.commit()
     
@@ -232,7 +209,7 @@ def register_student(
         
     # ?? AJUSTE OBLIGATORIO: Ya que el endpoint ahora acepta y procesa una lista,
     # debe devolver una lista para satisfacer el contrato (response_model=List[UserRead]).
-    # De lo contrario, FastAPI fallara al intentar convertir un solo objeto a una lista.
+    # De lo contrario, FastAPI fallará al intentar convertir un solo objeto a una lista.
     return created_users
 
 @app.post("/register", response_model=UserRead, status_code=status.HTTP_201_CREATED, tags=["Autenticacion"])
@@ -781,8 +758,8 @@ def set_assignment_active_status(
     updated_assignment = session.exec(statement_read).first()
 
     if not updated_assignment:
-            raise HTTPException(status_code=500, detail="Error interno: No se pudo recargar la asignacion actualizada.")
-            
+          raise HTTPException(status_code=500, detail="Error interno: No se pudo recargar la asignacion actualizada.")
+          
     return updated_assignment
     
 # --- Ruta para eliminar un grupo de asignaciones para un alumno especifico ---
@@ -1149,7 +1126,7 @@ def get_my_active_routine(
                 student_id=active_anchor_assignment.student_id,
                 professor_id=active_anchor_assignment.professor_id,
                 assigned_at=active_anchor_assignment.assigned_at,
-                is_active=is_active_status, # Usamos el estado REAL (Activa/Inactiva) para que el cliente pueda resaltar la rutina actual.
+                is_active=True, # Usamos TRUE para que el cliente sepa que esta rutina pertenece al grupo activo.
                 routine=routine,
                 student=active_anchor_assignment.student,
                 professor=active_anchor_assignment.professor
