@@ -147,42 +147,70 @@ def read_root():
     return {"message": "API del Gestor de Rutinas de Gimnasio activa."}
 
 # NUEVA RUTA: Registro solo de Alumnos
-@app.post("/register/student", response_model=List[UserRead], status_code=status.HTTP_201_CREATED, tags=["Autenticacion"])
+@app.post(
+    # ?? CAMBIO 1: response_model ahora es una LISTA de UserRead
+    "/register/student", 
+    response_model=List[UserRead], 
+    status_code=status.HTTP_201_CREATED, 
+    tags=["Autenticacion"]
+)
 def register_student(
-    user_data: UserCreate, # Se usa UserCreate, pero el rol se fuerza a Alumno
+    # ?? CAMBIO 2: user_data ahora espera una LISTA de objetos UserCreate
+    user_data: List[UserCreate], 
     session: Annotated[Session, Depends(get_session)]
 ):
-    """Permite el registro de nuevos usuarios con rol forzado a Alumno."""
+    """Permite el registro de uno o más usuarios con rol forzado a Alumno."""
     
-    # 1. Verificar si DNI ya existe
-    existing_dni = session.exec(select(User).where(User.dni == user_data.dni)).first()
-    if existing_dni:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="El DNI ya esta registrado."
-        )
+    # ----------------------------------------------------------------------
+    # LISTA PARA ALMACENAR LOS USUARIOS CREADOS
+    # ----------------------------------------------------------------------
+    created_users = []
     
-    # 2. Verificar si Email ya existe
-    existing_email = session.exec(select(User).where(User.email == user_data.email)).first()
-    if existing_email:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="El email ya esta registrado."
-        )
+    # ?? BUCLE PARA PROCESAR CADA USUARIO DE LA LISTA
+    for single_user_data in user_data:
+        
+        # 1. Verificar si DNI ya existe
+        existing_dni = session.exec(select(User).where(User.dni == single_user_data.dni)).first()
+        if existing_dni:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="El DNI ya esta registrado."
+            )
+        
+        # 2. Verificar si Email ya existe
+        existing_email = session.exec(select(User).where(User.email == single_user_data.email)).first()
+        if existing_email:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="El email ya esta registrado."
+            )
 
-    # NOTA: Se asume que el backend maneja el limite de 72 bytes para el password hash
-    hashed_password = get_password_hash(user_data.password)
-    new_user = User(
-        email=user_data.email,
-        dni=user_data.dni, # Almacenar DNI
-        password_hash=hashed_password,
-        nombre=user_data.nombre,
-        rol=UserRole.STUDENT # Forzar rol a Alumno
-    )
-    session.add(new_user)
+        # NOTA: Se asume que el backend maneja el limite de 72 bytes para el password hash
+        hashed_password = get_password_hash(single_user_data.password)
+        new_user = User(
+            email=single_user_data.email,
+            dni=single_user_data.dni, # Almacenar DNI
+            password_hash=hashed_password,
+            nombre=single_user_data.nombre,
+            rol=UserRole.STUDENT # Forzar rol a Alumno
+        )
+        
+        session.add(new_user)
+        created_users.append(new_user) # Almacenamos el nuevo usuario para la respuesta de lista
+        
+    # ----------------------------------------------------------------------
+    # COMMIT Y REFRESH (Se realiza una única vez para toda la transacción)
+    # ----------------------------------------------------------------------
     session.commit()
-    session.refresh(new_user)
-    return new_user
+    
+    # Refrescar los usuarios creados y devolver la lista
+    for user in created_users:
+        session.refresh(user)
+        
+    # ?? AJUSTE OBLIGATORIO: Ya que el endpoint ahora acepta y procesa una lista,
+    # debe devolver una lista para satisfacer el contrato (response_model=List[UserRead]).
+    # De lo contrario, FastAPI fallará al intentar convertir un solo objeto a una lista.
+    return created_users
 
 @app.post("/register", response_model=UserRead, status_code=status.HTTP_201_CREATED, tags=["Autenticacion"])
 def register_user(
