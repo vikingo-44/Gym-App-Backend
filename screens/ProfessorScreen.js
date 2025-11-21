@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext, useMemo, useRef } from 'react'; 
+import React, { useState, useEffect, useContext, useMemo, useRef, useCallback } from 'react'; 
 import { 
     StyleSheet, Text, View, ScrollView, SafeAreaView, Button, 
     ActivityIndicator, FlatList, TouchableOpacity, Alert, Modal,
@@ -1770,7 +1770,7 @@ export default function ProfessorScreen({ navigation }) {
         } finally {
             setIsLoading(false);
         }
-    };
+    }; [getToken, signOut]);
     
     // ----------------------------------------------------------------
     // FUNCIÓN: NAVEGAR A EDICIÓN DE DETALLES DEL ALUMNO
