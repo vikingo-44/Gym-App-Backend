@@ -862,7 +862,7 @@ function AssignmentView({ student, routines, onAssignmentComplete, onCancel, nav
                             ) : (
                                 <Text style={assignmentStyles.warning}>Este alumno no tiene rutinas asignadas.</Text>
                             )}
-                        </View>
+                        </div>
                     )}
 
                </View>
@@ -1794,15 +1794,23 @@ export default function ProfessorScreen({ navigation }) {
         animateOut(() => navigation.navigate('AddStudent')); 
     };
 
+    // 🚩 FIX CRÍTICO PARA EL CIERRE DE SESIÓN EN STATIC SITE/WEB 🚩
     const handleLogout = () => {
         Alert.alert(
             "Cerrar Sesión",
             "¿Estás seguro de que quieres cerrar sesión?",
             [
                 { text: "Cancelar", style: "cancel" },
-                { text: "Cerrar", onPress: () => {
-                    animateOut(signOut); 
-                }, style: "destructive" },
+                { 
+                    text: "Cerrar", 
+                    onPress: () => {
+                        // Se utiliza una función anónima para garantizar que la llamada a
+                        // signOut se haga después de que animateOut haya cerrado el modal,
+                        // resolviendo el problema de la "pantalla muerta" en la web.
+                        animateOut(() => signOut()); 
+                    }, 
+                    style: "destructive" 
+                },
             ]
         );
     };
