@@ -3,12 +3,18 @@
   "license": "0BSD",
   "version": "1.0.0",
   "main": "index.js",
+  "homepage": ".",
   "scripts": {
     "start": "expo start",
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
+<<<<<<< HEAD
+    "build": "expo export -p web",
+	"build:web": "expo export --output-dir web-build"
+=======
     "build": "expo export -p web"
+>>>>>>> dbc54c2b2c9ef00b612a5501ddcc14b4293bd40f
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "2.2.0",
@@ -27,7 +33,10 @@
     "react-native": "0.81.5",
     "react-native-safe-area-context": "~5.6.0",
     "react-native-screens": "~4.16.0",
+<<<<<<< HEAD
+=======
     "react-native-svg": "^15.15.0",
+>>>>>>> dbc54c2b2c9ef00b612a5501ddcc14b4293bd40f
     "react-native-web": "^0.21.0"
   },
   "private": true

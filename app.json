@@ -34,8 +34,13 @@
     },
     "web": {
       "favicon": "./assets/favicon.png",
+<<<<<<< HEAD
+	  "bundler": "metro",
+      "publicPath": "."
+=======
       "bundler": "webpack",
       "output": "static"
+>>>>>>> dbc54c2b2c9ef00b612a5501ddcc14b4293bd40f
     },
     "extra": {
       "eas": {
