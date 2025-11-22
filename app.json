@@ -3,6 +3,7 @@
     "name": "GymApp",
     "slug": "GymApp",
     "version": "1.0.0",
+	"entryPoint": "App.js",
     "platforms": [
       "ios",
       "android",
