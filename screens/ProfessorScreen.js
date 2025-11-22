@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext, useMemo, useRef, useCallback } from 'react'; 
+import React, { useState, useEffect, useContext, useMemo, useRef } from 'react'; 
 import { 
     StyleSheet, Text, View, ScrollView, SafeAreaView, Button, 
     ActivityIndicator, FlatList, TouchableOpacity, Alert, Modal,
@@ -862,7 +862,7 @@ function AssignmentView({ student, routines, onAssignmentComplete, onCancel, nav
                             ) : (
                                 <Text style={assignmentStyles.warning}>Este alumno no tiene rutinas asignadas.</Text>
                             )}
-                        </div>
+                        </View>
                     )}
 
                </View>
@@ -1481,7 +1481,6 @@ function CreationWizardSimplified({ students, onCancel, navigation }) {
         switch (step) {
             case 1:
                 return (
-                    // FIX: Envolvemos los elementos adyacentes en un fragmento <>...</>
                     <>
                         <Text style={styles.stepText}>Paso 1: Nombre y Descripción del Grupo</Text>
                         <Text style={wizardLabelStyle}>Nombre de la Agrupación:</Text>
@@ -1509,7 +1508,6 @@ function CreationWizardSimplified({ students, onCancel, navigation }) {
                 );
             case 2:
                 return (
-                    // FIX: Envolvemos los elementos adyacentes en un fragmento <>...</>
                     <>
                         <Text style={styles.stepText}>Paso 2: Configuración de la Agrupación</Text>
                         
@@ -1565,7 +1563,6 @@ function CreationWizardSimplified({ students, onCancel, navigation }) {
                 );
             case 3:
                 return (
-                    // FIX: Envolvemos los elementos adyacentes en un fragmento <>...</>
                     <>
                         <Text style={styles.stepText}>Paso 3: Selecciona el Alumno</Text>
                         <TextInput
@@ -1743,7 +1740,7 @@ export default function ProfessorScreen({ navigation }) {
     // ----------------------------------------------------------------
     // FUNCION PRINCIPAL: CARGA DATOS
     // ----------------------------------------------------------------
-    const fetchData = useCallback(async () => {
+    const fetchData = async () => {
         setIsLoading(true);
         setDataError(null); 
         try {
@@ -1773,7 +1770,7 @@ export default function ProfessorScreen({ navigation }) {
         } finally {
             setIsLoading(false);
         }
-    }, [getToken, signOut]);
+    };
     
     // ----------------------------------------------------------------
     // FUNCIÓN: NAVEGAR A EDICIÓN DE DETALLES DEL ALUMNO
@@ -1804,8 +1801,7 @@ export default function ProfessorScreen({ navigation }) {
             [
                 { text: "Cancelar", style: "cancel" },
                 { text: "Cerrar", onPress: () => {
-                    // FIX: Aseguramos que la llamada a signOut sea directa después de animateOut
-                    animateOut(() => signOut()); 
+                    animateOut(signOut); 
                 }, style: "destructive" },
             ]
         );
@@ -2007,7 +2003,6 @@ export default function ProfessorScreen({ navigation }) {
                             styles.menuContainer, 
                             { transform: [{ translateX: menuAnim }] } 
                         ]}
-                        // FIX WEB: Añadimos onStartShouldSetResponder para que no se cierre al hacer clic dentro
                         onStartShouldSetResponder={() => true} 
                     >
                         
