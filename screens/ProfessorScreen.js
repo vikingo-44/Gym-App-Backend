@@ -1481,6 +1481,7 @@ function CreationWizardSimplified({ students, onCancel, navigation }) {
         switch (step) {
             case 1:
                 return (
+                    // Se usa el fragmento de React <>...</> para anidación
                     <>
                         <Text style={styles.stepText}>Paso 1: Nombre y Descripción del Grupo</Text>
                         <Text style={wizardLabelStyle}>Nombre de la Agrupación:</Text>
@@ -1508,6 +1509,7 @@ function CreationWizardSimplified({ students, onCancel, navigation }) {
                 );
             case 2:
                 return (
+                    // Se usa el fragmento de React <>...</> para anidación
                     <>
                         <Text style={styles.stepText}>Paso 2: Configuración de la Agrupación</Text>
                         
@@ -1563,6 +1565,7 @@ function CreationWizardSimplified({ students, onCancel, navigation }) {
                 );
             case 3:
                 return (
+                    // Se usa el fragmento de React <>...</> para anidación
                     <>
                         <Text style={styles.stepText}>Paso 3: Selecciona el Alumno</Text>
                         <TextInput
@@ -1804,9 +1807,8 @@ export default function ProfessorScreen({ navigation }) {
                 { 
                     text: "Cerrar", 
                     onPress: () => {
-                        // Se utiliza una función anónima para garantizar que la llamada a
-                        // signOut se haga después de que animateOut haya cerrado el modal,
-                        // resolviendo el problema de la "pantalla muerta" en la web.
+                        // FIX: Se usa una función anónima que llama a signOut() solo 
+                        // cuando la animación de cierre del menú ha finalizado, garantizando el flujo en web.
                         animateOut(() => signOut()); 
                     }, 
                     style: "destructive" 
