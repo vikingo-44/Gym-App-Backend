@@ -4,6 +4,8 @@ from typing import Annotated, List, Optional
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Depends, HTTPException, status
+# ?? IMPORTACIoN CRiTICA AÑADIDA: Para el middleware CORS
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials 
 from sqlmodel import Session, select
 # Importamos selectinload para forzar la carga de relaciones anidadas
@@ -79,7 +81,7 @@ async def lifespan(app: FastAPI):
     print("Apagando la aplicacion...")
 
 # ----------------------------------------------------------------------
-# Inicializacion de la Aplicacion
+# Inicializacion de la Aplicacion y Configuracion CORS (AJUSTADO AQUi)
 # ----------------------------------------------------------------------
 
 app = FastAPI(
@@ -87,6 +89,35 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan
 )
+
+# -----------------------------------------------------
+# CONFIGURACIoN CORS (Cross-Origin Resource Sharing)
+# -----------------------------------------------------
+# Esto permite que tu frontend (https://ndtraining.onrender.com) se conecte a esta API.
+
+origins = [
+    "https://ndtraining.onrender.com",  # <-- ¡TU SITIO ESTaTICO (FRONTEND)!
+    
+    # Tambien incluimos tu backend y puertos de desarrollo local comunes
+    "https://gym-app-backend-e9bn.onrender.com",
+    "http://localhost",
+    "http://localhost:8080",
+    "http://localhost:19006", 
+    "http://localhost:19000",
+    "http://127.0.0.1:8000"
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,              # Permite los origenes listados arriba
+    allow_credentials=True,             # Permite cookies/headers de autenticacion
+    allow_methods=["*"],                # Permite todos los metodos HTTP
+    allow_headers=["*"],                # Permite todas las cabeceras
+)
+# -----------------------------------------------------
+# FIN DE CONFIGURACIoN CORS
+# -----------------------------------------------------
+
 
 # ----------------------------------------------------------------------
 # Dependencias de Autenticacion y Autorizacion
@@ -199,7 +230,7 @@ def register_student(
         created_users.append(new_user) # Almacenamos el nuevo usuario para la respuesta de lista
         
     # ----------------------------------------------------------------------
-    # COMMIT Y REFRESH (Se realiza una única vez para toda la transacción)
+    # COMMIT Y REFRESH (Se realiza una unica vez para toda la transaccion)
     # ----------------------------------------------------------------------
     session.commit()
     
@@ -209,7 +240,7 @@ def register_student(
         
     # ?? AJUSTE OBLIGATORIO: Ya que el endpoint ahora acepta y procesa una lista,
     # debe devolver una lista para satisfacer el contrato (response_model=List[UserRead]).
-    # De lo contrario, FastAPI fallará al intentar convertir un solo objeto a una lista.
+    # De lo contrario, FastAPI fallara al intentar convertir un solo objeto a una lista.
     return created_users
 
 @app.post("/register", response_model=UserRead, status_code=status.HTTP_201_CREATED, tags=["Autenticacion"])
