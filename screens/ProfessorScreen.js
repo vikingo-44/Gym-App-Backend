@@ -856,7 +856,7 @@ function AssignmentView({ student, routines, onAssignmentComplete, onCancel, nav
                                                         handleEditAssignment={handleEditAssignment} 
                                                     />
                                                 ))}
-                                        </div>
+                                        </view>
                                     );
                                 })
                             ) : (
