@@ -862,6 +862,7 @@ function AssignmentView({ student, routines, onAssignmentComplete, onCancel, nav
                             ) : (
                                 <Text style={assignmentStyles.warning}>Este alumno no tiene rutinas asignadas.</Text>
                             )}
+                        </div>
                     )}
 
                </View>
@@ -1480,6 +1481,7 @@ function CreationWizardSimplified({ students, onCancel, navigation }) {
         switch (step) {
             case 1:
                 return (
+                    // FIX: Envolvemos los elementos adyacentes en un fragmento <>...</>
                     <>
                         <Text style={styles.stepText}>Paso 1: Nombre y Descripción del Grupo</Text>
                         <Text style={wizardLabelStyle}>Nombre de la Agrupación:</Text>
@@ -1507,6 +1509,7 @@ function CreationWizardSimplified({ students, onCancel, navigation }) {
                 );
             case 2:
                 return (
+                    // FIX: Envolvemos los elementos adyacentes en un fragmento <>...</>
                     <>
                         <Text style={styles.stepText}>Paso 2: Configuración de la Agrupación</Text>
                         
@@ -1562,6 +1565,7 @@ function CreationWizardSimplified({ students, onCancel, navigation }) {
                 );
             case 3:
                 return (
+                    // FIX: Envolvemos los elementos adyacentes en un fragmento <>...</>
                     <>
                         <Text style={styles.stepText}>Paso 3: Selecciona el Alumno</Text>
                         <TextInput
@@ -1574,7 +1578,6 @@ function CreationWizardSimplified({ students, onCancel, navigation }) {
                         <ScrollView style={{ maxHeight: 400, marginBottom: 20 }}>
                             {filteredStudents.length > 0 ? (
                                 filteredStudents.map((item) => (
-                                    // 🚨 CLAVE: ESTE ES EL BOTÓN QUE PUEDE ESTAR FALLANDO EN LA WEB
                                     <TouchableOpacity 
                                         key={item.id.toString()}
                                         style={styles.studentCard}
@@ -1794,22 +1797,16 @@ export default function ProfessorScreen({ navigation }) {
         animateOut(() => navigation.navigate('AddStudent')); 
     };
 
-    // 🚨 MODIFICACIÓN CLAVE PARA EL STATIC SITE
     const handleLogout = () => {
         Alert.alert(
             "Cerrar Sesión",
             "¿Estás seguro de que quieres cerrar sesión?",
             [
                 { text: "Cancelar", style: "cancel" },
-                { 
-                    text: "Cerrar", 
-                    onPress: () => {
-                        // FORZAMOS EL CIERRE DEL DRAWER ANTES DE LLAMAR A SIGNOUT
-                        // Esto garantiza que la navegación pueda procesar el cambio de estado de token.
-                        animateOut(() => signOut()); 
-                    }, 
-                    style: "destructive" 
-                },
+                { text: "Cerrar", onPress: () => {
+                    // FIX: Aseguramos que la llamada a signOut sea directa después de animateOut
+                    animateOut(() => signOut()); 
+                }, style: "destructive" },
             ]
         );
     };
@@ -2010,7 +2007,7 @@ export default function ProfessorScreen({ navigation }) {
                             styles.menuContainer, 
                             { transform: [{ translateX: menuAnim }] } 
                         ]}
-                        // 🚨 FIX WEB: Añadimos onStartShouldSetResponder para que no se cierre al hacer clic dentro
+                        // FIX WEB: Añadimos onStartShouldSetResponder para que no se cierre al hacer clic dentro
                         onStartShouldSetResponder={() => true} 
                     >
                         
