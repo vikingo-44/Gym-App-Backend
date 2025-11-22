@@ -862,7 +862,6 @@ function AssignmentView({ student, routines, onAssignmentComplete, onCancel, nav
                             ) : (
                                 <Text style={assignmentStyles.warning}>Este alumno no tiene rutinas asignadas.</Text>
                             )}
-                        </div>
                     )}
 
                </View>
