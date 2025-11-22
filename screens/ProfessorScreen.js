@@ -862,7 +862,7 @@ function AssignmentView({ student, routines, onAssignmentComplete, onCancel, nav
                             ) : (
                                 <Text style={assignmentStyles.warning}>Este alumno no tiene rutinas asignadas.</Text>
                             )}
-                        </div>
+                        </View>
                     )}
 
                </View>
@@ -1481,7 +1481,6 @@ function CreationWizardSimplified({ students, onCancel, navigation }) {
         switch (step) {
             case 1:
                 return (
-                    // Se usa el fragmento de React <>...</> para anidación
                     <>
                         <Text style={styles.stepText}>Paso 1: Nombre y Descripción del Grupo</Text>
                         <Text style={wizardLabelStyle}>Nombre de la Agrupación:</Text>
@@ -1509,7 +1508,6 @@ function CreationWizardSimplified({ students, onCancel, navigation }) {
                 );
             case 2:
                 return (
-                    // Se usa el fragmento de React <>...</> para anidación
                     <>
                         <Text style={styles.stepText}>Paso 2: Configuración de la Agrupación</Text>
                         
@@ -1565,7 +1563,6 @@ function CreationWizardSimplified({ students, onCancel, navigation }) {
                 );
             case 3:
                 return (
-                    // Se usa el fragmento de React <>...</> para anidación
                     <>
                         <Text style={styles.stepText}>Paso 3: Selecciona el Alumno</Text>
                         <TextInput
@@ -1797,22 +1794,15 @@ export default function ProfessorScreen({ navigation }) {
         animateOut(() => navigation.navigate('AddStudent')); 
     };
 
-    // 🚩 FIX CRÍTICO PARA EL CIERRE DE SESIÓN EN STATIC SITE/WEB 🚩
     const handleLogout = () => {
         Alert.alert(
             "Cerrar Sesión",
             "¿Estás seguro de que quieres cerrar sesión?",
             [
                 { text: "Cancelar", style: "cancel" },
-                { 
-                    text: "Cerrar", 
-                    onPress: () => {
-                        // FIX: Se usa una función anónima que llama a signOut() solo 
-                        // cuando la animación de cierre del menú ha finalizado, garantizando el flujo en web.
-                        animateOut(() => signOut()); 
-                    }, 
-                    style: "destructive" 
-                },
+                { text: "Cerrar", onPress: () => {
+                    animateOut(signOut); 
+                }, style: "destructive" },
             ]
         );
     };
