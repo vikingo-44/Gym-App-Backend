@@ -856,13 +856,13 @@ function AssignmentView({ student, routines, onAssignmentComplete, onCancel, nav
                                                         handleEditAssignment={handleEditAssignment} 
                                                     />
                                                 ))}
-                                        </View>
+                                        </div>
                                     );
                                 })
                             ) : (
                                 <Text style={assignmentStyles.warning}>Este alumno no tiene rutinas asignadas.</Text>
                             )}
-                        </View>
+                        </div>
                     )}
 
                </View>
@@ -1575,6 +1575,7 @@ function CreationWizardSimplified({ students, onCancel, navigation }) {
                         <ScrollView style={{ maxHeight: 400, marginBottom: 20 }}>
                             {filteredStudents.length > 0 ? (
                                 filteredStudents.map((item) => (
+                                    // 🚨 CLAVE: ESTE ES EL BOTÓN QUE PUEDE ESTAR FALLANDO EN LA WEB
                                     <TouchableOpacity 
                                         key={item.id.toString()}
                                         style={styles.studentCard}
@@ -1794,15 +1795,22 @@ export default function ProfessorScreen({ navigation }) {
         animateOut(() => navigation.navigate('AddStudent')); 
     };
 
+    // 🚨 MODIFICACIÓN CLAVE PARA EL STATIC SITE
     const handleLogout = () => {
         Alert.alert(
             "Cerrar Sesión",
             "¿Estás seguro de que quieres cerrar sesión?",
             [
                 { text: "Cancelar", style: "cancel" },
-                { text: "Cerrar", onPress: () => {
-                    animateOut(signOut); 
-                }, style: "destructive" },
+                { 
+                    text: "Cerrar", 
+                    onPress: () => {
+                        // FORZAMOS EL CIERRE DEL DRAWER ANTES DE LLAMAR A SIGNOUT
+                        // Esto garantiza que la navegación pueda procesar el cambio de estado de token.
+                        animateOut(() => signOut()); 
+                    }, 
+                    style: "destructive" 
+                },
             ]
         );
     };
@@ -2003,6 +2011,7 @@ export default function ProfessorScreen({ navigation }) {
                             styles.menuContainer, 
                             { transform: [{ translateX: menuAnim }] } 
                         ]}
+                        // 🚨 FIX WEB: Añadimos onStartShouldSetResponder para que no se cierre al hacer clic dentro
                         onStartShouldSetResponder={() => true} 
                     >
                         
