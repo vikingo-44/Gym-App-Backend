@@ -1800,8 +1800,11 @@ export default function ProfessorScreen({ navigation }) {
             "¿Estás seguro de que quieres cerrar sesión?",
             [
                 { text: "Cancelar", style: "cancel" },
-                { text: "Cerrar", onPress: () => {
-                    animateOut(signOut); 
+                { text: "Cerrar",
+					onPress: () => {
+					animateOut(); // Inicia la animación de cierre (cierra el modal).
+					signOut(); // Llama a la función de cierre de sesión.
+                    // animateOut(signOut); 
                 }, style: "destructive" },
             ]
         );
