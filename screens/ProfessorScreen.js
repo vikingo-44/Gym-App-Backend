@@ -1800,12 +1800,23 @@ export default function ProfessorScreen({ navigation }) {
             "¿Estás seguro de que quieres cerrar sesión?",
             [
                 { text: "Cancelar", style: "cancel" },
-                { text: "Cerrar",
-					onPress: () => {
-					animateOut(); // Inicia la animación de cierre (cierra el modal).
-					signOut(); // Llama a la función de cierre de sesión.
-                    // animateOut(signOut); 
-                }, style: "destructive" },
+                { 
+                    text: "Cerrar", 
+                    onPress: () => {
+                        // FIX DEFINITIVO: 
+                        // El problema es que el signOut (que desmonta el componente) 
+                        // se llama inmediatamente o como callback de animateOut. 
+                        // Usamos un retardo para darle tiempo al Alert y a la animación a cerrar.
+                        
+                        // 1. Iniciamos la animación de salida.
+                        animateOut(); 
+
+                        // 2. Ejecutamos signOut después de un breve retardo. 
+                        // 100ms es un tiempo seguro para que la web capture el evento de cierre de la alerta.
+                        setTimeout(signOut, 100); 
+                    }, 
+                    style: "destructive" 
+                },
             ]
         );
     };
