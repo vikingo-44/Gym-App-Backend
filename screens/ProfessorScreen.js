@@ -1800,23 +1800,9 @@ export default function ProfessorScreen({ navigation }) {
             "¿Estás seguro de que quieres cerrar sesión?",
             [
                 { text: "Cancelar", style: "cancel" },
-                { 
-                    text: "Cerrar", 
-                    onPress: () => {
-                        // FIX DEFINITIVO: 
-                        // El problema es que el signOut (que desmonta el componente) 
-                        // se llama inmediatamente o como callback de animateOut. 
-                        // Usamos un retardo para darle tiempo al Alert y a la animación a cerrar.
-                        
-                        // 1. Iniciamos la animación de salida.
-                        animateOut(); 
-
-                        // 2. Ejecutamos signOut después de un breve retardo. 
-                        // 100ms es un tiempo seguro para que la web capture el evento de cierre de la alerta.
-                        setTimeout(signOut, 100); 
-                    }, 
-                    style: "destructive" 
-                },
+                { text: "Cerrar", onPress: () => {
+                    animateOut(signOut); 
+                }, style: "destructive" },
             ]
         );
     };
@@ -2049,13 +2035,6 @@ export default function ProfessorScreen({ navigation }) {
                                     <Text style={[styles.menuItemText, {color: themeColors.success}]}>Registrar Nuevo Alumno</Text>
                                 </TouchableOpacity>
 
-								// BOTON CERRAR SESION
-
-								<View 
-								// Esta propiedad detiene la propagación del evento táctil a las capas superiores.
-								onStartShouldSetResponder={() => true} 
-								>
-
                                 <TouchableOpacity 
                                     style={[styles.menuItem, {borderBottomWidth: 0}]} 
                                     onPress={handleLogout}
@@ -2063,11 +2042,6 @@ export default function ProfessorScreen({ navigation }) {
                                     <LogOut size={18} color={themeColors.danger} />
                                     <Text style={styles.menuItemTextLogout}>Cerrar Sesión</Text>
                                 </TouchableOpacity>
-								
-								</View>
-								
-								// FIN BOTON CERRAR SESION
-								
                             </ScrollView>
                         </SafeAreaView>
                         
