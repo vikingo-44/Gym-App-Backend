@@ -3,12 +3,6 @@
     "name": "GymApp",
     "slug": "GymApp",
     "version": "1.0.0",
-	"entryPoint": "App.js",
-    "platforms": [
-      "ios",
-      "android",
-      "web"
-    ],
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -34,11 +28,7 @@
       "package": "com.vikingo44.GymApp"
     },
     "web": {
-      "favicon": "./assets/favicon.png",
-	  "bundler": "metro",
-      "publicPath": ".",
-      "bundler": "webpack",
-      "output": "static"
+      "favicon": "./assets/favicon.png"
     },
     "extra": {
       "eas": {
