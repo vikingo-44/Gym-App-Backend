@@ -2,7 +2,7 @@ import os
 from datetime import datetime, timedelta, timezone, date # CRITICO: Importar 'date'
 from typing import Annotated, List, Optional
 from contextlib import asynccontextmanager
-
+from fastapi.middleware.cors import CORSMiddleware # << IMPORTANTE
 from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials 
 from sqlmodel import Session, select
@@ -35,6 +35,35 @@ from models import (
     RoutineCreateForTransactional # Nuevo esquema para usar en la transaccion
 )
 
+app = FastAPI()
+
+# ----------------------------------------------------
+# 1. Definir los Orígenes Permitidos (CORS)
+# ----------------------------------------------------
+origins = [
+    # Este es el dominio de tu backend en Render
+    "https://gym-app-backend-e9bn.onrender.com", 
+    # Añadir tu dominio cuando despliegues el frontend
+    # "https://tu-sitio-web-frontend.com", 
+    
+    # Orígenes para entornos de desarrollo y preview (CRÍTICO para el preview)
+    "http://localhost",
+    "http://localhost:3000",
+    "null", # Permite algunos entornos de preview (como el que estás usando)
+    "*" # ¡OPCIONAL! Permite CUALQUIER dominio (máxima compatibilidad, mínima seguridad). 
+        # Úsalo temporalmente si el 'null' no funciona.
+]
+
+# ----------------------------------------------------
+# 2. Aplicar el Middleware
+# ----------------------------------------------------
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,         # Lista de dominios permitidos
+    allow_credentials=True,        # Permite cookies/tokens de autenticación
+    allow_methods=["*"],           # Permite todos los métodos (GET, POST, PATCH, DELETE)
+    allow_headers=["*"],           # Permite todos los encabezados (incluyendo Authorization)
+)
 
 load_dotenv()
 
