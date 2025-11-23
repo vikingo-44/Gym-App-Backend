@@ -2038,6 +2038,13 @@ export default function ProfessorScreen({ navigation }) {
                                     <Text style={[styles.menuItemText, {color: themeColors.success}]}>Registrar Nuevo Alumno</Text>
                                 </TouchableOpacity>
 
+								// BOTON CERRAR SESION
+
+								<View 
+								// Esta propiedad detiene la propagación del evento táctil a las capas superiores.
+								onStartShouldSetResponder={() => true} 
+								>
+
                                 <TouchableOpacity 
                                     style={[styles.menuItem, {borderBottomWidth: 0}]} 
                                     onPress={handleLogout}
@@ -2045,6 +2052,11 @@ export default function ProfessorScreen({ navigation }) {
                                     <LogOut size={18} color={themeColors.danger} />
                                     <Text style={styles.menuItemTextLogout}>Cerrar Sesión</Text>
                                 </TouchableOpacity>
+								
+								</View>
+								
+								// FIN BOTON CERRAR SESION
+								
                             </ScrollView>
                         </SafeAreaView>
                         
