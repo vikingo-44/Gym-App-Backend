@@ -2,8 +2,10 @@ import os
 from datetime import datetime, timedelta, timezone, date # CRITICO: Importar 'date'
 from typing import Annotated, List, Optional
 from contextlib import asynccontextmanager
-from fastapi.middleware.cors import CORSMiddleware # << IMPORTANTE
+
 from fastapi import FastAPI, Depends, HTTPException, status
+# ¡IMPORTACIÓN CRÍTICA AÑADIDA para CORS!
+from fastapi.middleware.cors import CORSMiddleware 
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials 
 from sqlmodel import Session, select
 # Importamos selectinload para forzar la carga de relaciones anidadas
@@ -35,35 +37,6 @@ from models import (
     RoutineCreateForTransactional # Nuevo esquema para usar en la transaccion
 )
 
-app = FastAPI()
-
-# ----------------------------------------------------
-# 1. Definir los Orígenes Permitidos (CORS)
-# ----------------------------------------------------
-origins = [
-    # Este es el dominio de tu backend en Render
-    "https://gym-app-backend-e9bn.onrender.com", 
-    # Añadir tu dominio cuando despliegues el frontend
-    # "https://tu-sitio-web-frontend.com", 
-    
-    # Orígenes para entornos de desarrollo y preview (CRÍTICO para el preview)
-    "http://localhost",
-    "http://localhost:3000",
-    "null", # Permite algunos entornos de preview (como el que estás usando)
-    "*" # ¡OPCIONAL! Permite CUALQUIER dominio (máxima compatibilidad, mínima seguridad). 
-        # Úsalo temporalmente si el 'null' no funciona.
-]
-
-# ----------------------------------------------------
-# 2. Aplicar el Middleware
-# ----------------------------------------------------
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=origins,         # Lista de dominios permitidos
-    allow_credentials=True,        # Permite cookies/tokens de autenticación
-    allow_methods=["*"],           # Permite todos los métodos (GET, POST, PATCH, DELETE)
-    allow_headers=["*"],           # Permite todos los encabezados (incluyendo Authorization)
-)
 
 load_dotenv()
 
@@ -108,7 +81,7 @@ async def lifespan(app: FastAPI):
     print("Apagando la aplicacion...")
 
 # ----------------------------------------------------------------------
-# Inicializacion de la Aplicacion
+# Inicializacion de la Aplicacion Y CONFIGURACIÓN CORS
 # ----------------------------------------------------------------------
 
 app = FastAPI(
@@ -116,6 +89,33 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan
 )
+
+# ----------------------------------------------------
+# ?? Bloque AÑADIDO: Configuración CORS
+# ----------------------------------------------------
+# 1. Definir los Orígenes Permitidos (CORS)
+origins = [
+    # **CRÍTICO PARA EL PREVIEW:** Permite el origen "null" (usado por entornos embebidos)
+    "null", 
+    # **IMPORTANTE:** Permitimos cualquier origen por ahora para asegurar la conectividad
+    # hasta que publiques tu frontend en un dominio fijo.
+    "*", 
+    # Tu dominio de Render (Aunque con '*' ya estaría cubierto)
+    "https://gym-app-backend-e9bn.onrender.com",
+    "http://localhost",
+    "http://localhost:3000",
+]
+
+# 2. Aplicar el Middleware a la aplicación
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,         # Lista de dominios permitidos
+    allow_credentials=True,        # Permite cookies/tokens
+    allow_methods=["*"],           # Permite todos los métodos (GET, POST, etc.)
+    allow_headers=["*"],           # Permite todos los encabezados (incluyendo Authorization)
+)
+# ----------------------------------------------------
+
 
 # ----------------------------------------------------------------------
 # Dependencias de Autenticacion y Autorizacion
@@ -255,7 +255,7 @@ def register_user(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="El DNI ya esta registrado."
         )
-        
+    
     # 2. Verificar si Email ya existe
     existing_user = session.exec(select(User).where(User.email == user_data.email)).first()
     if existing_user:
