@@ -214,21 +214,21 @@ const ExerciseItem = ({ index, exercise, updateExercise, removeExercise, toggleS
                         onChangeText={(text) => handleChange('peso', text)}
                     />
                 </View>
+				
+				<View style={exerciseStyles.inputGroup}>
+					<Text style={exerciseStyles.notesLabel}>Notas / Técnica (Opcional):</Text>
+					<TextInput
+						style={exerciseStyles.notesInput}
+						placeholder="Ej: 30 segundos de descanso, técnica estricta, etc."
+						placeholderTextColor={placeholderColor}
+						keyboardType="default" 
+						value={exercise.notas}
+						onChangeText={(text) => handleChange('notas', text)} // <-- Aquí se actualiza el estado 'notas'
+						multiline
+						numberOfLines={3}
+					/>
+				</View>		
             </View>
-
-            {/* <--- CAMPO NUEVO Y CRÍTICO: NOTAS DEL PROFESOR ---> */}
-            <Text style={exerciseStyles.notesLabel}>Notas / Técnica (Opcional):</Text>
-            <TextInput
-                style={exerciseStyles.notesInput}
-                placeholder="Ej: 30 segundos de descanso, técnica estricta, etc."
-                placeholderTextColor={placeholderColor}
-                keyboardType="default" 
-                value={exercise.notas}
-                onChangeText={(text) => handleChange('notas', text)} // <-- Aquí se actualiza el estado 'notas'
-                multiline
-                numberOfLines={3}
-            />
-            {/* <--- FIN CAMPO NUEVO ---> */}
         </View>
     );
 };
