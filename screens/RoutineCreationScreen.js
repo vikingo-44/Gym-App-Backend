@@ -1,13 +1,13 @@
 import React, { useState, useEffect, useContext, useCallback } from 'react';
 import { 
     StyleSheet, Text, View, TextInput, Button, SafeAreaView, 
-    ScrollView, TouchableOpacity, Alert, KeyboardAvoidingView, Platform, ActivityIndicator
+    ScrollView, TouchableOpacity, Alert, KeyboardAvoidingView, Platform, ActivityIndicator, Modal
 } from 'react-native';
 import { useRoute } from '@react-navigation/native';
 import axios from 'axios';
 import { AuthContext } from '../App'; 
 import { useTheme } from '../ThemeContext'; 
-import { Save, XCircle, PlusCircle, Trash2, Search, Zap, Loader } from 'lucide-react-native';
+import { Save, XCircle, PlusCircle, Trash2, Search, Zap, Loader, RefreshCcw } from 'lucide-react-native';
 
 // ----------------------------------------------------------------------
 // API Configuration
@@ -94,6 +94,28 @@ const getExerciseStyles = (colors) => StyleSheet.create({
         textAlign: 'center',
         width: '100%',
     },
+    // <--- NUEVO ESTILO PARA NOTAS --->
+    notesLabel: {
+        fontSize: 14,
+        color: '#A9A9A9',
+        marginBottom: 5,
+        marginTop: 15,
+        fontWeight: 'bold',
+    },
+    notesInput: {
+        minHeight: 80,
+        backgroundColor: 'black',
+        borderColor: colors.divider,
+        borderWidth: 1,
+        borderRadius: 8,
+        paddingHorizontal: 10,
+        paddingTop: 10,
+        fontSize: 14,
+        color: 'white',
+        textAlignVertical: 'top',
+        marginBottom: 5,
+    },
+    // <--- FIN NUEVO ESTILO --->
 });
 
 // ----------------------------------------------------------------------
@@ -162,7 +184,8 @@ const ExerciseItem = ({ index, exercise, updateExercise, removeExercise, toggleS
                         placeholder="3"
                         placeholderTextColor={placeholderColor}
                         keyboardType="numeric"
-                        value={exercise.series}
+                        // CORRECCIÓN: Usar 'series' (o 'sets' si el estado usa sets)
+                        value={exercise.series} 
                         onChangeText={(text) => handleChange('series', text)}
                     />
                 </View>
@@ -193,6 +216,20 @@ const ExerciseItem = ({ index, exercise, updateExercise, removeExercise, toggleS
                     />
                 </View>
             </View>
+
+            {/* <--- NUEVO CAMPO DE NOTAS ---> */}
+            <Text style={exerciseStyles.notesLabel}>Notas / Técnica (Opcional):</Text>
+            <TextInput
+                style={exerciseStyles.notesInput}
+                placeholder="Ej: 30 segundos de descanso, técnica estricta, etc."
+                placeholderTextColor={placeholderColor}
+                keyboardType="default" 
+                value={exercise.notas}
+                onChangeText={(text) => handleChange('notas', text)}
+                multiline
+                numberOfLines={3}
+            />
+            {/* <--- FIN NUEVO CAMPO DE NOTAS ---> */}
         </View>
     );
 };
@@ -491,9 +528,10 @@ export default function RoutineCreationScreenV3({ navigation }) {
                         exercise_id: link.exercise_id, 
                         name: link.exercise?.nombre || 'Ejercicio Desconocido',
                         // CORRECCIÓN PARA CARGA: Aseguramos que los valores sean string o cadena vacía, NO "null" literal.
-                        series: String(link.sets || ''), 
+                        series: String(link.sets || ''), // Aquí usamos 'series' que coincide con el estado del componente ExerciseItem
                         repetitions: String(link.repetitions || ''), 
                         peso: String(link.peso || ''), // Aseguramos que sea string
+                        notas: String(link.notas || ''), // <--- CRÍTICO: CARGAR NOTAS EN EDICIÓN
                     }));
                 
                 // Aseguramos que solo haya un elemento en modo edición
@@ -559,6 +597,7 @@ export default function RoutineCreationScreenV3({ navigation }) {
             series: '', 
             repetitions: '', 
             peso: '', 
+            notas: '', // <--- CRÍTICO: INICIALIZAR NOTAS AL AÑADIR
         }];
         setRoutineData('exercises', newExercises);
     };
@@ -676,6 +715,7 @@ export default function RoutineCreationScreenV3({ navigation }) {
                     sets: parseInt(ex.series.trim()), // Aseguramos el parseo (debe ser un entero)
                     repetitions: ex.repetitions.trim(), // Aseguramos que sea string
                     peso: ex.peso.trim() || 'N/A', 
+                    notas: ex.notas.trim() || null, // <--- CRÍTICO: ENVIAR NOTAS EN TRANSACCIÓN
                     order: exIndex + 1
                 }))
             }))
@@ -732,6 +772,7 @@ export default function RoutineCreationScreenV3({ navigation }) {
                     sets: parseInt(ex.series.trim()), // Aseguramos el parseo (debe ser un entero)
                     repetitions: ex.repetitions.trim(), // Aseguramos que sea string
                     peso: ex.peso.trim() || 'N/A', 
+                    notas: ex.notas.trim() || null, // <--- CRÍTICO: ENVIAR NOTAS EN EDICIÓN
                     order: index + 1 
                 }))
             };
@@ -747,14 +788,14 @@ export default function RoutineCreationScreenV3({ navigation }) {
             
             let errorMessage = "Fallo desconocido al guardar la rutina.";
              if (e.response && e.response.data && e.response.data.detail) {
-                // Captura el mensaje de error detallado del backend
-                if (Array.isArray(e.response.data.detail) || typeof e.response.data.detail === 'string') {
-                    // Si el backend es el que lanza el error, mostramos su detalle
-                    errorMessage = `Error de FastAPI: ${JSON.stringify(e.response.data.detail)}`;
-                }
-            } else if (e.message === "Network Error") {
+                 // Captura el mensaje de error detallado del backend
+                 if (Array.isArray(e.response.data.detail) || typeof e.response.data.detail === 'string') {
+                     // Si el backend es el que lanza el error, mostramos su detalle
+                     errorMessage = `Error de FastAPI: ${JSON.stringify(e.response.data.detail)}`;
+                 }
+             } else if (e.message === "Network Error") {
                  errorMessage = "Error de red: No se pudo conectar al servidor API.";
-            }
+             }
 
             // Aquí alertamos el error. El error de Render es provocado por esta llamada fallida.
             Alert.alert("Error de Edición", errorMessage); 

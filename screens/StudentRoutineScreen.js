@@ -158,6 +158,15 @@ const CollapsibleRoutineCard = ({ assignment, styles, themeColors }) => {
                                 <Text style={[styles.detailValue, {color: '#3ABFBC'}]}>{link.peso || '-'}</Text>
                             </View>
                         </View>
+
+                        {/* 🚨 NOTA DEL PROFESOR POR EJERCICIO (AÑADIDO) */}
+                        {link.professor_note && link.professor_note.trim() !== '' && (
+                            <View style={styles.professorNoteContainer}>
+                                <Text style={styles.professorNoteLabel}>Nota del Profesor:</Text>
+                                <Text style={styles.professorNoteText}>{link.professor_note}</Text>
+                            </View>
+                        )}
+                        
                     </View>
                 ))}
         </View>
@@ -255,7 +264,7 @@ export default function StudentRoutineScreen({ navigation }) {
 
                 setActiveAssignments(validAssignments);
                 if (validAssignments.length === 0) {
-                     setError("No tienes ninguna rutina activa asignada.");
+                    setError("No tienes ninguna rutina activa asignada.");
                 }
             } else {
                 setActiveAssignments([]);
@@ -602,6 +611,28 @@ const getStudentStyles = (colors) => StyleSheet.create({
         fontWeight: 'bold',
         color: '#3ABFBC', // 🚨 PEAKFIT: Valor verde
     },
+    // 🚨 ESTILOS AÑADIDOS PARA LA NOTA DEL PROFESOR 🚨
+    professorNoteContainer: {
+        marginTop: 10,
+        paddingTop: 8,
+        borderTopWidth: 1,
+        borderTopColor: colors.divider + '60', // Un divisor sutil
+        backgroundColor: 'black', // Fondo Negro
+        borderRadius: 5,
+        paddingHorizontal: 5,
+        paddingBottom: 5,
+    },
+    professorNoteLabel: {
+        fontSize: 12,
+        fontWeight: 'bold',
+        color: colors.warning, // Color destacado (amarillo)
+        marginBottom: 4,
+    },
+    professorNoteText: {
+        fontSize: 14,
+        color: '#D4D4D4', // Gris claro para el texto de la nota
+        fontStyle: 'italic',
+    },
     // --- ESTILOS DEL DRAWER ---
     modalOverlay: {
         flex: 1,
@@ -614,8 +645,8 @@ const getStudentStyles = (colors) => StyleSheet.create({
         height: '100%', 
         backgroundColor: '#1C1C1E', // 🚨 PEAKFIT: Drawer Dark Gray
         position: 'absolute', 
-        left: 0,              
-        top: 0,               
+        left: 0,             
+        top: 0,              
         shadowColor: '#000',
         shadowOffset: { width: 2, height: 0 }, 
         shadowOpacity: 1, // Sombra más fuerte para contraste
