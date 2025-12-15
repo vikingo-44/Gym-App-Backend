@@ -91,7 +91,7 @@ app = FastAPI(
 )
 
 # ----------------------------------------------------
-# ?? Bloque AÑADIDO: Configuración CORS
+# Bloque AÑADIDO: Configuración CORS
 # ----------------------------------------------------
 # 1. Definir los Orígenes Permitidos (CORS)
 origins = [
@@ -177,14 +177,14 @@ def read_root():
 
 # NUEVA RUTA: Registro solo de Alumnos
 @app.post(
-    # ?? CAMBIO 1: response_model ahora es una LISTA de UserRead
+    # response_model ahora es una LISTA de UserRead
     "/register/student", 
     response_model=List[UserRead], 
     status_code=status.HTTP_201_CREATED, 
     tags=["Autenticacion"]
 )
 def register_student(
-    # ?? CAMBIO 2: user_data ahora espera una LISTA de objetos UserCreate
+    # user_data ahora espera una LISTA de objetos UserCreate
     user_data: List[UserCreate], 
     session: Annotated[Session, Depends(get_session)]
 ):
@@ -195,7 +195,7 @@ def register_student(
     # ----------------------------------------------------------------------
     created_users = []
     
-    # ?? BUCLE PARA PROCESAR CADA USUARIO DE LA LISTA
+    # BUCLE PARA PROCESAR CADA USUARIO DE LA LISTA
     for single_user_data in user_data:
         
         # 1. Verificar si DNI ya existe
@@ -236,7 +236,7 @@ def register_student(
     for user in created_users:
         session.refresh(user)
         
-    # ?? AJUSTE OBLIGATORIO: Ya que el endpoint ahora acepta y procesa una lista,
+    # AJUSTE OBLIGATORIO: Ya que el endpoint ahora acepta y procesa una lista,
     # debe devolver una lista para satisfacer el contrato (response_model=List[UserRead]).
     # De lo contrario, FastAPI fallará al intentar convertir un solo objeto a una lista.
     return created_users
@@ -559,6 +559,7 @@ def create_routine_group_and_routines(
                     sets=exercise_link_data.sets,
                     repetitions=exercise_link_data.repetitions,
                     peso=exercise_link_data.peso, 
+                    notas=exercise_link_data.notas, # <--- AÑADIDO: Campo Notas
                     order=index + 1 # Usar el indice para el orden, asegurando que sea un entero
                 )
                 session.add(link)
@@ -653,6 +654,7 @@ def create_routine(
             sets=exercise_link_data.sets,
             repetitions=exercise_link_data.repetitions,
             peso=exercise_link_data.peso, # AGREGADO: Campo peso
+            notas=exercise_link_data.notas, # <--- AÑADIDO: Campo Notas
             order=exercise_link_data.order
         )
         session.add(link)
@@ -870,6 +872,7 @@ def update_routine_full(
             sets=exercise_link_data.sets,
             repetitions=exercise_link_data.repetitions,
             peso=exercise_link_data.peso, # AGREGADO: Campo peso
+            notas=exercise_link_data.notas, # <--- AÑADIDO: Campo Notas
             order=exercise_link_data.order
         )
         session.add(link)

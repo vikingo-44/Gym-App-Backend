@@ -42,7 +42,10 @@ class RoutineExercise(SQLModel, table=True):
     sets: int
     repetitions: str
     # NUEVO CAMPO: Almacena el peso o tipo de resistencia 
-    peso: str = Field(default="N/A", max_length=50) 
+    peso: str = Field(default="N/A", max_length=50)
+    # <--- MODIFICACIÓN CRÍTICA: NUEVO CAMPO 'NOTAS' --->
+    notas: Optional[str] = Field(default=None, max_length=500)
+    # <--- FIN MODIFICACIÓN --->
     order: int
     
     routine: "Routine" = Relationship(back_populates="exercise_links")
@@ -280,7 +283,10 @@ class RoutineExerciseRead(BaseModel):
     sets: int
     repetitions: str
     # NUEVO: Campo para el peso
-    peso: str 
+    peso: str
+    # <--- MODIFICACIÓN CRÍTICA: NUEVO CAMPO 'NOTAS' EN LECTURA --->
+    notas: Optional[str]
+    # <--- FIN MODIFICACIÓN --->
     order: int
     
     # El ejercicio real al que enlaza (anidado)
@@ -297,6 +303,9 @@ class RoutineExerciseCreate(BaseModel):
     repetitions: str
     # NUEVO: Campo para el peso (Input)
     peso: str
+    # <--- MODIFICACIÓN CRÍTICA: NUEVO CAMPO 'NOTAS' EN CREACIÓN --->
+    notas: Optional[str] = None
+    # <--- FIN MODIFICACIÓN --->
     order: int
 
 class RoutineCreate(BaseModel):
