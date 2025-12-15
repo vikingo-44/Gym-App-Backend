@@ -217,7 +217,7 @@ const ExerciseItem = ({ index, exercise, updateExercise, removeExercise, toggleS
                 </View>
             </View>
 
-            {/* <--- NUEVO CAMPO DE NOTAS ---> */}
+            {/* <--- CAMPO NUEVO: NOTAS DEL PROFESOR (PARA EL ALUMNO) ---> */}
             <Text style={exerciseStyles.notesLabel}>Notas / Técnica (Opcional):</Text>
             <TextInput
                 style={exerciseStyles.notesInput}
@@ -229,7 +229,7 @@ const ExerciseItem = ({ index, exercise, updateExercise, removeExercise, toggleS
                 multiline
                 numberOfLines={3}
             />
-            {/* <--- FIN NUEVO CAMPO DE NOTAS ---> */}
+            {/* <--- FIN CAMPO NUEVO ---> */}
         </View>
     );
 };
@@ -531,7 +531,7 @@ export default function RoutineCreationScreenV3({ navigation }) {
                         series: String(link.sets || ''), // Aquí usamos 'series' que coincide con el estado del componente ExerciseItem
                         repetitions: String(link.repetitions || ''), 
                         peso: String(link.peso || ''), // Aseguramos que sea string
-                        notas: String(link.notas || ''), // <--- CRÍTICO: CARGAR NOTAS EN EDICIÓN
+                        notas: String(link.professor_note || ''), // <--- CRÍTICO: CARGAR NOTAS EN EDICIÓN (professor_note)
                     }));
                 
                 // Aseguramos que solo haya un elemento en modo edición
@@ -671,6 +671,8 @@ export default function RoutineCreationScreenV3({ navigation }) {
             const repetitionsTrimmed = ex.repetitions ? ex.repetitions.trim() : '';
             if (repetitionsTrimmed.length === 0) return true; 
 
+            // 4. Peso can be empty, Notes can be empty.
+
             // All checks passed
             return false;
         });
@@ -715,7 +717,7 @@ export default function RoutineCreationScreenV3({ navigation }) {
                     sets: parseInt(ex.series.trim()), // Aseguramos el parseo (debe ser un entero)
                     repetitions: ex.repetitions.trim(), // Aseguramos que sea string
                     peso: ex.peso.trim() || 'N/A', 
-                    notas: ex.notas.trim() || null, // <--- CRÍTICO: ENVIAR NOTAS EN TRANSACCIÓN
+                    professor_note: ex.notas.trim() || null, // <--- CRÍTICO: ENVIAR NOTAS EN TRANSACCIÓN (professor_note)
                     order: exIndex + 1
                 }))
             }))
@@ -772,7 +774,7 @@ export default function RoutineCreationScreenV3({ navigation }) {
                     sets: parseInt(ex.series.trim()), // Aseguramos el parseo (debe ser un entero)
                     repetitions: ex.repetitions.trim(), // Aseguramos que sea string
                     peso: ex.peso.trim() || 'N/A', 
-                    notas: ex.notas.trim() || null, // <--- CRÍTICO: ENVIAR NOTAS EN EDICIÓN
+                    professor_note: ex.notas.trim() || null, // <--- CRÍTICO: ENVIAR NOTAS EN EDICIÓN (professor_note)
                     order: index + 1 
                 }))
             };
