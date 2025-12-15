@@ -170,7 +170,7 @@ const ExerciseItem = ({ index, exercise, updateExercise, removeExercise, toggleS
                     numberOfLines={1}
                     ellipsizeMode="tail" 
                 >
-                    {exercise.name || "Toca para Seleccionar Ejercicio"}
+                    {exercise.name || "para Seleccionar Ejercicio"}
                 </Text>
             </TouchableOpacity>
             
