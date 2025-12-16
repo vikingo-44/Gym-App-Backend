@@ -2,19 +2,86 @@ import React, { useState, useEffect, useContext, useMemo } from 'react';
 import { 
     StyleSheet, Text, View, ScrollView, SafeAreaView, Button, 
     ActivityIndicator, FlatList, TouchableOpacity, Alert, Modal,
-    TextInput, Platform // 🚨 ADDED Platform for Android header fix
+    TextInput, Platform, Image // 🚨 AGREGADO Image para cargar el GIF
 } from 'react-native';
 import axios from 'axios';
 import { AuthContext } from '../App'; 
 import { useTheme } from '../ThemeContext'; 
-// Iconos actualizados para Menu
-import { Trash2, Edit, RefreshCcw, Settings, Key, LogOut, Menu, ChevronDown, ChevronUp } from 'lucide-react-native'; 
+// Iconos actualizados para Menu y para la demo
+import { Trash2, Edit, RefreshCcw, Settings, Key, LogOut, Menu, ChevronDown, ChevronUp, PlayCircle } from 'lucide-react-native'; 
 
 // URL de la API (Asegúrate que esta URL coincida con la de tu App.js/Backend)
 const API_URL = "https://gym-app-backend-e9bn.onrender.com"; 
 
 // ----------------------------------------------------------------------
-// COMPONENTE: MENÚ LATERAL (DRAWER) DE AJUSTES Y CUENTA
+// 🚨 Mapeo de Demos (Para implementar sin modificar el backend)
+// 🚨 ATENCION: Reemplaza estas URLs con las de tus GIFs/Videos subidos.
+// ----------------------------------------------------------------------
+const EXERCISE_DEMO_MAP = {
+    // Clave: Parte del nombre del ejercicio (la búsqueda es parcial)
+    "Press Banca": "https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExN29jMGFwNWFhb2J3d3E4cmlkaHVscTBhOGU1d2R5cDV6ajRldzF6bSZlcD12MV9pbnRlcm5hbF9naWYmY3Q9Zw/k3g0Q8W1rYhS0/giphy.gif",
+    "Sentadilla": "https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExZjFvazUwNmp0aXl1cGhkajR3OWR5bmM5Nmg4NWFmZDM1Z2EzZ282byZlcD12MV9pbnRlcm5hbF9naWYmY3Q9Zw/ycf0oQoO3n3oA/giphy.gif",
+    "Peso Muerto": "https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExYWZ3ZHZ1MTJtY25zbjV0bW5qN2xoa3M0ZmliYjZ3dDJrNHc4cW90cyZlcD12MV9pbnRlcm5hbF9naWYmY3Q9Zw/3oKIPcfwW188H4EwW4/giphy.gif",
+    "Jalón": "https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExOXA4d3J1eDV4dXRzNWd1ZzZ6dm50NHV5c2Z6NW01Z21wbnZ6cW9mcyZlcD12MV9pbnRlcm5hbF9naWYmY3Q9Zw/xT39JXZ1WpU/giphy.gif",
+    "Bíceps": "https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExdmVncmUycmV6ZnM3eGtwa296ejA4ZWRxNmN6aWRvNWc5d3l5ZzF3aiZlcD12MV9pbnRlcm5hbF9naWYmY3Q9Zw/l0O9w1c9l43kS6T9S/giphy.gif",
+    "Zancada": "https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExZnk1bHZ1cGVyMGt6c2c1czR0aHV0bDRoOHQ5eXp6Z3Z5cmZqajR0MyZlcD12MV9pbnRlcm5hbF9naWYmY3Q9Zw/l0O5T44gW3Nf2/giphy.gif",
+};
+
+// Función para buscar la URL de demostración
+const getDemoUrl = (exerciseName) => {
+    const nameLower = exerciseName.toLowerCase();
+    for (const key in EXERCISE_DEMO_MAP) {
+        if (nameLower.includes(key.toLowerCase())) {
+            return EXERCISE_DEMO_MAP[key];
+        }
+    }
+    return null;
+};
+// ----------------------------------------------------------------------
+
+// ----------------------------------------------------------------------
+// COMPONENTE: MODAL DE DEMOSTRACIÓN (NUEVO)
+// ----------------------------------------------------------------------
+const DemoModal = ({ isVisible, onClose, exerciseName, demoUrl, styles, themeColors }) => {
+    return (
+        <Modal
+            animationType="fade" // Usamos fade o slide
+            transparent={true}
+            visible={isVisible}
+            onRequestClose={onClose}
+        >
+            <View style={styles.demoModalOverlay}>
+                <View style={styles.demoModalContainer}>
+                    <Text style={styles.demoTitle}>Demostración: {exerciseName}</Text>
+                    
+                    {demoUrl ? (
+                        // Usamos Image de React Native para cargar el GIF/Video
+                        <Image
+                            source={{ uri: demoUrl }}
+                            style={styles.demoImage}
+                            resizeMode="contain"
+                            // Añadimos un fallback visual simple si la imagen no carga
+                            onError={() => console.error("Error al cargar GIF desde:", demoUrl)}
+                        />
+                    ) : (
+                        <Text style={styles.demoErrorText}>Demostración no disponible.</Text>
+                    )}
+
+                    <TouchableOpacity 
+                        style={[styles.demoCloseButton, {backgroundColor: themeColors.primary}]}
+                        onPress={onClose}
+                    >
+                        <Text style={styles.demoCloseButtonText}>Cerrar</Text>
+                    </TouchableOpacity>
+                </View>
+            </View>
+        </Modal>
+    );
+};
+
+
+// ----------------------------------------------------------------------
+// COMPONENTE: MENÚ LATERAL (DRAWER) DE AJUSTES Y CUENTA (SIN CAMBIOS)
 // ----------------------------------------------------------------------
 const AccountSettingsModal = ({ isVisible, onClose, navigation, signOut, themeColors, styles }) => {
     // Los estilos ya vienen pre-generados y adaptados para el drawer
@@ -100,6 +167,9 @@ const CollapsibleRoutineCard = ({ assignment, styles, themeColors }) => {
     
     // Inicializa isExpanded con false para que las tarjetas estén cerradas por defecto
     const [isExpanded, setIsExpanded] = useState(false);
+    const [isDemoModalVisible, setIsDemoModalVisible] = useState(false); // 🚨 NUEVO: Estado del Modal Demo
+    const [currentDemo, setCurrentDemo] = useState({ name: '', url: '' }); // 🚨 NUEVO: Ejercicio actual en demo
+
     const routine = assignment.routine;
     const linkCount = routine?.exercise_links ? routine.exercise_links.length : 0;
     
@@ -126,46 +196,93 @@ const CollapsibleRoutineCard = ({ assignment, styles, themeColors }) => {
         }
     }
     // 🚨 FIN LÓGICA DE TÍTULO
+    
+    // 🚨 NUEVO HANDLER: Abre el modal de demostración
+    const handleShowDemo = (exerciseName) => {
+        const demoUrl = getDemoUrl(exerciseName);
+        if (demoUrl) {
+            setCurrentDemo({ name: exerciseName, url: demoUrl });
+            setIsDemoModalVisible(true);
+        } else {
+            Alert.alert("Demo no Disponible", `No se encontró una demostración para "${exerciseName}".`);
+        }
+    };
 
     const renderExercises = () => (
         <View style={styles.exerciseListContainer}>
             <Text style={{ fontSize: 13, fontWeight: 'bold', color: 'white', marginBottom: 10 }}>Detalle de Ejercicios:</Text>
             {routine.exercise_links
                 .sort((a, b) => a.order - b.order)
-                .map((link, exIndex) => (
-                    // El estilo exerciseItem ya tiene el fondo oscuro corregido
-                    <View key={link.id || exIndex} style={styles.exerciseItem}>
-                        <Text style={styles.exerciseName}>
-                            {link.order}. {link.exercise?.nombre ?? 'Ejercicio Desconocido'}
-                        </Text>
-                        
-                        <View style={styles.detailsRow}>
-                            {/* Sets */}
-                            <View style={styles.detailItem}>
-                                <Text style={styles.detailLabel}>Sets:</Text>
-                                <Text style={[styles.detailValue, {color: '#3ABFBC'}]}>{link.sets}</Text>
+                .map((link, exIndex) => {
+                    const exerciseName = link.exercise?.nombre ?? 'Ejercicio Desconocido';
+                    const hasDemo = getDemoUrl(exerciseName) !== null; // 🚨 Verificar si hay demo
+
+                    return (
+                        // El estilo exerciseItem ya tiene el fondo oscuro corregido
+                        <View key={link.id || exIndex} style={styles.exerciseItem}>
+                            <View style={styles.exerciseHeader}>
+                                <Text style={styles.exerciseName}>
+                                    {link.order}. {exerciseName}
+                                </Text>
+                                {/* 🚨 BOTÓN VER DEMO (NUEVO) */}
+                                {hasDemo && (
+                                    <TouchableOpacity 
+                                        style={styles.demoButton}
+                                        onPress={() => handleShowDemo(exerciseName)}
+                                    >
+                                        <PlayCircle size={16} color={'black'} />
+                                        <Text style={styles.demoButtonText}>Ver Demo</Text>
+                                    </TouchableOpacity>
+                                )}
+                            </View>
+                            
+                            <View style={styles.detailsRow}>
+                                {/* Sets */}
+                                <View style={styles.detailItem}>
+                                    <Text style={styles.detailLabel}>Sets:</Text>
+                                    <Text style={[styles.detailValue, {color: '#3ABFBC'}]}>{link.sets}</Text>
+                                </View>
+
+                                {/* Reps */}
+                                <View style={styles.detailItem}>
+                                    <Text style={styles.detailLabel}>Reps:</Text>
+                                    <Text style={[styles.detailValue, {color: '#3ABFBC'}]}>{link.repetitions}</Text>
+                                </View>
+
+                                {/* Peso */}
+                                <View style={styles.detailItem}>
+                                    <Text style={styles.detailLabel}>Peso:</Text>
+                                    <Text style={[styles.detailValue, {color: '#3ABFBC'}]}>{link.peso || '-'}</Text>
+                                </View>
                             </View>
 
-                            {/* Reps */}
-                            <View style={styles.detailItem}>
-                                <Text style={styles.detailLabel}>Reps:</Text>
-                                <Text style={[styles.detailValue, {color: '#3ABFBC'}]}>{link.repetitions}</Text>
-                            </View>
-
-                            {/* Peso */}
-                            <View style={styles.detailItem}>
-                                <Text style={styles.detailLabel}>Peso:</Text>
-                                <Text style={[styles.detailValue, {color: '#3ABFBC'}]}>{link.peso || '-'}</Text>
-                            </View>
+                            {/* 🚨 NOTA DEL PROFESOR POR EJERCICIO (CORREGIDO: Usar link.notes) */}
+                            {link.notes && link.notes.trim() !== '' && (
+                                <View style={styles.professorNoteContainer}>
+                                    <Text style={styles.professorNoteLabel}>Nota del Profesor:</Text>
+                                    <Text style={styles.professorNoteText}>{link.notes}</Text>
+                                </View>
+                            )}
+                            
                         </View>
-                    </View>
-                ))}
+                    );
+                })}
         </View>
     );
 
     return (
         <View style={styles.routineCardContainer}>
             
+            {/* 🚨 NUEVO MODAL DE DEMOSTRACIÓN */}
+            <DemoModal
+                isVisible={isDemoModalVisible}
+                onClose={() => setIsDemoModalVisible(false)}
+                exerciseName={currentDemo.name}
+                demoUrl={currentDemo.url}
+                styles={styles}
+                themeColors={themeColors}
+            />
+
             {/* 1. BARRA LATERAL DE ESTADO */}
             <View style={[styles.statusBar, { backgroundColor: statusColor }]}>
                 {/* 🚨 StatusText Color: Negro si el fondo es claro (warning), blanco si es oscuro (success/danger) */}
@@ -255,7 +372,7 @@ export default function StudentRoutineScreen({ navigation }) {
 
                 setActiveAssignments(validAssignments);
                 if (validAssignments.length === 0) {
-                     setError("No tienes ninguna rutina activa asignada.");
+                    setError("No tienes ninguna rutina activa asignada.");
                 }
             } else {
                 setActiveAssignments([]);
@@ -571,11 +688,18 @@ const getStudentStyles = (colors) => StyleSheet.create({
         backgroundColor: '#1C1C1E', // 🚨 PEAKFIT: Fondo de ítem (más claro que el fondo)
         borderRadius: 5, 
     },
+    exerciseHeader: { // 🚨 NUEVO: Para alinear nombre y botón demo
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 5,
+    },
     exerciseName: {
         fontSize: 16,
         fontWeight: '700',
         color: 'white',
-        marginBottom: 5,
+        flexShrink: 1,
+        paddingRight: 10,
     },
     detailsRow: {
         flexDirection: 'row',
@@ -602,7 +726,88 @@ const getStudentStyles = (colors) => StyleSheet.create({
         fontWeight: 'bold',
         color: '#3ABFBC', // 🚨 PEAKFIT: Valor verde
     },
-    // --- ESTILOS DEL DRAWER ---
+    // 🚨 ESTILOS AÑADIDOS PARA LA NOTA DEL PROFESOR 🚨
+    professorNoteContainer: {
+        marginTop: 10,
+        paddingTop: 8,
+        borderTopWidth: 1,
+        borderTopColor: colors.divider + '60', // Un divisor sutil
+        backgroundColor: 'black', // Fondo Negro
+        borderRadius: 5,
+        paddingHorizontal: 5,
+        paddingBottom: 5,
+    },
+    professorNoteLabel: {
+        fontSize: 12,
+        fontWeight: 'bold',
+        color: colors.warning, // Color destacado (amarillo)
+        marginBottom: 4,
+    },
+    professorNoteText: {
+        fontSize: 14,
+        color: '#D4D4D4', // Gris claro para el texto de la nota
+        fontStyle: 'italic',
+    },
+    // 🚨 ESTILOS AÑADIDOS PARA EL BOTÓN Y MODAL DE DEMO 🚨
+    demoButton: {
+        backgroundColor: colors.primary, // Usamos el color primario (Verde) para el botón de acción
+        paddingHorizontal: 10,
+        paddingVertical: 6,
+        borderRadius: 5,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 5,
+    },
+    demoButtonText: {
+        color: 'black',
+        fontWeight: 'bold',
+        fontSize: 13,
+    },
+    demoModalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0, 0, 0, 0.9)', // Fondo negro oscuro
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    demoModalContainer: {
+        width: '90%',
+        backgroundColor: '#1C1C1E',
+        borderRadius: 15,
+        padding: 20,
+        alignItems: 'center',
+    },
+    demoTitle: {
+        fontSize: 18,
+        fontWeight: 'bold',
+        color: '#3ABFBC',
+        marginBottom: 15,
+        textAlign: 'center',
+    },
+    demoImage: {
+        width: '100%',
+        aspectRatio: 1, // Mantiene la relación de aspecto 1:1, ideal para GIFs
+        borderRadius: 10,
+        marginBottom: 20,
+        backgroundColor: 'black',
+        borderWidth: 1,
+        borderColor: colors.divider,
+    },
+    demoErrorText: {
+        color: colors.danger,
+        textAlign: 'center',
+        marginVertical: 20,
+    },
+    demoCloseButton: {
+        paddingVertical: 12,
+        paddingHorizontal: 30,
+        borderRadius: 10,
+    },
+    demoCloseButtonText: {
+        color: 'black',
+        fontWeight: 'bold',
+        fontSize: 16,
+    },
+    // --- ESTILOS DEL DRAWER (Sin cambios) ---
     modalOverlay: {
         flex: 1,
         backgroundColor: 'rgba(0, 0, 0, 0.7)', // Más oscuro
@@ -614,8 +819,8 @@ const getStudentStyles = (colors) => StyleSheet.create({
         height: '100%', 
         backgroundColor: '#1C1C1E', // 🚨 PEAKFIT: Drawer Dark Gray
         position: 'absolute', 
-        left: 0,              
-        top: 0,               
+        left: 0,          
+        top: 0,           
         shadowColor: '#000',
         shadowOffset: { width: 2, height: 0 }, 
         shadowOpacity: 1, // Sombra más fuerte para contraste

@@ -94,7 +94,6 @@ const getExerciseStyles = (colors) => StyleSheet.create({
         textAlign: 'center',
         width: '100%',
     },
-    // <--- ESTILO PARA EL CAMPO DE NOTAS --->
     notesLabel: {
         fontSize: 14,
         color: '#A9A9A9',
@@ -115,7 +114,6 @@ const getExerciseStyles = (colors) => StyleSheet.create({
         textAlignVertical: 'top',
         marginBottom: 5,
     },
-    // <--- FIN ESTILO PARA EL CAMPO DE NOTAS --->
 });
 
 // ----------------------------------------------------------------------
@@ -134,9 +132,7 @@ const ExerciseItem = ({ index, exercise, updateExercise, removeExercise, toggleS
     // Determina el color del botón de selección (verde si está seleccionado, rojo si no)
     const buttonColor = exercise.exercise_id ? '#3ABFBC' : themeColors.danger;
     
-    // Fondo más oscuro para el botón si está seleccionado, o usa el color de la tarjeta
     const buttonBgColor = exercise.exercise_id ? '#1C1C1E' : '#1C1C1E'; 
-    // El indicador visual es el color del texto/icono, no el fondo.
 
 
     return (
@@ -159,12 +155,10 @@ const ExerciseItem = ({ index, exercise, updateExercise, removeExercise, toggleS
                 ]} 
                 onPress={() => toggleSelector(index)} 
             >
-                {/* Icono usa el color determinado (verde/rojo) */}
                 <Zap size={20} color={buttonColor} /> 
                 <Text 
                     style={[
                         exerciseStyles.selectButtonText, 
-                        // El texto es rojo si no está seleccionado
                         !exercise.exercise_id && {color: themeColors.danger} 
                     ]}
                     numberOfLines={1}
@@ -216,7 +210,7 @@ const ExerciseItem = ({ index, exercise, updateExercise, removeExercise, toggleS
                 </View>
             </View>
 
-            {/* <--- CAMPO NUEVO Y CRÍTICO: NOTAS DEL PROFESOR ---> */}
+            {/* <--- CAMPO DE NOTAS (Visible) ---> */}
             <Text style={exerciseStyles.notesLabel}>Notas / Técnica (Opcional):</Text>
             <TextInput
                 style={exerciseStyles.notesInput}
@@ -224,11 +218,11 @@ const ExerciseItem = ({ index, exercise, updateExercise, removeExercise, toggleS
                 placeholderTextColor={placeholderColor}
                 keyboardType="default" 
                 value={exercise.notas}
-                onChangeText={(text) => handleChange('notas', text)} // <-- Este es el campo que solicitas.
+                onChangeText={(text) => handleChange('notas', text)} // <-- Se guarda en el estado 'notas'
                 multiline
                 numberOfLines={3}
             />
-            {/* <--- FIN CAMPO NUEVO ---> */}
+            {/* <--- FIN CAMPO DE NOTAS ---> */}
         </View>
     );
 };
@@ -497,7 +491,6 @@ export default function RoutineCreationScreenV3({ navigation }) {
             }
             
             if (newRoutines[currentDay - 1]) {
-                // En modo edición (newRoutines.length es 1) o creación, esto siempre apunta al día correcto
                 newRoutines[currentDay - 1].exercises = currentExercises; 
             }
             return newRoutines;
@@ -526,18 +519,16 @@ export default function RoutineCreationScreenV3({ navigation }) {
                     .map(link => ({
                         exercise_id: link.exercise_id, 
                         name: link.exercise?.nombre || 'Ejercicio Desconocido',
-                        // CORRECCIÓN PARA CARGA: Aseguramos que los valores sean string o cadena vacía, NO "null" literal.
-                        series: String(link.sets || ''), // Aquí usamos 'series' que coincide con el estado del componente ExerciseItem
+                        series: String(link.sets || ''), 
                         repetitions: String(link.repetitions || ''), 
-                        peso: String(link.peso || ''), // Aseguramos que sea string
-                        notas: String(link.professor_note || ''), // <-- CRÍTICO: CARGAR NOTAS DESDE professor_note
+                        peso: String(link.peso || ''), 
+                        notas: String(link.notas || ''), // <-- CRÍTICO: CARGAR NOTAS DESDE 'notas' (el nombre correcto)
                     }));
                 
                 // Aseguramos que solo haya un elemento en modo edición
                 setAllRoutinesData([{
                     day: 1,
                     name: routineData.nombre,
-                    // CORRECCIÓN: Si la descripción viene nula, la establecemos como cadena vacía.
                     description: routineData.descripcion || '', 
                     exercises: loadedExercises,
                 }]);
@@ -709,14 +700,13 @@ export default function RoutineCreationScreenV3({ navigation }) {
             days: totalDays, 
             routines: allRoutinesData.map((routine, index) => ({
                 nombre: routine.name, 
-                // Aseguramos que la descripción sea string vacío si está vacía, no null (por si el backend lo requiere)
                 descripcion: routine.description.trim() || '', 
                 exercises: routine.exercises.map((ex, exIndex) => ({
                     exercise_id: ex.exercise_id,
                     sets: parseInt(ex.series.trim()), // Aseguramos el parseo (debe ser un entero)
                     repetitions: ex.repetitions.trim(), // Aseguramos que sea string
                     peso: ex.peso.trim() || 'N/A', 
-                    professor_note: ex.notas.trim() || null, // <-- CRÍTICO: ENVIAR NOTAS A professor_note
+                    notas: ex.notas.trim() || null, // <--- ¡CORRECCIÓN CLAVE: AHORA ES 'notas'!--->
                     order: exIndex + 1
                 }))
             }))
@@ -766,14 +756,13 @@ export default function RoutineCreationScreenV3({ navigation }) {
 
             const routineData = {
                 nombre: routineToSave.name.trim(),
-                // CORRECCIÓN CLAVE: Si la descripción está vacía, enviamos "" en lugar de null
                 descripcion: routineToSave.description.trim() || '', 
                 exercises: routineToSave.exercises.map((ex, index) => ({ 
                     exercise_id: ex.exercise_id, 
                     sets: parseInt(ex.series.trim()), // Aseguramos el parseo (debe ser un entero)
                     repetitions: ex.repetitions.trim(), // Aseguramos que sea string
                     peso: ex.peso.trim() || 'N/A', 
-                    professor_note: ex.notas.trim() || null, // <-- CRÍTICO: ENVIAR NOTAS A professor_note
+                    notas: ex.notas.trim() || null, // <--- ¡CORRECCIÓN CLAVE: AHORA ES 'notas'!--->
                     order: index + 1 
                 }))
             };
@@ -789,16 +778,13 @@ export default function RoutineCreationScreenV3({ navigation }) {
             
             let errorMessage = "Fallo desconocido al guardar la rutina.";
              if (e.response && e.response.data && e.response.data.detail) {
-                 // Captura el mensaje de error detallado del backend
                  if (Array.isArray(e.response.data.detail) || typeof e.response.data.detail === 'string') {
-                     // Si el backend es el que lanza el error, mostramos su detalle
                      errorMessage = `Error de FastAPI: ${JSON.stringify(e.response.data.detail)}`;
                  }
              } else if (e.message === "Network Error") {
                  errorMessage = "Error de red: No se pudo conectar al servidor API.";
              }
 
-            // Aquí alertamos el error. El error de Render es provocado por esta llamada fallida.
             Alert.alert("Error de Edición", errorMessage); 
         } finally {
             setIsSaving(false);
