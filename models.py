@@ -252,6 +252,8 @@ class UserUpdateByProfessor(BaseModel):
     nombre: Optional[str] = None
     email: Optional[str] = None
     dni: Optional[str] = None
+    # AGREGADO: Campo password opcional para permitir el reset directo
+    password: Optional[str] = None
 
 
 # --- Esquemas de Ejercicio (Se mantienen) ---

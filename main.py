@@ -365,15 +365,15 @@ def read_students_list(
     students = session.exec(select(User).where(User.rol == UserRole.STUDENT)).all()
     return students
 
-# RUTA: Actualizar Datos del Alumno por el Profesor
+# RUTA ACTUALIZADA: Actualizar Datos del Alumno por el Profesor (CON RESET DE CLAVE)
 @app.patch("/users/student/{student_id}", response_model=UserRead, tags=["Usuarios"])
 def update_student_data(
     student_id: int,
-    user_data: UserUpdateByProfessor, # Usamos el esquema importado
+    user_data: UserUpdateByProfessor, 
     session: Annotated[Session, Depends(get_session)],
     current_professor: Annotated[User, Depends(get_current_professor)]
 ):
-    """(Profesor) Permite actualizar el nombre, email o DNI de un alumno especifico."""
+    """(Profesor) Permite actualizar el nombre, email o DNI de un alumno especifico, o resetear su clave."""
     
     # 1. Buscar al alumno
     student_to_update = session.get(User, student_id)
@@ -386,6 +386,12 @@ def update_student_data(
     
     # 3. Aplicar los cambios al objeto de la DB
     for key, value in update_data.items():
+        # --- Lógica de Reset de Password (AÑADIDO) ---
+        if key == 'password' and value:
+            student_to_update.password_hash = get_password_hash(value)
+            continue
+        # ---------------------------------------------
+
         # Validar si el DNI o Email ya existen en OTRO usuario
         if key == 'email' and value is not None and value.lower() != student_to_update.email.lower():
             existing_user = session.exec(select(User).where(func.lower(User.email) == value.lower())).first()
