@@ -33,6 +33,7 @@ from models import (
     RoutineCreateOrUpdate, 
     # CRITICO: Importaciones de Grupo y Transaccional
     RoutineGroup, RoutineGroupCreate, RoutineGroupRead, RoutineGroupCreateAndRoutines,
+    RoutineGroupUpdate, # <--- AÑADIDO PARA EDICIÓN DE GRUPO
     UserUpdateByProfessor,
     RoutineCreateForTransactional # Nuevo esquema para usar en la transaccion
 )
@@ -109,10 +110,10 @@ origins = [
 # 2. Aplicar el Middleware a la aplicación
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,         # Lista de dominios permitidos
-    allow_credentials=True,        # Permite cookies/tokens
-    allow_methods=["*"],           # Permite todos los métodos (GET, POST, etc.)
-    allow_headers=["*"],           # Permite todos los encabezados (incluyendo Authorization)
+    allow_origins=origins,          # Lista de dominios permitidos
+    allow_credentials=True,         # Permite cookies/tokens
+    allow_methods=["*"],            # Permite todos los métodos (GET, POST, etc.)
+    allow_headers=["*"],            # Permite todos los encabezados (incluyendo Authorization)
 )
 # ----------------------------------------------------
 
@@ -837,6 +838,31 @@ def delete_assignment_group_for_student(
     session.commit()
     
     return {"message": f"Se eliminaron {len(assignments_to_delete)} asignaciones de grupo para el alumno."}
+
+# <--- AÑADIDO: RUTA PARA ACTUALIZAR METADATOS DEL GRUPO (PLAN) --->
+@app.patch("/routines-group/{group_id}", response_model=RoutineGroupRead, tags=["Rutinas"])
+def update_routine_group_metadata(
+    group_id: int,
+    group_data: RoutineGroupUpdate,
+    session: Annotated[Session, Depends(get_session)],
+    current_professor: Annotated[User, Depends(get_current_professor)]
+):
+    """(Profesor) Actualiza el nombre y/o la fecha de vencimiento de un plan (grupo)."""
+    db_group = session.get(RoutineGroup, group_id)
+    if not db_group:
+        raise HTTPException(status_code=404, detail="Grupo no encontrado")
+    
+    if db_group.professor_id != current_professor.id:
+        raise HTTPException(status_code=403, detail="No tienes permiso para modificar este grupo")
+
+    update_dict = group_data.model_dump(exclude_unset=True)
+    for key, value in update_dict.items():
+        setattr(db_group, key, value)
+    
+    session.add(db_group)
+    session.commit()
+    session.refresh(db_group)
+    return db_group
 
 # RUTA ACTUALIZADA: EDICION COMPLETA (Metadata y Ejercicios)
 @app.patch("/routines/{routine_id}", response_model=RoutineRead, tags=["Rutinas"])

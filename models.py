@@ -21,8 +21,8 @@ class MuscleGroup(str, Enum):
     PIERNAS = "Piernas"
     HOMBRO = "Hombro"
     BRAZOS = "Brazos"
-    ABDOMEN = "Abdomen" # CORREGIDO/CONFIRMADO
-    GLUTEOS = "Gluteos" # NUEVA INCORPORACIÓN
+    ABDOMEN = "Abdomen" 
+    GLUTEOS = "Gluteos" 
     CARDIO = "Cardio"
 
 # ----------------------------------------------------------------------
@@ -85,7 +85,6 @@ class RoutineGroup(SQLModel, table=True):
     
     id: Optional[int] = Field(default=None, primary_key=True)
     nombre: str = Field(index=True, max_length=100)
-    # ELIMINA: descripcion: Optional[str] = Field(default=None, max_length=500) 
     fecha_creacion: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), nullable=False)
     fecha_vencimiento: Optional[date] 
     professor_id: int = Field(foreign_key="USERS.id")
@@ -178,6 +177,11 @@ class RoutineGroupCreate(BaseModel):
     nombre: str
     fecha_vencimiento: date 
 
+# <--- AÑADIDO: Esquema para actualizar el grupo (Metadatos del Plan) --->
+class RoutineGroupUpdate(BaseModel):
+    nombre: Optional[str] = None
+    fecha_vencimiento: Optional[date] = None
+
 class RoutineGroupRead(BaseModel):
     id: int
     nombre: str
@@ -237,10 +241,6 @@ class UserLogin(BaseModel):
 class Token(BaseModel):
     access_token: str
     token_type: str = "bearer"
-
-class TokenData(BaseModel):
-    dni: str 
-    rol: Optional[UserRole] = None
 
 # NUEVO: Esquema para el cambio de contrasena
 class ChangePassword(BaseModel):
