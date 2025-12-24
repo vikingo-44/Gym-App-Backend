@@ -4,7 +4,7 @@ from typing import Annotated, List, Optional
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Depends, HTTPException, status
-# ¡IMPORTACIÓN CRÍTICA AÑADIDA para CORS!
+# ¡IMPORTACIoN CRiTICA AnADIDA para CORS!
 from fastapi.middleware.cors import CORSMiddleware 
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials 
 from sqlmodel import Session, select
@@ -33,10 +33,10 @@ from models import (
     RoutineCreateOrUpdate, 
     # CRITICO: Importaciones de Grupo y Transaccional
     RoutineGroup, RoutineGroupCreate, RoutineGroupRead, RoutineGroupCreateAndRoutines,
-    RoutineGroupUpdate, # <--- AÑADIDO PARA EDICIÓN DE GRUPO
+    RoutineGroupUpdate, # <--- AnADIDO PARA EDICIoN DE GRUPO
     UserUpdateByProfessor,
     RoutineCreateForTransactional,
-    # <--- AÑADIDO: Esquema de reset público --->
+    # <--- AnADIDO: Esquema de reset publico --->
     UserPasswordResetPublic
 )
 
@@ -84,7 +84,7 @@ async def lifespan(app: FastAPI):
     print("Apagando la aplicacion...")
 
 # ----------------------------------------------------------------------
-# Inicializacion de la Aplicacion Y CONFIGURACIÓN CORS
+# Inicializacion de la Aplicacion Y CONFIGURACIoN CORS
 # ----------------------------------------------------------------------
 
 app = FastAPI(
@@ -94,27 +94,27 @@ app = FastAPI(
 )
 
 # ----------------------------------------------------
-# Bloque AÑADIDO: Configuración CORS
+# Bloque AnADIDO: Configuracion CORS
 # ----------------------------------------------------
-# 1. Definir los Orígenes Permitidos (CORS)
+# 1. Definir los Origenes Permitidos (CORS)
 origins = [
-    # **CRÍTICO PARA EL PREVIEW:** Permite el origen "null" (usado por entornos embebidos)
+    # **CRiTICO PARA EL PREVIEW:** Permite el origen "null" (usado por entornos embebidos)
     "null", 
     # **IMPORTANTE:** Permitimos cualquier origen por ahora para asegurar la conectividad
     # hasta que publiques tu frontend en un dominio fijo.
     "*", 
-    # Tu dominio de Render (Aunque con '*' ya estaría cubierto)
+    # Tu dominio de Render (Aunque con '*' ya estaria cubierto)
     "https://gym-app-backend-e9bn.onrender.com",
     "http://localhost",
     "http://localhost:3000",
 ]
 
-# 2. Aplicar el Middleware a la aplicación
+# 2. Aplicar el Middleware a la aplicacion
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,          # Lista de dominios permitidos
     allow_credentials=True,         # Permite cookies/tokens
-    allow_methods=["*"],            # Permite todos los métodos (GET, POST, etc.)
+    allow_methods=["*"],            # Permite todos los metodos (GET, POST, etc.)
     allow_headers=["*"],            # Permite todos los encabezados (incluyendo Authorization)
 )
 # ----------------------------------------------------
@@ -231,7 +231,7 @@ def register_student(
         created_users.append(new_user) # Almacenamos el nuevo usuario para la respuesta de lista
         
     # ----------------------------------------------------------------------
-    # COMMIT Y REFRESH (Se realiza una única vez para toda la transacción)
+    # COMMIT Y REFRESH (Se realiza una unica vez para toda la transaccion)
     # ----------------------------------------------------------------------
     session.commit()
     
@@ -241,7 +241,7 @@ def register_student(
         
     # AJUSTE OBLIGATORIO: Ya que el endpoint ahora acepta y procesa una lista,
     # debe devolver una lista para satisfacer el contrato (response_model=List[UserRead]).
-    # De lo contrario, FastAPI fallará al intentar convertir un solo objeto a una lista.
+    # De lo contrario, FastAPI fallara al intentar convertir un solo objeto a una lista.
     return created_users
 
 @app.post("/register", response_model=UserRead, status_code=status.HTTP_201_CREATED, tags=["Autenticacion"])
@@ -389,7 +389,7 @@ def update_student_data(
     
     # 3. Aplicar los cambios al objeto de la DB
     for key, value in update_data.items():
-        # --- Lógica de Reset de Password (AÑADIDO) ---
+        # --- Logica de Reset de Password (AnADIDO) ---
         if key == 'password' and value:
             student_to_update.password_hash = get_password_hash(value)
             continue
@@ -415,21 +415,21 @@ def update_student_data(
     
     return student_to_update
 
-# <--- NUEVO ENDPOINT: RECUPERACIÓN PÚBLICA PARA ALUMNOS (Identificación por DNI) --->
+# <--- NUEVO ENDPOINT: RECUPERACIoN PuBLICA PARA ALUMNOS (Identificacion por DNI) --->
 @app.patch("/users/student/reset-password/{dni}", response_model=UserRead, tags=["Usuarios"])
 def public_reset_password_by_dni(
     dni: str,
     reset_data: UserPasswordResetPublic,
     session: Annotated[Session, Depends(get_session)]
 ):
-    """(Público) Permite a un alumno resetear su contraseña identificándose únicamente por DNI."""
+    """(Publico) Permite a un alumno resetear su contrasena identificandose unicamente por DNI."""
     # Buscamos al usuario por su DNI string
     user = session.exec(select(User).where(User.dni == dni)).first()
     
     if not user:
-        raise HTTPException(status_code=404, detail="El DNI ingresado no corresponde a ningún usuario.")
+        raise HTTPException(status_code=404, detail="El DNI ingresado no corresponde a ningun usuario.")
     
-    # Hasheamos la nueva contraseña y actualizamos
+    # Hasheamos la nueva contrasena y actualizamos
     user.password_hash = get_password_hash(reset_data.password)
     
     session.add(user)
@@ -590,7 +590,7 @@ def create_routine_group_and_routines(
                     sets=exercise_link_data.sets,
                     repetitions=exercise_link_data.repetitions,
                     peso=exercise_link_data.peso, 
-                    notas=exercise_link_data.notas, # <--- AÑADIDO: Campo Notas
+                    notas=exercise_link_data.notas, # <--- AnADIDO: Campo Notas
                     order=index + 1 # Usar el indice para el orden, asegurando que sea un entero
                 )
                 session.add(link)
@@ -685,7 +685,7 @@ def create_routine(
             sets=exercise_link_data.sets,
             repetitions=exercise_link_data.repetitions,
             peso=exercise_link_data.peso, # AGREGADO: Campo peso
-            notas=exercise_link_data.notas, # <--- AÑADIDO: Campo Notas
+            notas=exercise_link_data.notas, # <--- AnADIDO: Campo Notas
             order=exercise_link_data.order
         )
         session.add(link)
@@ -863,7 +863,7 @@ def delete_assignment_group_for_student(
     
     return {"message": f"Se eliminaron {len(assignments_to_delete)} asignaciones de grupo para el alumno."}
 
-# <--- AÑADIDO: RUTA PARA ACTUALIZAR METADATOS DEL GRUPO (PLAN) --->
+# <--- AnADIDO: RUTA PARA ACTUALIZAR METADATOS DEL GRUPO (PLAN) --->
 @app.patch("/routines-group/{group_id}", response_model=RoutineGroupRead, tags=["Rutinas"])
 def update_routine_group_metadata(
     group_id: int,
@@ -928,7 +928,7 @@ def update_routine_full(
             sets=exercise_link_data.sets,
             repetitions=exercise_link_data.repetitions,
             peso=exercise_link_data.peso, # AGREGADO: Campo peso
-            notas=exercise_link_data.notas, # <--- AÑADIDO: Campo Notas
+            notas=exercise_link_data.notas, # <--- AnADIDO: Campo Notas
             order=exercise_link_data.order
         )
         session.add(link)
