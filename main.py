@@ -35,7 +35,9 @@ from models import (
     RoutineGroup, RoutineGroupCreate, RoutineGroupRead, RoutineGroupCreateAndRoutines,
     RoutineGroupUpdate, # <--- AÑADIDO PARA EDICIÓN DE GRUPO
     UserUpdateByProfessor,
-    RoutineCreateForTransactional # Nuevo esquema para usar en la transaccion
+    RoutineCreateForTransactional,
+    # <--- AÑADIDO: Esquema de reset público --->
+    UserPasswordResetPublic
 )
 
 
@@ -54,8 +56,8 @@ http_bearer = HTTPBearer()
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     return pwd_context.verify(plain_password, hashed_password)
 
-def get_password_hash(password: str) -> str:
-    return pwd_context.hash(password)
+def get_password_hash(plain_password: str) -> str:
+    return pwd_context.hash(plain_password)
 
 def create_access_token(data: dict, expires_delta: timedelta | None = None) -> str:
     to_encode = data.copy()
@@ -413,6 +415,28 @@ def update_student_data(
     
     return student_to_update
 
+# <--- NUEVO ENDPOINT: RECUPERACIÓN PÚBLICA PARA ALUMNOS (Identificación por DNI) --->
+@app.patch("/users/student/reset-password/{dni}", response_model=UserRead, tags=["Usuarios"])
+def public_reset_password_by_dni(
+    dni: str,
+    reset_data: UserPasswordResetPublic,
+    session: Annotated[Session, Depends(get_session)]
+):
+    """(Público) Permite a un alumno resetear su contraseña identificándose únicamente por DNI."""
+    # Buscamos al usuario por su DNI string
+    user = session.exec(select(User).where(User.dni == dni)).first()
+    
+    if not user:
+        raise HTTPException(status_code=404, detail="El DNI ingresado no corresponde a ningún usuario.")
+    
+    # Hasheamos la nueva contraseña y actualizamos
+    user.password_hash = get_password_hash(reset_data.password)
+    
+    session.add(user)
+    session.commit()
+    session.refresh(user)
+    return user
+
 # ----------------------------------------------------------------------
 # Rutas de Ejercicios (CRUD - RESTAURADAS)
 # ----------------------------------------------------------------------
@@ -675,7 +699,7 @@ def create_routine(
             .where(Routine.id == db_routine.id)
             .options(
                 selectinload(Routine.routine_group),
-                selectinload(Routine.exercise_links).selectinload(RoutineExercise.exercise)
+                selectinload(Routine.exercise_links).selectinload(RoutineExercise.exercise) 
             )
         )
         final_routine = session.exec(statement).first()

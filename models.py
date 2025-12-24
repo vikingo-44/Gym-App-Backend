@@ -255,6 +255,10 @@ class UserUpdateByProfessor(BaseModel):
     # AGREGADO: Campo password opcional para permitir el reset directo
     password: Optional[str] = None
 
+# <--- AÑADIDO: Esquema para recuperación pública (Alumno) --->
+class UserPasswordResetPublic(BaseModel):
+    password: str
+
 
 # --- Esquemas de Ejercicio (Se mantienen) ---
 class ExerciseCreate(BaseModel):
