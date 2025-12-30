@@ -1076,9 +1076,6 @@ def get_global_assignments_for_student(
     session: Annotated[Session, Depends(get_session)],
     current_professor: Annotated[User, Depends(get_current_professor)]
 ):
-    """
-    (Profesor) Obtiene TODAS las asignaciones historicas del alumno sin importar quien las generó.
-    """
     # 1. Verificar que el alumno exista
     student = session.get(User, student_id)
     if not student or student.rol != UserRole.STUDENT:
