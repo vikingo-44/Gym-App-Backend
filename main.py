@@ -1151,10 +1151,6 @@ def get_my_active_routine(
     session: Annotated[Session, Depends(get_session)],
     current_student: Annotated[User, Depends(get_current_student)]
 ):
-    """
-    (Alumno) Obtiene SOLAMENTE las rutinas asignadas que estan marcadas como activas.
-    Si la asignacion es parte de un grupo, devuelve TODAS las rutinas de ese grupo.
-    """
     # 1. Buscar la asignacion activa (el "ancla")
     statement = (
         select(RoutineAssignment)
