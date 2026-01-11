@@ -160,7 +160,7 @@ def get_current_professor(current_user: Annotated[User, Depends(get_current_user
         )
     return current_user
 
-def get_current_student(current_user: Annotated[User, Depends(get_current_user)]) -> User:
+def get_current_student(current_user: Annotated[User, Depends(get_current_student)]) -> User:
     """Dependencia que verifica si el usuario actual es un Alumno."""
     if current_user.rol != UserRole.STUDENT:
         raise HTTPException(
@@ -781,9 +781,9 @@ def set_assignment_active_status(
     if not assignment:
         raise HTTPException(status_code=404, detail="Asignacion no encontrada.")
 
-    # Opcional: Verificar que el profesor sea dueno (basado en el profesor que la asigno)
-    if assignment.professor_id != current_professor.id:
-        raise HTTPException(status_code=403, detail="No tienes permiso para modificar esta asignacion.")
+    # MODIFICACIoN: Eliminada validacion de propiedad para permitir edicion cruzada entre profesores
+    # if assignment.professor_id != current_professor.id:
+    #     raise HTTPException(status_code=403, detail="No tienes permiso para modificar esta asignacion.")
         
     # Aplicar solo la actualizacion de is_active
     update_data = assignment_update.model_dump(exclude_unset=True)
@@ -845,10 +845,11 @@ def delete_assignment_group_for_student(
     routine_ids = [r.id for r in routines]
 
     # 2. Encontrar y eliminar las asignaciones especificas para este alumno y estas rutinas
+    # MODIFICACIoN: Quitamos el filtro de professor_id para permitir que cualquier profesor borre el grupo
     assignment_statement = select(RoutineAssignment).where(
         RoutineAssignment.routine_id.in_(routine_ids),
-        RoutineAssignment.student_id == student_id,
-        RoutineAssignment.professor_id == current_professor.id # Solo asignaciones creadas por el profesor actual
+        RoutineAssignment.student_id == student_id
+        # RoutineAssignment.professor_id == current_professor.id # <--- Eliminado
     )
     assignments_to_delete = session.exec(assignment_statement).all()
 
@@ -876,8 +877,9 @@ def update_routine_group_metadata(
     if not db_group:
         raise HTTPException(status_code=404, detail="Grupo no encontrado")
     
-    if db_group.professor_id != current_professor.id:
-        raise HTTPException(status_code=403, detail="No tienes permiso para modificar este grupo")
+    # MODIFICACIoN: Eliminada validacion de propiedad para permitir edicion cruzada
+    # if db_group.professor_id != current_professor.id:
+    #     raise HTTPException(status_code=403, detail="No tienes permiso para modificar este grupo")
 
     update_dict = group_data.model_dump(exclude_unset=True)
     for key, value in update_dict.items():
@@ -901,8 +903,9 @@ def update_routine_full(
     if not db_routine:
         raise HTTPException(status_code=404, detail="Rutina no encontrada")
         
-    if db_routine.owner_id != current_professor.id:
-        raise HTTPException(status_code=403, detail="No autorizado para editar esta rutina")
+    # MODIFICACIoN: Eliminada validacion de propiedad para permitir edicion cruzada
+    # if db_routine.owner_id != current_professor.id:
+    #     raise HTTPException(status_code=403, detail="No autorizado para editar esta rutina")
 
     # 1. Actualizar metadata (Nombre/Descripcion)
     db_routine.nombre = routine_data.nombre
@@ -971,8 +974,9 @@ def delete_routine(
     if not db_routine:
         raise HTTPException(status_code=404, detail="Rutina no encontrada")
     
-    if db_routine.owner_id != current_professor.id:
-        raise HTTPException(status_code=403, detail="No autorizado para eliminar esta rutina")
+    # MODIFICACIoN: Eliminada validacion de propiedad para permitir eliminacion cruzada
+    # if db_routine.owner_id != current_professor.id:
+    #     raise HTTPException(status_code=403, detail="No autorizado para eliminar esta rutina")
 
     # Eliminamos enlaces y asignaciones antes de eliminar la rutina (CRITICO para evitar errores de Foreign Key)
     # CORRECCIoN: Usamos la funcion delete() de SQLAlchemy
