@@ -160,7 +160,8 @@ def get_current_professor(current_user: Annotated[User, Depends(get_current_user
         )
     return current_user
 
-def get_current_student(current_user: Annotated[User, Depends(get_current_student)]) -> User:
+# CORRECCIÓN AQUÍ: Se cambió Depends(get_current_student) por Depends(get_current_user)
+def get_current_student(current_user: Annotated[User, Depends(get_current_user)]) -> User:
     """Dependencia que verifica si el usuario actual es un Alumno."""
     if current_user.rol != UserRole.STUDENT:
         raise HTTPException(
@@ -820,8 +821,8 @@ def set_assignment_active_status(
     updated_assignment = session.exec(statement_read).first()
 
     if not updated_assignment:
-          raise HTTPException(status_code=500, detail="Error interno: No se pudo recargar la asignacion actualizada.")
-          
+            raise HTTPException(status_code=500, detail="Error interno: No se pudo recargar la asignacion actualizada.")
+            
     return updated_assignment
     
 # --- Ruta para eliminar un grupo de asignaciones para un alumno especifico ---
