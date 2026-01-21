@@ -662,7 +662,9 @@ def create_routine(
     db_routine = Routine(
         nombre=routine_data.nombre,
         descripcion=routine_data.descripcion,
-        owner_id=current_professor.id
+        owner_id=current_professor.id,
+        # CORRECCION: Se agregó la asignación del grupo para evitar que se creen como rutinas sueltas
+        routine_group_id=routine_data.routine_group_id 
     )
     
     # 1. Creamos la rutina y hacemos commit INMEDIATO para que la DB le asigne el ID.
@@ -784,7 +786,7 @@ def set_assignment_active_status(
 
     # MODIFICACIoN: Eliminada validacion de propiedad para permitir edicion cruzada entre profesores
     # if assignment.professor_id != current_professor.id:
-    #     raise HTTPException(status_code=403, detail="No tienes permiso para modificar esta asignacion.")
+    #      raise HTTPException(status_code=403, detail="No tienes permiso para modificar esta asignacion.")
         
     # Aplicar solo la actualizacion de is_active
     update_data = assignment_update.model_dump(exclude_unset=True)
@@ -880,7 +882,7 @@ def update_routine_group_metadata(
     
     # MODIFICACIoN: Eliminada validacion de propiedad para permitir edicion cruzada
     # if db_group.professor_id != current_professor.id:
-    #     raise HTTPException(status_code=403, detail="No tienes permiso para modificar este grupo")
+    #      raise HTTPException(status_code=403, detail="No tienes permiso para modificar este grupo")
 
     update_dict = group_data.model_dump(exclude_unset=True)
     for key, value in update_dict.items():
@@ -906,11 +908,14 @@ def update_routine_full(
         
     # MODIFICACIoN: Eliminada validacion de propiedad para permitir edicion cruzada
     # if db_routine.owner_id != current_professor.id:
-    #     raise HTTPException(status_code=403, detail="No autorizado para editar esta rutina")
+    #      raise HTTPException(status_code=403, detail="No autorizado para editar esta rutina")
 
     # 1. Actualizar metadata (Nombre/Descripcion)
     db_routine.nombre = routine_data.nombre
     db_routine.descripcion = routine_data.descripcion
+    # CORRECCION: Asegurar que el orden también se actualice si viene en el payload
+    if hasattr(routine_data, 'orden'):
+        db_routine.orden = routine_data.orden
     
     # 2. Eliminar todos los enlaces de ejercicios existentes para reemplazarlos
     # CORRECCIoN CLAVE: Usamos la funcion delete() de SQLAlchemy
@@ -977,7 +982,7 @@ def delete_routine(
     
     # MODIFICACIoN: Eliminada validacion de propiedad para permitir eliminacion cruzada
     # if db_routine.owner_id != current_professor.id:
-    #     raise HTTPException(status_code=403, detail="No autorizado para eliminar esta rutina")
+    #      raise HTTPException(status_code=403, detail="No autorizado para eliminar esta rutina")
 
     # Eliminamos enlaces y asignaciones antes de eliminar la rutina (CRITICO para evitar errores de Foreign Key)
     # CORRECCIoN: Usamos la funcion delete() de SQLAlchemy
