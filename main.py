@@ -183,7 +183,7 @@ def read_root():
 @app.post(
     # response_model ahora es una LISTA de UserRead
     "/register/student", 
-    response_model=List[UserRead], 
+    # response_model=List[UserRead], 
     status_code=status.HTTP_201_CREATED, 
     tags=["Autenticacion"]
 )
@@ -784,7 +784,7 @@ def set_assignment_active_status(
 
     # MODIFICACIoN: Eliminada validacion de propiedad para permitir edicion cruzada entre profesores
     # if assignment.professor_id != current_professor.id:
-    #     raise HTTPException(status_code=403, detail="No tienes permiso para modificar esta asignacion.")
+    #      raise HTTPException(status_code=403, detail="No tienes permiso para modificar esta asignacion.")
         
     # Aplicar solo la actualizacion de is_active
     update_data = assignment_update.model_dump(exclude_unset=True)
@@ -880,7 +880,7 @@ def update_routine_group_metadata(
     
     # MODIFICACIoN: Eliminada validacion de propiedad para permitir edicion cruzada
     # if db_group.professor_id != current_professor.id:
-    #     raise HTTPException(status_code=403, detail="No tienes permiso para modificar este grupo")
+    #      raise HTTPException(status_code=403, detail="No tienes permiso para modificar este grupo")
 
     update_dict = group_data.model_dump(exclude_unset=True)
     for key, value in update_dict.items():
@@ -906,7 +906,7 @@ def update_routine_full(
         
     # MODIFICACIoN: Eliminada validacion de propiedad para permitir edicion cruzada
     # if db_routine.owner_id != current_professor.id:
-    #     raise HTTPException(status_code=403, detail="No autorizado para editar esta rutina")
+    #      raise HTTPException(status_code=403, detail="No autorizado para editar esta rutina")
 
     # 1. Actualizar metadata (Nombre/Descripcion)
     db_routine.nombre = routine_data.nombre
@@ -977,7 +977,7 @@ def delete_routine(
     
     # MODIFICACIoN: Eliminada validacion de propiedad para permitir eliminacion cruzada
     # if db_routine.owner_id != current_professor.id:
-    #     raise HTTPException(status_code=403, detail="No autorizado para eliminar esta rutina")
+    #      raise HTTPException(status_code=403, detail="No autorizado para eliminar esta rutina")
 
     # Eliminamos enlaces y asignaciones antes de eliminar la rutina (CRITICO para evitar errores de Foreign Key)
     # CORRECCIoN: Usamos la funcion delete() de SQLAlchemy
@@ -1234,3 +1234,62 @@ def get_my_active_routine(
         
     # 5. Si no hay grupo (rutina simple antigua), devuelve la asignacion original
     return [active_anchor_assignment]
+
+# <--- NUEVO ENDPOINT PARA AGREGAR RUTINA A GRUPO EXISTENTE --->
+@app.post("/routines-group/{group_id}/student/{student_id}/add-routine", response_model=RoutineRead, tags=["Rutinas"])
+def add_routine_to_existing_group(
+    group_id: int,
+    student_id: int,
+    routine_data: RoutineCreateForTransactional,
+    session: Annotated[Session, Depends(get_session)],
+    current_professor: Annotated[User, Depends(get_current_professor)]
+):
+    """(Profesor) Agrega una nueva rutina a un plan (grupo) ya existente y la asigna al alumno."""
+    group = session.get(RoutineGroup, group_id)
+    if not group:
+        raise HTTPException(status_code=404, detail="Grupo no encontrado")
+
+    # 1. Crear la Rutina
+    new_routine = Routine(
+        nombre=routine_data.nombre,
+        descripcion=routine_data.descripcion,
+        owner_id=current_professor.id,
+        routine_group_id=group_id
+    )
+    session.add(new_routine)
+    session.flush()
+
+    # 2. Crear Ejercicios
+    for index, ex_link in enumerate(routine_data.exercises):
+        link = RoutineExercise(
+            routine_id=new_routine.id,
+            exercise_id=ex_link.exercise_id,
+            sets=ex_link.sets,
+            repetitions=ex_link.repetitions,
+            peso=ex_link.peso,
+            notas=ex_link.notas,
+            order=index + 1
+        )
+        session.add(link)
+
+    # 3. Crear Asignacion
+    new_assignment = RoutineAssignment(
+        routine_id=new_routine.id,
+        student_id=student_id,
+        professor_id=current_professor.id,
+        is_active=False # Por defecto inactivas al agregarlas después
+    )
+    session.add(new_assignment)
+    
+    session.commit()
+    
+    # Recargar para devolver completo
+    statement = (
+        select(Routine)
+        .where(Routine.id == new_routine.id)
+        .options(
+            selectinload(Routine.routine_group),
+            selectinload(Routine.exercise_links).selectinload(RoutineExercise.exercise)
+        )
+    )
+    return session.exec(statement).first()
