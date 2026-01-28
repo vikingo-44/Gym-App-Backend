@@ -72,6 +72,39 @@ def create_access_token(data: dict, expires_delta: timedelta | None = None) -> s
     return encoded_jwt
 
 # ----------------------------------------------------------------------
+# FUNCION UTILITARIA: Inactivacion Automatica por Vencimiento
+# ----------------------------------------------------------------------
+
+def check_and_inactivate_expired_assignments(session: Session, student_id: int):
+    """
+    Busca todas las asignaciones activas del alumno que pertenezcan a un grupo 
+    cuya fecha de vencimiento sea menor a la fecha actual, y las marca como inactivas.
+    """
+    today = date.today()
+    
+    # Buscamos asignaciones activas vinculadas a rutinas que tienen un grupo vencido
+    statement = (
+        select(RoutineAssignment)
+        .join(Routine, RoutineAssignment.routine_id == Routine.id)
+        .join(RoutineGroup, Routine.routine_group_id == RoutineGroup.id)
+        .where(
+            RoutineAssignment.student_id == student_id,
+            RoutineAssignment.is_active == True,
+            RoutineGroup.fecha_vencimiento < today
+        )
+    )
+    
+    expired_assignments = session.exec(statement).all()
+    
+    if expired_assignments:
+        for assignment in expired_assignments:
+            assignment.is_active = False
+            session.add(assignment)
+        session.commit()
+        # Log para depuracion interna
+        print(f"INFO: Se han inactivado {len(expired_assignments)} asignaciones vencidas para el alumno ID {student_id}.")
+
+# ----------------------------------------------------------------------
 # Eventos de la Aplicacion (Startup/Shutdown)
 # ----------------------------------------------------------------------
 
@@ -1048,12 +1081,15 @@ def get_assignments_for_student_by_professor(
     """
     (Profesor) Obtiene asignaciones historicas del alumno CREADAS POR EL PROFESOR ACTUAL. 
     """
-    # 1. Verificar que el alumno exista
+    # 1. VERIFICAR VENCIMIENTOS ANTES DE CONSULTAR
+    check_and_inactivate_expired_assignments(session, student_id)
+
+    # 2. Verificar que el alumno exista
     student = session.get(User, student_id)
     if not student or student.rol != UserRole.STUDENT:
         raise HTTPException(status_code=404, detail="Alumno no encontrado.")
         
-    # 2. Fetch asignaciones filtradas por profesor
+    # 3. Fetch asignaciones filtradas por profesor
     statement = (
         select(RoutineAssignment)
         .where(
@@ -1081,12 +1117,15 @@ def get_global_assignments_for_student(
     session: Annotated[Session, Depends(get_session)],
     current_professor: Annotated[User, Depends(get_current_professor)]
 ):
-    # 1. Verificar que el alumno exista
+    # 1. VERIFICAR VENCIMIENTOS ANTES DE CONSULTAR
+    check_and_inactivate_expired_assignments(session, student_id)
+
+    # 2. Verificar que el alumno exista
     student = session.get(User, student_id)
     if not student or student.rol != UserRole.STUDENT:
         raise HTTPException(status_code=404, detail="Alumno no encontrado.")
         
-    # 2. Fetch todas las asignaciones (Quitamos el filtro de professor_id)
+    # 3. Fetch todas las asignaciones (Quitamos el filtro de professor_id)
     statement = (
         select(RoutineAssignment)
         .where(RoutineAssignment.student_id == student_id)
@@ -1156,7 +1195,10 @@ def get_my_active_routine(
     session: Annotated[Session, Depends(get_session)],
     current_student: Annotated[User, Depends(get_current_student)]
 ):
-    # 1. Buscar la asignacion activa (el "ancla")
+    # 1. VERIFICAR VENCIMIENTOS ANTES DE CONSULTAR
+    check_and_inactivate_expired_assignments(session, current_student.id)
+
+    # 2. Buscar la asignacion activa (el "ancla")
     statement = (
         select(RoutineAssignment)
         .where(
@@ -1181,11 +1223,11 @@ def get_my_active_routine(
     if not active_anchor_assignment:
         return []
         
-    # 2. Verificar si pertenece a un grupo
+    # 3. Verificar si pertenece a un grupo
     if active_anchor_assignment.routine.routine_group_id:
         routine_group_id = active_anchor_assignment.routine.routine_group_id
         
-        # 3. Traer TODAS las rutinas de ese grupo (Dia 1, Dia 2, etc.)
+        # 4. Traer TODAS las rutinas de ese grupo (Dia 1, Dia 2, etc.)
         routine_statement = (
             select(Routine)
             .where(Routine.routine_group_id == routine_group_id)
@@ -1197,7 +1239,7 @@ def get_my_active_routine(
         )
         grouped_routines = session.exec(routine_statement).all()
         
-        # 4. Obtener las asignaciones reales para cada rutina del grupo
+        # 5. Obtener las asignaciones reales para cada rutina del grupo
         routine_ids = [r.id for r in grouped_routines]
         real_assignments_statement = (
             select(RoutineAssignment)
@@ -1206,7 +1248,7 @@ def get_my_active_routine(
         real_assignments = session.exec(real_assignments_statement).all()
         real_assignments_map = {a.routine_id: a for a in real_assignments}
 
-        # 5. Crear "pseudo-asignaciones" para devolver todas las rutinas del grupo
+        # 6. Crear "pseudo-asignaciones" para devolver todas las rutinas del grupo
         expanded_assignments = []
         for routine in grouped_routines:
             
@@ -1232,7 +1274,7 @@ def get_my_active_routine(
             
         return expanded_assignments
         
-    # 5. Si no hay grupo (rutina simple antigua), devuelve la asignacion original
+    # 7. Si no hay grupo (rutina simple antigua), devuelve la asignacion original
     return [active_anchor_assignment]
 
 # <--- NUEVO ENDPOINT PARA AGREGAR RUTINA A GRUPO EXISTENTE --->
