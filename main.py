@@ -140,13 +140,12 @@ origins = [
     "https://gym-app-backend-e9bn.onrender.com",
     "http://localhost",
     "http://localhost:3000",
-    "http://localhost:5173",
 ]
 
 # 2. Aplicar el Middleware a la aplicacion
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],          # Lista de dominios permitidos
+    allow_origins=origins,          # Lista de dominios permitidos
     allow_credentials=True,          # Permite cookies/tokens
     allow_methods=["*"],            # Permite todos los metodos (GET, POST, etc.)
     allow_headers=["*"],            # Permite todos los encabezados (incluyendo Authorization)
@@ -393,6 +392,7 @@ def change_password(
     
     return {"message": "Contrasena actualizada exitosamente."}
 
+
 @app.get("/users/students", tags=["Usuarios"])
 def read_students_list(
     session: Annotated[Session, Depends(get_session)],
@@ -401,45 +401,47 @@ def read_students_list(
     limit: int = 20,
     only_inactive: bool = False
 ):
+    """
+    Obtiene una lista de todos los usuarios con rol 'Alumno'.
+    Incluye paginacion de 20 por defecto y filtro opcional para alumnos con rutinas inactivas.
+    Cada alumno incluye el campo 'has_active_routine' para la visualizacion en tarjeta.
+    """
+    # 1. Obtener todos los alumnos de la DB
     statement = select(User).where(User.rol == UserRole.STUDENT)
     all_students = session.exec(statement).all()
     
     enriched_students = []
     
     for student in all_students:
-        # 1. Actualizamos estado en DB antes de leer
+        # Ejecutamos la verificacion de vencimiento para que el estado sea el mas actual
         check_and_inactivate_expired_assignments(session, student.id)
         
-        # 2. Buscamos la asignación activa y traemos su fecha de vencimiento
-        # Hacemos un join con el grupo para obtener la fecha real
-        active_data = session.exec(
-            select(RoutineAssignment, RoutineGroup.fecha_vencimiento)
-            .join(Routine, RoutineAssignment.routine_id == Routine.id)
-            .join(RoutineGroup, Routine.routine_group_id == RoutineGroup.id)
-            .where(
+        # Verificamos si tiene alguna asignacion activa
+        active_assignment = session.exec(
+            select(RoutineAssignment).where(
                 RoutineAssignment.student_id == student.id,
                 RoutineAssignment.is_active == True
             )
         ).first()
         
-        has_active = active_data is not None
-        # Si tiene rutina, usamos su fecha; si no, None
-        due_date = active_data[1] if active_data else None
+        has_active = active_assignment is not None
         
+        # Filtro: si se pide solo inactivas y el alumno tiene activa, lo saltamos
         if only_inactive and has_active:
             continue
             
+        # Construimos el objeto de respuesta enriquecido
         student_info = {
             "id": student.id,
             "nombre": student.nombre,
             "email": student.email,
             "dni": student.dni,
             "rol": student.rol,
-            "has_active_routine": has_active,
-            "latest_due_date": due_date  # <--- AGREGAMOS ESTO
+            "has_active_routine": has_active # Flag para mostrar "rutina inactiva" en el frontend
         }
         enriched_students.append(student_info)
     
+    # 2. Aplicar Paginacion sobre la lista resultante (skip y limit)
     return enriched_students[skip : skip + limit]
 
 # RUTA ACTUALIZADA: Actualizar Datos del Alumno por el Profesor (CON RESET DE CLAVE)
