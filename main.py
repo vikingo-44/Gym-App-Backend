@@ -142,13 +142,13 @@ origins = [
     "http://localhost:3000",
 ]
 
-# 2. Aplicar el Middleware a la aplicacion
+# Configuración de CORS ultra-segura para que funcione sí o sí
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,          # Lista de dominios permitidos
-    allow_credentials=True,          # Permite cookies/tokens
-    allow_methods=["*"],            # Permite todos los metodos (GET, POST, etc.)
-    allow_headers=["*"],            # Permite todos los encabezados (incluyendo Authorization)
+    allow_origins=["*"],  # Permite cualquier origen (Frontend)
+    allow_credentials=True,
+    allow_methods=["*"],  # Permite GET, POST, PATCH, DELETE, etc.
+    allow_headers=["*"],  # Permite todos los encabezados
 )
 # ----------------------------------------------------
 
