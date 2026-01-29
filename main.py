@@ -72,39 +72,6 @@ def create_access_token(data: dict, expires_delta: timedelta | None = None) -> s
     return encoded_jwt
 
 # ----------------------------------------------------------------------
-# FUNCION UTILITARIA: Inactivacion Automatica por Vencimiento
-# ----------------------------------------------------------------------
-
-def check_and_inactivate_expired_assignments(session: Session, student_id: int):
-    """
-    Busca todas las asignaciones activas del alumno que pertenezcan a un grupo 
-    cuya fecha de vencimiento sea menor a la fecha actual, y las marca como inactivas.
-    """
-    today = date.today()
-    
-    # Buscamos asignaciones activas vinculadas a rutinas que tienen un grupo vencido
-    statement = (
-        select(RoutineAssignment)
-        .join(Routine, RoutineAssignment.routine_id == Routine.id)
-        .join(RoutineGroup, Routine.routine_group_id == RoutineGroup.id)
-        .where(
-            RoutineAssignment.student_id == student_id,
-            RoutineAssignment.is_active == True,
-            RoutineGroup.fecha_vencimiento < today
-        )
-    )
-    
-    expired_assignments = session.exec(statement).all()
-    
-    if expired_assignments:
-        for assignment in expired_assignments:
-            assignment.is_active = False
-            session.add(assignment)
-        session.commit()
-        # Log para depuracion interna
-        print(f"INFO: Se han inactivado {len(expired_assignments)} asignaciones vencidas para el alumno ID {student_id}.")
-
-# ----------------------------------------------------------------------
 # Eventos de la Aplicacion (Startup/Shutdown)
 # ----------------------------------------------------------------------
 
@@ -142,13 +109,13 @@ origins = [
     "http://localhost:3000",
 ]
 
-# Configuración de CORS ultra-segura para que funcione sí o sí
+# 2. Aplicar el Middleware a la aplicacion
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Permite cualquier origen (Frontend)
-    allow_credentials=True,
-    allow_methods=["*"],  # Permite GET, POST, PATCH, DELETE, etc.
-    allow_headers=["*"],  # Permite todos los encabezados
+    allow_origins=origins,          # Lista de dominios permitidos
+    allow_credentials=True,          # Permite cookies/tokens
+    allow_methods=["*"],            # Permite todos los metodos (GET, POST, etc.)
+    allow_headers=["*"],            # Permite todos los encabezados (incluyendo Authorization)
 )
 # ----------------------------------------------------
 
@@ -191,7 +158,7 @@ def get_current_professor(current_user: Annotated[User, Depends(get_current_user
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Se requiere rol de Profesor para acceder a este recurso."
         )
-    return current_professor
+    return current_user
 
 # CORRECCIÓN AQUÍ: Se cambió Depends(get_current_student) por Depends(get_current_user)
 def get_current_student(current_user: Annotated[User, Depends(get_current_user)]) -> User:
@@ -382,7 +349,7 @@ def change_password(
             detail="La nueva contrasena debe tener al menos 6 caracteres."
         )
 
-    # 3. Generar el nuevo hash and actualizar el usuario
+    # 3. Generar el nuevo hash y actualizar el usuario
     new_hashed_password = get_password_hash(password_data.new_password)
     current_user.password_hash = new_hashed_password
     
@@ -393,56 +360,14 @@ def change_password(
     return {"message": "Contrasena actualizada exitosamente."}
 
 
-@app.get("/users/students", tags=["Usuarios"])
+@app.get("/users/students", response_model=List[UserReadSimple], tags=["Usuarios"])
 def read_students_list(
     session: Annotated[Session, Depends(get_session)],
-    current_professor: Annotated[User, Depends(get_current_professor)],
-    skip: int = 0,
-    limit: int = 20,
-    only_inactive: bool = False
+    current_professor: Annotated[User, Depends(get_current_professor)]
 ):
-    """
-    Obtiene una lista de todos los usuarios con rol 'Alumno'.
-    Incluye paginacion de 20 por defecto y filtro opcional para alumnos con rutinas inactivas.
-    Cada alumno incluye el campo 'has_active_routine' para la visualizacion en tarjeta.
-    """
-    # 1. Obtener todos los alumnos de la DB
-    statement = select(User).where(User.rol == UserRole.STUDENT)
-    all_students = session.exec(statement).all()
-    
-    enriched_students = []
-    
-    for student in all_students:
-        # Ejecutamos la verificacion de vencimiento para que el estado sea el mas actual
-        check_and_inactivate_expired_assignments(session, student.id)
-        
-        # Verificamos si tiene alguna asignacion activa
-        active_assignment = session.exec(
-            select(RoutineAssignment).where(
-                RoutineAssignment.student_id == student.id,
-                RoutineAssignment.is_active == True
-            )
-        ).first()
-        
-        has_active = active_assignment is not None
-        
-        # Filtro: si se pide solo inactivas y el alumno tiene activa, lo saltamos
-        if only_inactive and has_active:
-            continue
-            
-        # Construimos el objeto de respuesta enriquecido
-        student_info = {
-            "id": student.id,
-            "nombre": student.nombre,
-            "email": student.email,
-            "dni": student.dni,
-            "rol": student.rol,
-            "has_active_routine": has_active # Flag para mostrar "rutina inactiva" en el frontend
-        }
-        enriched_students.append(student_info)
-    
-    # 2. Aplicar Paginacion sobre la lista resultante (skip y limit)
-    return enriched_students[skip : skip + limit]
+    """Obtiene una lista de todos los usuarios con rol 'Alumno' (para asignar rutinas)."""
+    students = session.exec(select(User).where(User.rol == UserRole.STUDENT)).all()
+    return students
 
 # RUTA ACTUALIZADA: Actualizar Datos del Alumno por el Profesor (CON RESET DE CLAVE)
 @app.patch("/users/student/{student_id}", response_model=UserRead, tags=["Usuarios"])
@@ -505,7 +430,7 @@ def public_reset_password_by_dni(
     if not user:
         raise HTTPException(status_code=404, detail="El DNI ingresado no corresponde a ningun usuario.")
     
-    # Hasheamos la nueva contrasena and actualizamos
+    # Hasheamos la nueva contrasena y actualizamos
     user.password_hash = get_password_hash(reset_data.password)
     
     session.add(user)
@@ -1123,15 +1048,12 @@ def get_assignments_for_student_by_professor(
     """
     (Profesor) Obtiene asignaciones historicas del alumno CREADAS POR EL PROFESOR ACTUAL. 
     """
-    # 1. VERIFICAR VENCIMIENTOS ANTES DE CONSULTAR
-    check_and_inactivate_expired_assignments(session, student_id)
-
-    # 2. Verificar que el alumno exista
+    # 1. Verificar que el alumno exista
     student = session.get(User, student_id)
     if not student or student.rol != UserRole.STUDENT:
         raise HTTPException(status_code=404, detail="Alumno no encontrado.")
         
-    # 3. Fetch asignaciones filtradas por profesor
+    # 2. Fetch asignaciones filtradas por profesor
     statement = (
         select(RoutineAssignment)
         .where(
@@ -1159,15 +1081,12 @@ def get_global_assignments_for_student(
     session: Annotated[Session, Depends(get_session)],
     current_professor: Annotated[User, Depends(get_current_professor)]
 ):
-    # 1. VERIFICAR VENCIMIENTOS ANTES DE CONSULTAR
-    check_and_inactivate_expired_assignments(session, student_id)
-
-    # 2. Verificar que el alumno exista
+    # 1. Verificar que el alumno exista
     student = session.get(User, student_id)
     if not student or student.rol != UserRole.STUDENT:
         raise HTTPException(status_code=404, detail="Alumno no encontrado.")
         
-    # 3. Fetch todas las asignaciones (Quitamos el filtro de professor_id)
+    # 2. Fetch todas las asignaciones (Quitamos el filtro de professor_id)
     statement = (
         select(RoutineAssignment)
         .where(RoutineAssignment.student_id == student_id)
@@ -1237,10 +1156,7 @@ def get_my_active_routine(
     session: Annotated[Session, Depends(get_session)],
     current_student: Annotated[User, Depends(get_current_student)]
 ):
-    # 1. VERIFICAR VENCIMIENTOS ANTES DE CONSULTAR
-    check_and_inactivate_expired_assignments(session, current_student.id)
-
-    # 2. Buscar la asignacion activa (el "ancla")
+    # 1. Buscar la asignacion activa (el "ancla")
     statement = (
         select(RoutineAssignment)
         .where(
@@ -1265,11 +1181,11 @@ def get_my_active_routine(
     if not active_anchor_assignment:
         return []
         
-    # 3. Verificar si pertenece a un grupo
+    # 2. Verificar si pertenece a un grupo
     if active_anchor_assignment.routine.routine_group_id:
         routine_group_id = active_anchor_assignment.routine.routine_group_id
         
-        # 4. Traer TODAS las rutinas de ese grupo (Dia 1, Dia 2, etc.)
+        # 3. Traer TODAS las rutinas de ese grupo (Dia 1, Dia 2, etc.)
         routine_statement = (
             select(Routine)
             .where(Routine.routine_group_id == routine_group_id)
@@ -1281,7 +1197,7 @@ def get_my_active_routine(
         )
         grouped_routines = session.exec(routine_statement).all()
         
-        # 5. Obtener las asignaciones reales para cada rutina del grupo
+        # 4. Obtener las asignaciones reales para cada rutina del grupo
         routine_ids = [r.id for r in grouped_routines]
         real_assignments_statement = (
             select(RoutineAssignment)
@@ -1290,7 +1206,7 @@ def get_my_active_routine(
         real_assignments = session.exec(real_assignments_statement).all()
         real_assignments_map = {a.routine_id: a for a in real_assignments}
 
-        # 6. Crear "pseudo-asignaciones" para devolver todas las rutinas del grupo
+        # 5. Crear "pseudo-asignaciones" para devolver todas las rutinas del grupo
         expanded_assignments = []
         for routine in grouped_routines:
             
@@ -1316,7 +1232,7 @@ def get_my_active_routine(
             
         return expanded_assignments
         
-    # 7. Si no hay grupo (rutina simple antigua), devuelve la asignacion original
+    # 5. Si no hay grupo (rutina simple antigua), devuelve la asignacion original
     return [active_anchor_assignment]
 
 # <--- NUEVO ENDPOINT PARA AGREGAR RUTINA A GRUPO EXISTENTE --->
