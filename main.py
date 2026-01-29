@@ -140,12 +140,13 @@ origins = [
     "https://gym-app-backend-e9bn.onrender.com",
     "http://localhost",
     "http://localhost:3000",
+    "http://localhost:5173",
 ]
 
 # 2. Aplicar el Middleware a la aplicacion
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,          # Lista de dominios permitidos
+    allow_origins=["*"],          # Lista de dominios permitidos
     allow_credentials=True,          # Permite cookies/tokens
     allow_methods=["*"],            # Permite todos los metodos (GET, POST, etc.)
     allow_headers=["*"],            # Permite todos los encabezados (incluyendo Authorization)
