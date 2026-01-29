@@ -359,40 +359,44 @@ def change_password(
     
     return {"message": "Contrasena actualizada exitosamente."}
 
-
-@app.get("/users/students", response_model=List[UserReadSimple], tags=["Usuarios"])
+@app.get("/users/students", tags=["Usuarios"])
 def read_students_list(
     session: Annotated[Session, Depends(get_session)],
     current_professor: Annotated[User, Depends(get_current_professor)]
 ):
-    """Obtiene alumnos y marca si tienen el plan vencido comparando con HOY."""
+    # 1. Traer alumnos de un solo golpe
     students = session.exec(select(User).where(User.rol == UserRole.STUDENT)).all()
-    
-    hoy = date.today() # El =HOY() de Excel
+    hoy = date.today()
     enriched_students = []
 
     for student in students:
-        # Buscamos la asignación activa y traemos la fecha de vencimiento del grupo
-        statement = (
+        # 2. Buscamos el vencimiento de forma ultra rápida
+        # Solo traemos la fecha del grupo que esté marcado como activo para este alumno
+        vencimiento_query = (
             select(RoutineGroup.fecha_vencimiento)
             .join(Routine, Routine.routine_group_id == RoutineGroup.id)
             .join(RoutineAssignment, RoutineAssignment.routine_id == Routine.id)
-            .where(RoutineAssignment.student_id == student.id)
-            .where(RoutineAssignment.is_active == True)
+            .where(RoutineAssignment.student_id == student.id, RoutineAssignment.is_active == True)
         )
-        vencimiento = session.exec(statement).first()
+        vencimiento = session.exec(vencimiento_query).first()
         
-        # Lógica de comparación
+        # 3. Comparación estricta
         is_expired = False
         if vencimiento:
-            # Si la fecha de vencimiento es menor a hoy, está vencida
-            if vencimiento < hoy:
+            # Si el vencimiento es un objeto date/datetime, comparamos
+            dt_vencimiento = vencimiento.date() if isinstance(vencimiento, datetime) else vencimiento
+            if dt_vencimiento < hoy:
                 is_expired = True
         
-        # Agregamos el campo al objeto que va al frontend
-        student_data = student.model_dump()
-        student_data["is_plan_expired"] = is_expired
-        enriched_students.append(student_data)
+        # 4. Mandamos el objeto limpio
+        enriched_students.append({
+            "id": student.id,
+            "nombre": student.nombre,
+            "email": student.email,
+            "dni": student.dni,
+            "rol": student.rol,
+            "is_plan_expired": is_expired  # <--- ESTO ACTIVA EL PUNTO
+        })
 
     return enriched_students
 
