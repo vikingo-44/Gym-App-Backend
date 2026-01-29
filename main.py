@@ -364,38 +364,35 @@ def read_students_list(
     session: Annotated[Session, Depends(get_session)],
     current_professor: Annotated[User, Depends(get_current_professor)]
 ):
-    # 1. Traer alumnos de un solo golpe
     students = session.exec(select(User).where(User.rol == UserRole.STUDENT)).all()
     hoy = date.today()
     enriched_students = []
 
     for student in students:
-        # 2. Buscamos el vencimiento de forma ultra rápida
-        # Solo traemos la fecha del grupo que esté marcado como activo para este alumno
+        # CAMBIO: Quitamos RoutineAssignment.is_active == True 
+        # para que evalúe el vencimiento del último plan asignado siempre.
         vencimiento_query = (
             select(RoutineGroup.fecha_vencimiento)
             .join(Routine, Routine.routine_group_id == RoutineGroup.id)
             .join(RoutineAssignment, RoutineAssignment.routine_id == Routine.id)
-            .where(RoutineAssignment.student_id == student.id, RoutineAssignment.is_active == True)
+            .where(RoutineAssignment.student_id == student.id)
+            .order_by(desc(RoutineAssignment.assigned_at)) # Tomamos el más reciente
         )
         vencimiento = session.exec(vencimiento_query).first()
         
-        # 3. Comparación estricta
         is_expired = False
         if vencimiento:
-            # Si el vencimiento es un objeto date/datetime, comparamos
             dt_vencimiento = vencimiento.date() if isinstance(vencimiento, datetime) else vencimiento
             if dt_vencimiento < hoy:
                 is_expired = True
         
-        # 4. Mandamos el objeto limpio
         enriched_students.append({
             "id": student.id,
             "nombre": student.nombre,
             "email": student.email,
             "dni": student.dni,
             "rol": student.rol,
-            "is_plan_expired": is_expired  # <--- ESTO ACTIVA EL PUNTO
+            "is_plan_expired": is_expired 
         })
 
     return enriched_students
