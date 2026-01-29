@@ -365,9 +365,36 @@ def read_students_list(
     session: Annotated[Session, Depends(get_session)],
     current_professor: Annotated[User, Depends(get_current_professor)]
 ):
-    """Obtiene una lista de todos los usuarios con rol 'Alumno' (para asignar rutinas)."""
+    """Obtiene alumnos y marca si tienen el plan vencido comparando con HOY."""
     students = session.exec(select(User).where(User.rol == UserRole.STUDENT)).all()
-    return students
+    
+    hoy = date.today() # El =HOY() de Excel
+    enriched_students = []
+
+    for student in students:
+        # Buscamos la asignación activa y traemos la fecha de vencimiento del grupo
+        statement = (
+            select(RoutineGroup.fecha_vencimiento)
+            .join(Routine, Routine.routine_group_id == RoutineGroup.id)
+            .join(RoutineAssignment, RoutineAssignment.routine_id == Routine.id)
+            .where(RoutineAssignment.student_id == student.id)
+            .where(RoutineAssignment.is_active == True)
+        )
+        vencimiento = session.exec(statement).first()
+        
+        # Lógica de comparación
+        is_expired = False
+        if vencimiento:
+            # Si la fecha de vencimiento es menor a hoy, está vencida
+            if vencimiento < hoy:
+                is_expired = True
+        
+        # Agregamos el campo al objeto que va al frontend
+        student_data = student.model_dump()
+        student_data["is_plan_expired"] = is_expired
+        enriched_students.append(student_data)
+
+    return enriched_students
 
 # RUTA ACTUALIZADA: Actualizar Datos del Alumno por el Profesor (CON RESET DE CLAVE)
 @app.patch("/users/student/{student_id}", response_model=UserRead, tags=["Usuarios"])
