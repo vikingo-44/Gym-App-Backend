@@ -191,7 +191,7 @@ def get_current_professor(current_user: Annotated[User, Depends(get_current_user
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Se requiere rol de Profesor para acceder a este recurso."
         )
-    return current_user
+    return current_professor
 
 # CORRECCIÓN AQUÍ: Se cambió Depends(get_current_student) por Depends(get_current_user)
 def get_current_student(current_user: Annotated[User, Depends(get_current_user)]) -> User:
@@ -382,7 +382,7 @@ def change_password(
             detail="La nueva contrasena debe tener al menos 6 caracteres."
         )
 
-    # 3. Generar el nuevo hash y actualizar el usuario
+    # 3. Generar el nuevo hash and actualizar el usuario
     new_hashed_password = get_password_hash(password_data.new_password)
     current_user.password_hash = new_hashed_password
     
@@ -392,15 +392,54 @@ def change_password(
     
     return {"message": "Contrasena actualizada exitosamente."}
 
-
-@app.get("/users/students", response_model=List[UserReadSimple], tags=["Usuarios"])
+@app.get("/users/students", tags=["Usuarios"])
 def read_students_list(
     session: Annotated[Session, Depends(get_session)],
-    current_professor: Annotated[User, Depends(get_current_professor)]
+    current_professor: Annotated[User, Depends(get_current_professor)],
+    skip: int = 0,
+    limit: int = 20,
+    only_inactive: bool = False
 ):
-    """Obtiene una lista de todos los usuarios con rol 'Alumno' (para asignar rutinas)."""
-    students = session.exec(select(User).where(User.rol == UserRole.STUDENT)).all()
-    return students
+    statement = select(User).where(User.rol == UserRole.STUDENT)
+    all_students = session.exec(statement).all()
+    
+    enriched_students = []
+    
+    for student in all_students:
+        # 1. Actualizamos estado en DB antes de leer
+        check_and_inactivate_expired_assignments(session, student.id)
+        
+        # 2. Buscamos la asignación activa y traemos su fecha de vencimiento
+        # Hacemos un join con el grupo para obtener la fecha real
+        active_data = session.exec(
+            select(RoutineAssignment, RoutineGroup.fecha_vencimiento)
+            .join(Routine, RoutineAssignment.routine_id == Routine.id)
+            .join(RoutineGroup, Routine.routine_group_id == RoutineGroup.id)
+            .where(
+                RoutineAssignment.student_id == student.id,
+                RoutineAssignment.is_active == True
+            )
+        ).first()
+        
+        has_active = active_data is not None
+        # Si tiene rutina, usamos su fecha; si no, None
+        due_date = active_data[1] if active_data else None
+        
+        if only_inactive and has_active:
+            continue
+            
+        student_info = {
+            "id": student.id,
+            "nombre": student.nombre,
+            "email": student.email,
+            "dni": student.dni,
+            "rol": student.rol,
+            "has_active_routine": has_active,
+            "latest_due_date": due_date  # <--- AGREGAMOS ESTO
+        }
+        enriched_students.append(student_info)
+    
+    return enriched_students[skip : skip + limit]
 
 # RUTA ACTUALIZADA: Actualizar Datos del Alumno por el Profesor (CON RESET DE CLAVE)
 @app.patch("/users/student/{student_id}", response_model=UserRead, tags=["Usuarios"])
@@ -463,7 +502,7 @@ def public_reset_password_by_dni(
     if not user:
         raise HTTPException(status_code=404, detail="El DNI ingresado no corresponde a ningun usuario.")
     
-    # Hasheamos la nueva contrasena y actualizamos
+    # Hasheamos la nueva contrasena and actualizamos
     user.password_hash = get_password_hash(reset_data.password)
     
     session.add(user)
