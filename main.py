@@ -364,34 +364,49 @@ def read_students_list(
     session: Annotated[Session, Depends(get_session)],
     current_professor: Annotated[User, Depends(get_current_professor)]
 ):
-    students = session.exec(select(User).where(User.rol == UserRole.STUDENT)).all()
     hoy = date.today()
-    enriched_students = []
 
-    for student in students:
-        # CAMBIO: Quitamos RoutineAssignment.is_active == True 
-        # para que evalúe el vencimiento del último plan asignado siempre.
-        vencimiento_query = (
-            select(RoutineGroup.fecha_vencimiento)
-            .join(Routine, Routine.routine_group_id == RoutineGroup.id)
-            .join(RoutineAssignment, RoutineAssignment.routine_id == Routine.id)
-            .where(RoutineAssignment.student_id == student.id)
-            .order_by(desc(RoutineAssignment.assigned_at)) # Tomamos el más reciente
+    # Optimizamos: Traemos todos los alumnos y su vencimiento más reciente en UNA sola consulta
+    query = (
+        select(
+            User.id, 
+            User.nombre, 
+            User.email, 
+            User.dni, 
+            User.rol, 
+            func.max(RoutineGroup.fecha_vencimiento).label("ultimo_vencimiento")
         )
-        vencimiento = session.exec(vencimiento_query).first()
-        
+        .where(User.rol == UserRole.STUDENT)
+        # Unimos las tablas necesarias
+        .join(RoutineAssignment, User.id == RoutineAssignment.student_id, isouter=True)
+        .join(Routine, RoutineAssignment.routine_id == Routine.id, isouter=True)
+        .join(RoutineGroup, Routine.routine_group_id == RoutineGroup.id, isouter=True)
+        # Agrupamos por ID de usuario para que no se repitan
+        .group_by(User.id)
+    )
+    
+    results = session.exec(query).all()
+    
+    enriched_students = []
+    
+    # Procesamos los resultados que ya vienen listos
+    for row in results:
+        # row es una tupla: (id, nombre, email, dni, rol, ultimo_vencimiento)
+        vencimiento = row.ultimo_vencimiento
         is_expired = False
+        
         if vencimiento:
+            # Normalizamos la fecha (por si viene como datetime de la DB)
             dt_vencimiento = vencimiento.date() if isinstance(vencimiento, datetime) else vencimiento
             if dt_vencimiento < hoy:
                 is_expired = True
         
         enriched_students.append({
-            "id": student.id,
-            "nombre": student.nombre,
-            "email": student.email,
-            "dni": student.dni,
-            "rol": student.rol,
+            "id": row.id,
+            "nombre": row.nombre,
+            "email": row.email,
+            "dni": row.dni,
+            "rol": row.rol,
             "is_plan_expired": is_expired 
         })
 
