@@ -1202,11 +1202,17 @@ def get_my_active_routine(
     # Solo necesitamos la mas reciente
     active_anchor_assignment = session.exec(statement).first()
 
-    # --- NUEVA LÓGICA DE BLOQUEO ---
-    if active_anchor and active_anchor.routine.routine_group:
-        venc = active_anchor.routine.routine_group.fecha_vencimiento
-        if (venc.date() if isinstance(venc, datetime) else venc) < date.today():
-            return [] # Si venció, devolvemos lista vacía y el alumno no ve nada.
+    # --- NUEVA LÓGICA DE BLOQUEO CORREGIDA ---
+    hoy = date.today()
+    if active_anchor and active_anchor.routine and getattr(active_anchor.routine, 'routine_group', None):
+        group = active_anchor.routine.routine_group
+        if group and group.fecha_vencimiento:
+            # Convertimos a 'date' por si viene como 'datetime' desde la base de datos
+            venc_limpio = group.fecha_vencimiento.date() if hasattr(group.fecha_vencimiento, 'date') else group.fecha_vencimiento
+            
+            # Comparamos: si la fecha de vencimiento es menor a hoy, bloqueamos
+            if venc_limpio < hoy:
+                return []
     # -------------------------------
     
     if not active_anchor_assignment:
@@ -1325,3 +1331,4 @@ def add_routine_to_existing_group(
     )
 
     return session.exec(statement).first()
+
