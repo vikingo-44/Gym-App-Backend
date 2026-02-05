@@ -4,7 +4,7 @@ from typing import Annotated, List, Optional
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Depends, HTTPException, status
-# ¡IMPORTACIoN CRiTICA AnADIDA para CORS!
+# Â¡IMPORTACIoN CRiTICA AnADIDA para CORS!
 from fastapi.middleware.cors import CORSMiddleware 
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials 
 from sqlmodel import Session, select
@@ -12,7 +12,7 @@ from sqlmodel import Session, select
 from sqlalchemy.orm import selectinload 
 from sqlalchemy import desc 
 from sqlalchemy import func # NECESARIO para usar func.lower() en validacion de email
-from sqlalchemy import delete # <--- ¡IMPORTACIoN CRiTICA AnADIDA!
+from sqlalchemy import delete # <--- Â¡IMPORTACIoN CRiTICA AnADIDA!
 
 from passlib.context import CryptContext
 from jose import JWTError, jwt
@@ -160,7 +160,7 @@ def get_current_professor(current_user: Annotated[User, Depends(get_current_user
         )
     return current_user
 
-# CORRECCIÓN AQUÍ: Se cambió Depends(get_current_student) por Depends(get_current_user)
+# CORRECCIÃ“N AQUÃ: Se cambiÃ³ Depends(get_current_student) por Depends(get_current_user)
 def get_current_student(current_user: Annotated[User, Depends(get_current_user)]) -> User:
     """Dependencia que verifica si el usuario actual es un Alumno."""
     if current_user.rol != UserRole.STUDENT:
@@ -365,51 +365,32 @@ def read_students_list(
     current_professor: Annotated[User, Depends(get_current_professor)]
 ):
     hoy = date.today()
-
-    # Optimizamos: Traemos todos los alumnos y su vencimiento más reciente en UNA sola consulta
     query = (
         select(
-            User.id, 
-            User.nombre, 
-            User.email, 
-            User.dni, 
-            User.rol, 
-            func.max(RoutineGroup.fecha_vencimiento).label("ultimo_vencimiento")
+            User.id, User.nombre, User.email, User.dni, User.rol, 
+            func.max(RoutineGroup.fecha_vencimiento).label("ultimo_vencimiento"),
+            func.count(RoutineAssignment.id).label("total_rutinas") # Contamos si tiene algo
         )
         .where(User.rol == UserRole.STUDENT)
-        # Unimos las tablas necesarias
         .join(RoutineAssignment, User.id == RoutineAssignment.student_id, isouter=True)
         .join(Routine, RoutineAssignment.routine_id == Routine.id, isouter=True)
         .join(RoutineGroup, Routine.routine_group_id == RoutineGroup.id, isouter=True)
-        # Agrupamos por ID de usuario para que no se repitan
         .group_by(User.id)
     )
-    
     results = session.exec(query).all()
-    
     enriched_students = []
-    
-    # Procesamos los resultados que ya vienen listos
     for row in results:
-        # row es una tupla: (id, nombre, email, dni, rol, ultimo_vencimiento)
-        vencimiento = row.ultimo_vencimiento
         is_expired = False
-        
-        if vencimiento:
-            # Normalizamos la fecha (por si viene como datetime de la DB)
-            dt_vencimiento = vencimiento.date() if isinstance(vencimiento, datetime) else vencimiento
+        if row.ultimo_vencimiento:
+            dt_vencimiento = row.ultimo_vencimiento.date() if isinstance(row.ultimo_vencimiento, datetime) else row.ultimo_vencimiento
             if dt_vencimiento < hoy:
                 is_expired = True
         
         enriched_students.append({
-            "id": row.id,
-            "nombre": row.nombre,
-            "email": row.email,
-            "dni": row.dni,
-            "rol": row.rol,
-            "is_plan_expired": is_expired 
+            "id": row.id, "nombre": row.nombre, "email": row.email, "dni": row.dni, "rol": row.rol,
+            "is_plan_expired": is_expired,
+            "has_routine": row.total_rutinas > 0 # <--- NUEVO CAMPO
         })
-
     return enriched_students
 
 # RUTA ACTUALIZADA: Actualizar Datos del Alumno por el Profesor (CON RESET DE CLAVE)
@@ -1146,7 +1127,7 @@ def get_global_assignments_for_student(
     if not all_assignments:
         return []
     
-    # Lógica de agrupamiento para visualización coherente del plan actual
+    # LÃ³gica de agrupamiento para visualizaciÃ³n coherente del plan actual
     active_anchor_assignment = next((a for a in all_assignments if a.is_active), None)
 
     if active_anchor_assignment and active_anchor_assignment.routine.routine_group_id:
@@ -1220,6 +1201,13 @@ def get_my_active_routine(
     )
     # Solo necesitamos la mas reciente
     active_anchor_assignment = session.exec(statement).first()
+
+    # --- NUEVA LÃ“GICA DE BLOQUEO ---
+    if active_anchor and active_anchor.routine.routine_group:
+        venc = active_anchor.routine.routine_group.fecha_vencimiento
+        if (venc.date() if isinstance(venc, datetime) else venc) < date.today():
+            return [] # Si venciÃ³, devolvemos lista vacÃ­a y el alumno no ve nada.
+    # -------------------------------
     
     if not active_anchor_assignment:
         return []
@@ -1320,7 +1308,7 @@ def add_routine_to_existing_group(
         routine_id=new_routine.id,
         student_id=student_id,
         professor_id=current_professor.id,
-        is_active=False # Por defecto inactivas al agregarlas después
+        is_active=False # Por defecto inactivas al agregarlas despuÃ©s
     )
     session.add(new_assignment)
     
@@ -1335,4 +1323,5 @@ def add_routine_to_existing_group(
             selectinload(Routine.exercise_links).selectinload(RoutineExercise.exercise)
         )
     )
+
     return session.exec(statement).first()
