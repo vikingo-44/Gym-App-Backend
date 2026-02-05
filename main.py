@@ -1180,7 +1180,7 @@ def get_my_active_routine(
     session: Annotated[Session, Depends(get_session)],
     current_student: Annotated[User, Depends(get_current_student)]
 ):
-    # 1. Buscar la asignacion activa (el "ancla")
+    # 1. Buscar la asignación activa (el "ancla")
     statement = (
         select(RoutineAssignment)
         .where(
@@ -1189,7 +1189,6 @@ def get_my_active_routine(
         )
         .order_by(desc(RoutineAssignment.assigned_at)) 
         .options(
-            # FIX LoGICO: Cargar la Rutina y su Grupo (CRiTICO) 
             selectinload(RoutineAssignment.routine)
                 .selectinload(Routine.routine_group),
             selectinload(RoutineAssignment.routine)
@@ -1199,30 +1198,34 @@ def get_my_active_routine(
             selectinload(RoutineAssignment.professor)
         )
     )
-    # Solo necesitamos la mas reciente
+    
+    # Solo necesitamos la más reciente
     active_anchor_assignment = session.exec(statement).first()
 
-    # --- NUEVA LÓGICA DE BLOQUEO CORREGIDA ---
-    hoy = date.today()
-    if active_anchor and active_anchor.routine and getattr(active_anchor.routine, 'routine_group', None):
-        group = active_anchor.routine.routine_group
-        if group and group.fecha_vencimiento:
-            # Convertimos a 'date' por si viene como 'datetime' desde la base de datos
-            venc_limpio = group.fecha_vencimiento.date() if hasattr(group.fecha_vencimiento, 'date') else group.fecha_vencimiento
-            
-            # Comparamos: si la fecha de vencimiento es menor a hoy, bloqueamos
-            if venc_limpio < hoy:
-                return []
-    # -------------------------------
-    
+    # Si no hay ninguna asignación activa, devolvemos lista vacía de inmediato
     if not active_anchor_assignment:
         return []
-        
-    # 2. Verificar si pertenece a un grupo
+
+    # --- LÓGICA DE BLOQUEO POR VENCIMIENTO (CORREGIDA) ---
+    hoy = date.today()
+    
+    # Verificamos si la rutina tiene un grupo y si ese grupo tiene fecha de vencimiento
+    if active_anchor_assignment.routine and getattr(active_anchor_assignment.routine, 'routine_group', None):
+        group = active_anchor_assignment.routine.routine_group
+        if group and group.fecha_vencimiento:
+            # Convertimos a 'date' por si viene como 'datetime'
+            venc_limpio = group.fecha_vencimiento.date() if hasattr(group.fecha_vencimiento, 'date') else group.fecha_vencimiento
+            
+            # Si la fecha de vencimiento es menor a hoy (ya pasó), bloqueamos
+            if venc_limpio < hoy:
+                return []
+    # ----------------------------------------------------
+    
+    # 2. Verificar si la rutina pertenece a un grupo para expandirla
     if active_anchor_assignment.routine.routine_group_id:
         routine_group_id = active_anchor_assignment.routine.routine_group_id
         
-        # 3. Traer TODAS las rutinas de ese grupo (Dia 1, Dia 2, etc.)
+        # 3. Traer TODAS las rutinas de ese grupo (Día 1, Día 2, etc.)
         routine_statement = (
             select(Routine)
             .where(Routine.routine_group_id == routine_group_id)
@@ -1234,33 +1237,34 @@ def get_my_active_routine(
         )
         grouped_routines = session.exec(routine_statement).all()
         
-        # 4. Obtener las asignaciones reales para cada rutina del grupo
+        # 4. Obtener las asignaciones reales existentes para cada rutina del grupo
         routine_ids = [r.id for r in grouped_routines]
         real_assignments_statement = (
             select(RoutineAssignment)
-            .where(RoutineAssignment.routine_id.in_(routine_ids))
+            .where(
+                RoutineAssignment.routine_id.in_(routine_ids),
+                RoutineAssignment.student_id == current_student.id
+            )
         )
         real_assignments = session.exec(real_assignments_statement).all()
         real_assignments_map = {a.routine_id: a for a in real_assignments}
 
-        # 5. Crear "pseudo-asignaciones" para devolver todas las rutinas del grupo
+        # 5. Crear "pseudo-asignaciones" para que el alumno vea todos los días del grupo
         expanded_assignments = []
         for routine in grouped_routines:
-            
             real_assignment = real_assignments_map.get(routine.id)
             
-            # Usamos los datos de la asignacion real o del ancla como fallback
+            # Usamos el ID de la asignación real si existe, sino el del ancla
             assignment_id_to_use = real_assignment.id if real_assignment else active_anchor_assignment.id
-            is_active_status = real_assignment.is_active if real_assignment else True
 
-            # Creamos un objeto RoutineAssignmentRead para cada rutina en el grupo
+            # Creamos el objeto de respuesta para cada rutina en el grupo
             pseudo_assignment_data = RoutineAssignmentRead(
                 id=assignment_id_to_use,
                 routine_id=routine.id,
                 student_id=active_anchor_assignment.student_id,
                 professor_id=active_anchor_assignment.professor_id,
                 assigned_at=active_anchor_assignment.assigned_at,
-                is_active=True, # Usamos TRUE para que el cliente sepa que esta rutina pertenece al grupo activo.
+                is_active=True,
                 routine=routine,
                 student=active_anchor_assignment.student,
                 professor=active_anchor_assignment.professor
@@ -1269,7 +1273,7 @@ def get_my_active_routine(
             
         return expanded_assignments
         
-    # 5. Si no hay grupo (rutina simple antigua), devuelve la asignacion original
+    # 6. Si no hay grupo (rutina simple), devuelve la asignación original en una lista
     return [active_anchor_assignment]
 
 # <--- NUEVO ENDPOINT PARA AGREGAR RUTINA A GRUPO EXISTENTE --->
@@ -1331,4 +1335,5 @@ def add_routine_to_existing_group(
     )
 
     return session.exec(statement).first()
+
 
