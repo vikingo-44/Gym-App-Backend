@@ -4,14 +4,15 @@ from typing import Annotated, List, Optional
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Depends, HTTPException, status
-from fastapi.middleware.cors import CORSMiddleware # <--- 1. IMPORTACIÓN CRÍTICA PARA REPARAR CORS
+# ¡IMPORTACIoN CRiTICA AnADIDA para CORS!
+from fastapi.middleware.cors import CORSMiddleware 
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials 
 from sqlmodel import Session, select
 # Importamos selectinload para forzar la carga de relaciones anidadas
 from sqlalchemy.orm import selectinload 
 from sqlalchemy import desc 
 from sqlalchemy import func # NECESARIO para usar func.lower() en validacion de email
-from sqlalchemy import delete # <--- �IMPORTACIoN CRiTICA AnADIDA!
+from sqlalchemy import delete # <--- ¡IMPORTACIoN CRiTICA AnADIDA!
 
 from passlib.context import CryptContext
 from jose import JWTError, jwt
@@ -32,8 +33,11 @@ from models import (
     RoutineCreateOrUpdate, 
     # CRITICO: Importaciones de Grupo y Transaccional
     RoutineGroup, RoutineGroupCreate, RoutineGroupRead, RoutineGroupCreateAndRoutines,
+    RoutineGroupUpdate, # <--- AnADIDO PARA EDICIoN DE GRUPO
     UserUpdateByProfessor,
-    RoutineCreateForTransactional # Nuevo esquema para usar en la transaccion
+    RoutineCreateForTransactional,
+    # <--- AnADIDO: Esquema de reset publico --->
+    UserPasswordResetPublic
 )
 
 
@@ -52,8 +56,8 @@ http_bearer = HTTPBearer()
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     return pwd_context.verify(plain_password, hashed_password)
 
-def get_password_hash(password: str) -> str:
-    return pwd_context.hash(password)
+def get_password_hash(plain_password: str) -> str:
+    return pwd_context.hash(plain_password)
 
 def create_access_token(data: dict, expires_delta: timedelta | None = None) -> str:
     to_encode = data.copy()
@@ -68,39 +72,6 @@ def create_access_token(data: dict, expires_delta: timedelta | None = None) -> s
     return encoded_jwt
 
 # ----------------------------------------------------------------------
-# FUNCION UTILITARIA: Inactivacion Automatica por Vencimiento
-# ----------------------------------------------------------------------
-
-def check_and_inactivate_expired_assignments(session: Session, student_id: int):
-    """
-    Busca todas las asignaciones activas del alumno que pertenezcan a un grupo 
-    cuya fecha de vencimiento sea menor a la fecha actual, y las marca como inactivas.
-    """
-    today = date.today()
-    
-    # Buscamos asignaciones activas vinculadas a rutinas que tienen un grupo vencido
-    statement = (
-        select(RoutineAssignment)
-        .join(Routine, RoutineAssignment.routine_id == Routine.id)
-        .join(RoutineGroup, Routine.routine_group_id == RoutineGroup.id)
-        .where(
-            RoutineAssignment.student_id == student_id,
-            RoutineAssignment.is_active == True,
-            RoutineGroup.fecha_vencimiento < today
-        )
-    )
-    
-    expired_assignments = session.exec(statement).all()
-    
-    if expired_assignments:
-        for assignment in expired_assignments:
-            assignment.is_active = False
-            session.add(assignment)
-        session.commit()
-        # Log para depuracion interna
-        print(f"INFO: Se han inactivado {len(expired_assignments)} asignaciones vencidas para el alumno ID {student_id}.")
-
-# ----------------------------------------------------------------------
 # Eventos de la Aplicacion (Startup/Shutdown)
 # ----------------------------------------------------------------------
 
@@ -113,7 +84,7 @@ async def lifespan(app: FastAPI):
     print("Apagando la aplicacion...")
 
 # ----------------------------------------------------------------------
-# Inicializacion de la Aplicacion
+# Inicializacion de la Aplicacion Y CONFIGURACIoN CORS
 # ----------------------------------------------------------------------
 
 app = FastAPI(
@@ -122,19 +93,32 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# ----------------------------------------------------------------------
-# CONFIGURACIÓN DEL MIDDLEWARE DE CORS (ZONA CRÍTICA - ARRIBA DE LAS RUTAS)
-# ----------------------------------------------------------------------
+# ----------------------------------------------------
+# Bloque AnADIDO: Configuracion CORS
+# ----------------------------------------------------
+# 1. Definir los Origenes Permitidos (CORS)
+origins = [
+    # **CRiTICO PARA EL PREVIEW:** Permite el origen "null" (usado por entornos embebidos)
+    "null", 
+    # **IMPORTANTE:** Permitimos cualquier origen por ahora para asegurar la conectividad
+    # hasta que publiques tu frontend en un dominio fijo.
+    "*", 
+    # Tu dominio de Render (Aunque con '*' ya estaria cubierto)
+    "https://gym-app-backend-e9bn.onrender.com",
+    "http://localhost",
+    "http://localhost:3000",
+]
+
+# 2. Aplicar el Middleware a la aplicacion
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "https://nd-training-appweb.onrender.com",  # Tu URL de producción del Frontend
-        "http://localhost:5173",                     # Tu entorno de desarrollo local si usas Vite
-    ],
-    allow_credentials=True,
-    allow_methods=["*"],  # Permite OPTIONS, POST, GET, PATCH, DELETE, etc.
-    allow_headers=["*"],  # Permite todas las cabeceras (incluyendo Authorization)
+    allow_origins=origins,          # Lista de dominios permitidos
+    allow_credentials=True,          # Permite cookies/tokens
+    allow_methods=["*"],            # Permite todos los metodos (GET, POST, etc.)
+    allow_headers=["*"],            # Permite todos los encabezados (incluyendo Authorization)
 )
+# ----------------------------------------------------
+
 
 # ----------------------------------------------------------------------
 # Dependencias de Autenticacion y Autorizacion
@@ -176,6 +160,7 @@ def get_current_professor(current_user: Annotated[User, Depends(get_current_user
         )
     return current_user
 
+# CORRECCIÓN AQUÍ: Se cambió Depends(get_current_student) por Depends(get_current_user)
 def get_current_student(current_user: Annotated[User, Depends(get_current_user)]) -> User:
     """Dependencia que verifica si el usuario actual es un Alumno."""
     if current_user.rol != UserRole.STUDENT:
@@ -195,42 +180,70 @@ def read_root():
     return {"message": "API del Gestor de Rutinas de Gimnasio activa."}
 
 # NUEVA RUTA: Registro solo de Alumnos
-@app.post("/register/student", response_model=UserRead, status_code=status.HTTP_201_CREATED, tags=["Autenticacion"])
+@app.post(
+    # response_model ahora es una LISTA de UserRead
+    "/register/student", 
+    # response_model=List[UserRead], 
+    status_code=status.HTTP_201_CREATED, 
+    tags=["Autenticacion"]
+)
 def register_student(
-    user_data: UserCreate, # Se usa UserCreate, pero el rol se fuerza a Alumno
+    # user_data ahora espera una LISTA de objetos UserCreate
+    user_data: List[UserCreate], 
     session: Annotated[Session, Depends(get_session)]
 ):
-    """Permite el registro de nuevos usuarios con rol forzado a Alumno."""
+    """Permite el registro de uno o mas usuarios con rol forzado a Alumno."""
     
-    # 1. Verificar si DNI ya existe
-    existing_dni = session.exec(select(User).where(User.dni == user_data.dni)).first()
-    if existing_dni:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="El DNI ya esta registrado."
-        )
+    # ----------------------------------------------------------------------
+    # LISTA PARA ALMACENAR LOS USUARIOS CREADOS
+    # ----------------------------------------------------------------------
+    created_users = []
     
-    # 2. Verificar si Email ya existe
-    existing_email = session.exec(select(User).where(User.email == user_data.email)).first()
-    if existing_email:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="El email ya esta registrado."
-        )
+    # BUCLE PARA PROCESAR CADA USUARIO DE LA LISTA
+    for single_user_data in user_data:
+        
+        # 1. Verificar si DNI ya existe
+        existing_dni = session.exec(select(User).where(User.dni == single_user_data.dni)).first()
+        if existing_dni:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="El DNI ya esta registrado."
+            )
+        
+        # 2. Verificar si Email ya existe
+        existing_email = session.exec(select(User).where(User.email == single_user_data.email)).first()
+        if existing_email:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="El email ya esta registrado."
+            )
 
-    # NOTA: Se asume que el backend maneja el limite de 72 bytes para el password hash
-    hashed_password = get_password_hash(user_data.password)
-    new_user = User(
-        email=user_data.email,
-        dni=user_data.dni, # Almacenar DNI
-        password_hash=hashed_password,
-        nombre=user_data.nombre,
-        rol=UserRole.STUDENT # Forzar rol a Alumno
-    )
-    session.add(new_user)
+        # NOTA: Se asume que el backend maneja el limite de 72 bytes para el password hash
+        hashed_password = get_password_hash(single_user_data.password)
+        new_user = User(
+            email=single_user_data.email,
+            dni=single_user_data.dni, # Almacenar DNI
+            password_hash=hashed_password,
+            nombre=single_user_data.nombre,
+            rol=UserRole.STUDENT # Forzar rol a Alumno
+        )
+        
+        session.add(new_user)
+        created_users.append(new_user) # Almacenamos el nuevo usuario para la respuesta de lista
+        
+    # ----------------------------------------------------------------------
+    # COMMIT Y REFRESH (Se realiza una unica vez para toda la transaccion)
+    # ----------------------------------------------------------------------
     session.commit()
-    session.refresh(new_user)
-    return new_user
+    
+    # Refrescar los usuarios creados y devolver la lista
+    for user in created_users:
+        session.refresh(user)
+        
+    # AJUSTE OBLIGATORIO: Ya que el endpoint ahora acepta y procesa una lista,
+    # debe devolver una lista para satisfacer el contrato (response_model=List[UserRead]).
+    # De lo contrario, FastAPI fallara al intentar convertir un solo objeto a una lista.
+    return created_users
 
 @app.post("/register", response_model=UserRead, status_code=status.HTTP_201_CREATED, tags=["Autenticacion"])
 def register_user(
@@ -246,7 +259,7 @@ def register_user(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="El DNI ya esta registrado."
         )
-        
+    
     # 2. Verificar si Email ya existe
     existing_user = session.exec(select(User).where(User.email == user_data.email)).first()
     if existing_user:
@@ -346,25 +359,49 @@ def change_password(
     
     return {"message": "Contrasena actualizada exitosamente."}
 
-
-@app.get("/users/students", response_model=List[UserReadSimple], tags=["Usuarios"])
+@app.get("/users/students", tags=["Usuarios"])
 def read_students_list(
     session: Annotated[Session, Depends(get_session)],
     current_professor: Annotated[User, Depends(get_current_professor)]
 ):
-    """Obtiene una lista de todos los usuarios con rol 'Alumno' (para asignar rutinas)."""
-    students = session.exec(select(User).where(User.rol == UserRole.STUDENT)).all()
-    return students
+    hoy = date.today()
+    query = (
+        select(
+            User.id, User.nombre, User.email, User.dni, User.rol, 
+            func.max(RoutineGroup.fecha_vencimiento).label("ultimo_vencimiento"),
+            func.count(RoutineAssignment.id).label("total_rutinas") # Contamos si tiene algo
+        )
+        .where(User.rol == UserRole.STUDENT)
+        .join(RoutineAssignment, User.id == RoutineAssignment.student_id, isouter=True)
+        .join(Routine, RoutineAssignment.routine_id == Routine.id, isouter=True)
+        .join(RoutineGroup, Routine.routine_group_id == RoutineGroup.id, isouter=True)
+        .group_by(User.id)
+    )
+    results = session.exec(query).all()
+    enriched_students = []
+    for row in results:
+        is_expired = False
+        if row.ultimo_vencimiento:
+            dt_vencimiento = row.ultimo_vencimiento.date() if isinstance(row.ultimo_vencimiento, datetime) else row.ultimo_vencimiento
+            if dt_vencimiento < hoy:
+                is_expired = True
+        
+        enriched_students.append({
+            "id": row.id, "nombre": row.nombre, "email": row.email, "dni": row.dni, "rol": row.rol,
+            "is_plan_expired": is_expired,
+            "has_routine": row.total_rutinas > 0 # <--- NUEVO CAMPO
+        })
+    return enriched_students
 
-# RUTA: Actualizar Datos del Alumno por el Profesor
+# RUTA ACTUALIZADA: Actualizar Datos del Alumno por el Profesor (CON RESET DE CLAVE)
 @app.patch("/users/student/{student_id}", response_model=UserRead, tags=["Usuarios"])
 def update_student_data(
     student_id: int,
-    user_data: UserUpdateByProfessor, # Usamos el esquema importado
+    user_data: UserUpdateByProfessor, 
     session: Annotated[Session, Depends(get_session)],
     current_professor: Annotated[User, Depends(get_current_professor)]
 ):
-    """(Profesor) Permite actualizar el nombre, email o DNI de un alumno especifico."""
+    """(Profesor) Permite actualizar el nombre, email o DNI de un alumno especifico, o resetear su clave."""
     
     # 1. Buscar al alumno
     student_to_update = session.get(User, student_id)
@@ -377,6 +414,12 @@ def update_student_data(
     
     # 3. Aplicar los cambios al objeto de la DB
     for key, value in update_data.items():
+        # --- Logica de Reset de Password (AnADIDO) ---
+        if key == 'password' and value:
+            student_to_update.password_hash = get_password_hash(value)
+            continue
+        # ---------------------------------------------
+
         # Validar si el DNI o Email ya existen en OTRO usuario
         if key == 'email' and value is not None and value.lower() != student_to_update.email.lower():
             existing_user = session.exec(select(User).where(func.lower(User.email) == value.lower())).first()
@@ -396,6 +439,28 @@ def update_student_data(
     session.refresh(student_to_update)
     
     return student_to_update
+
+# <--- NUEVO ENDPOINT: RECUPERACIoN PuBLICA PARA ALUMNOS (Identificacion por DNI) --->
+@app.patch("/users/student/reset-password/{dni}", response_model=UserRead, tags=["Usuarios"])
+def public_reset_password_by_dni(
+    dni: str,
+    reset_data: UserPasswordResetPublic,
+    session: Annotated[Session, Depends(get_session)]
+):
+    """(Publico) Permite a un alumno resetear su contrasena identificandose unicamente por DNI."""
+    # Buscamos al usuario por su DNI string
+    user = session.exec(select(User).where(User.dni == dni)).first()
+    
+    if not user:
+        raise HTTPException(status_code=404, detail="El DNI ingresado no corresponde a ningun usuario.")
+    
+    # Hasheamos la nueva contrasena y actualizamos
+    user.password_hash = get_password_hash(reset_data.password)
+    
+    session.add(user)
+    session.commit()
+    session.refresh(user)
+    return user
 
 # ----------------------------------------------------------------------
 # Rutas de Ejercicios (CRUD - RESTAURADAS)
@@ -550,6 +615,7 @@ def create_routine_group_and_routines(
                     sets=exercise_link_data.sets,
                     repetitions=exercise_link_data.repetitions,
                     peso=exercise_link_data.peso, 
+                    notas=exercise_link_data.notas, # <--- AnADIDO: Campo Notas
                     order=index + 1 # Usar el indice para el orden, asegurando que sea un entero
                 )
                 session.add(link)
@@ -644,6 +710,7 @@ def create_routine(
             sets=exercise_link_data.sets,
             repetitions=exercise_link_data.repetitions,
             peso=exercise_link_data.peso, # AGREGADO: Campo peso
+            notas=exercise_link_data.notas, # <--- AnADIDO: Campo Notas
             order=exercise_link_data.order
         )
         session.add(link)
@@ -657,7 +724,7 @@ def create_routine(
             .where(Routine.id == db_routine.id)
             .options(
                 selectinload(Routine.routine_group),
-                selectinload(Routine.exercise_links).selectinload(RoutineExercise.exercise)
+                selectinload(Routine.exercise_links).selectinload(RoutineExercise.exercise) 
             )
         )
         final_routine = session.exec(statement).first()
@@ -739,9 +806,9 @@ def set_assignment_active_status(
     if not assignment:
         raise HTTPException(status_code=404, detail="Asignacion no encontrada.")
 
-    # Opcional: Verificar que el profesor sea dueno (basado en el profesor que la asigno)
-    if assignment.professor_id != current_professor.id:
-        raise HTTPException(status_code=403, detail="No tienes permiso para modificar esta asignacion.")
+    # MODIFICACIoN: Eliminada validacion de propiedad para permitir edicion cruzada entre profesores
+    # if assignment.professor_id != current_professor.id:
+    #      raise HTTPException(status_code=403, detail="No tienes permiso para modificar esta asignacion.")
         
     # Aplicar solo la actualizacion de is_active
     update_data = assignment_update.model_dump(exclude_unset=True)
@@ -778,8 +845,8 @@ def set_assignment_active_status(
     updated_assignment = session.exec(statement_read).first()
 
     if not updated_assignment:
-          raise HTTPException(status_code=500, detail="Error interno: No se pudo recargar la asignacion actualizada.")
-          
+            raise HTTPException(status_code=500, detail="Error interno: No se pudo recargar la asignacion actualizada.")
+            
     return updated_assignment
     
 # --- Ruta para eliminar un grupo de asignaciones para un alumno especifico ---
@@ -803,10 +870,11 @@ def delete_assignment_group_for_student(
     routine_ids = [r.id for r in routines]
 
     # 2. Encontrar y eliminar las asignaciones especificas para este alumno y estas rutinas
+    # MODIFICACIoN: Quitamos el filtro de professor_id para permitir que cualquier profesor borre el grupo
     assignment_statement = select(RoutineAssignment).where(
         RoutineAssignment.routine_id.in_(routine_ids),
-        RoutineAssignment.student_id == student_id,
-        RoutineAssignment.professor_id == current_professor.id # Solo asignaciones creadas por el profesor actual
+        RoutineAssignment.student_id == student_id
+        # RoutineAssignment.professor_id == current_professor.id # <--- Eliminado
     )
     assignments_to_delete = session.exec(assignment_statement).all()
 
@@ -821,6 +889,32 @@ def delete_assignment_group_for_student(
     
     return {"message": f"Se eliminaron {len(assignments_to_delete)} asignaciones de grupo para el alumno."}
 
+# <--- AnADIDO: RUTA PARA ACTUALIZAR METADATOS DEL GRUPO (PLAN) --->
+@app.patch("/routines-group/{group_id}", response_model=RoutineGroupRead, tags=["Rutinas"])
+def update_routine_group_metadata(
+    group_id: int,
+    group_data: RoutineGroupUpdate,
+    session: Annotated[Session, Depends(get_session)],
+    current_professor: Annotated[User, Depends(get_current_professor)]
+):
+    """(Profesor) Actualiza el nombre y/o la fecha de vencimiento de un plan (grupo)."""
+    db_group = session.get(RoutineGroup, group_id)
+    if not db_group:
+        raise HTTPException(status_code=404, detail="Grupo no encontrado")
+    
+    # MODIFICACIoN: Eliminada validacion de propiedad para permitir edicion cruzada
+    # if db_group.professor_id != current_professor.id:
+    #      raise HTTPException(status_code=403, detail="No tienes permiso para modificar este grupo")
+
+    update_dict = group_data.model_dump(exclude_unset=True)
+    for key, value in update_dict.items():
+        setattr(db_group, key, value)
+    
+    session.add(db_group)
+    session.commit()
+    session.refresh(db_group)
+    return db_group
+
 # RUTA ACTUALIZADA: EDICION COMPLETA (Metadata y Ejercicios)
 @app.patch("/routines/{routine_id}", response_model=RoutineRead, tags=["Rutinas"])
 def update_routine_full(
@@ -834,8 +928,9 @@ def update_routine_full(
     if not db_routine:
         raise HTTPException(status_code=404, detail="Rutina no encontrada")
         
-    if db_routine.owner_id != current_professor.id:
-        raise HTTPException(status_code=403, detail="No autorizado para editar esta rutina")
+    # MODIFICACIoN: Eliminada validacion de propiedad para permitir edicion cruzada
+    # if db_routine.owner_id != current_professor.id:
+    #      raise HTTPException(status_code=403, detail="No autorizado para editar esta rutina")
 
     # 1. Actualizar metadata (Nombre/Descripcion)
     db_routine.nombre = routine_data.nombre
@@ -861,6 +956,7 @@ def update_routine_full(
             sets=exercise_link_data.sets,
             repetitions=exercise_link_data.repetitions,
             peso=exercise_link_data.peso, # AGREGADO: Campo peso
+            notas=exercise_link_data.notas, # <--- AnADIDO: Campo Notas
             order=exercise_link_data.order
         )
         session.add(link)
@@ -903,8 +999,9 @@ def delete_routine(
     if not db_routine:
         raise HTTPException(status_code=404, detail="Rutina no encontrada")
     
-    if db_routine.owner_id != current_professor.id:
-        raise HTTPException(status_code=403, detail="No autorizado para eliminar esta rutina")
+    # MODIFICACIoN: Eliminada validacion de propiedad para permitir eliminacion cruzada
+    # if db_routine.owner_id != current_professor.id:
+    #      raise HTTPException(status_code=403, detail="No autorizado para eliminar esta rutina")
 
     # Eliminamos enlaces y asignaciones antes de eliminar la rutina (CRITICO para evitar errores de Foreign Key)
     # CORRECCIoN: Usamos la funcion delete() de SQLAlchemy
@@ -963,7 +1060,7 @@ def assign_routine_to_student(
     return db_assignment
 
 # ----------------------------------------------------------------------
-# RUTA DE LECTURA DE ASIGNACIONES (Devuelve todas las rutinas del grupo activo)
+# RUTA DE LECTURA DE ASIGNACIONES (Filtro por profesor actual)
 # ----------------------------------------------------------------------
 
 @app.get("/professor/assignments/student/{student_id}", response_model=List[RoutineAssignmentRead], tags=["Asignaciones"])
@@ -973,29 +1070,52 @@ def get_assignments_for_student_by_professor(
     current_professor: Annotated[User, Depends(get_current_professor)]
 ):
     """
-    (Profesor) Obtiene TODAS las asignaciones historicas del alumno. 
-    Si hay una asignacion activa reciente que pertenece a un grupo, reemplaza esa entrada 
-    con TODAS las rutinas de ese grupo para su visualizacion.
+    (Profesor) Obtiene asignaciones historicas del alumno CREADAS POR EL PROFESOR ACTUAL. 
     """
-    
-    # 1. VERIFICAR VENCIMIENTOS ANTES DE CONSULTAR
-    check_and_inactivate_expired_assignments(session, student_id)
-
-    # 2. Verificar que el alumno exista
+    # 1. Verificar que el alumno exista
     student = session.get(User, student_id)
     if not student or student.rol != UserRole.STUDENT:
         raise HTTPException(status_code=404, detail="Alumno no encontrado.")
         
-    # 3. Fetch todas las asignaciones historicas (ordenadas por fecha de asignacion)
+    # 2. Fetch asignaciones filtradas por profesor
     statement = (
         select(RoutineAssignment)
         .where(
             RoutineAssignment.student_id == student_id,
-            RoutineAssignment.professor_id == current_professor.id # SOLO ASIGNACIONES HECHAS POR ESTE PROFESOR
+            RoutineAssignment.professor_id == current_professor.id 
         )
         .order_by(desc(RoutineAssignment.assigned_at)) 
         .options(
-            # CRITICO: Asegura la carga del grupo para la logica de agrupamiento del frontend
+            selectinload(RoutineAssignment.routine).selectinload(Routine.routine_group),
+            selectinload(RoutineAssignment.routine).selectinload(Routine.exercise_links).selectinload(RoutineExercise.exercise),
+            selectinload(RoutineAssignment.student),
+            selectinload(RoutineAssignment.professor)
+        )
+    )
+    all_assignments = session.exec(statement).all()
+    return all_assignments
+
+# ----------------------------------------------------------------------
+# NUEVO: RUTA DE LECTURA GLOBAL (Sin filtro por profesor)
+# ----------------------------------------------------------------------
+
+@app.get("/professor/assignments/student/{student_id}/global", response_model=List[RoutineAssignmentRead], tags=["Asignaciones"])
+def get_global_assignments_for_student(
+    student_id: int, 
+    session: Annotated[Session, Depends(get_session)],
+    current_professor: Annotated[User, Depends(get_current_professor)]
+):
+    # 1. Verificar que el alumno exista
+    student = session.get(User, student_id)
+    if not student or student.rol != UserRole.STUDENT:
+        raise HTTPException(status_code=404, detail="Alumno no encontrado.")
+        
+    # 2. Fetch todas las asignaciones (Quitamos el filtro de professor_id)
+    statement = (
+        select(RoutineAssignment)
+        .where(RoutineAssignment.student_id == student_id)
+        .order_by(desc(RoutineAssignment.assigned_at)) 
+        .options(
             selectinload(RoutineAssignment.routine).selectinload(Routine.routine_group),
             selectinload(RoutineAssignment.routine).selectinload(Routine.exercise_links).selectinload(RoutineExercise.exercise),
             selectinload(RoutineAssignment.student),
@@ -1007,18 +1127,16 @@ def get_assignments_for_student_by_professor(
     if not all_assignments:
         return []
     
-    # 4. Identificar la asignacion activa mas reciente (el 'ancla')
-    # NOTA: En el caso de grupos, solo una de las rutinas del grupo esta marcada como is_active=True.
+    # Lógica de agrupamiento para visualización coherente del plan actual
     active_anchor_assignment = next((a for a in all_assignments if a.is_active), None)
 
     if active_anchor_assignment and active_anchor_assignment.routine.routine_group_id:
         routine_group_id = active_anchor_assignment.routine.routine_group_id
         
-        # 5. Fetch TODAS las rutinas que pertenecen a ese grupo (Dia 1, Dia 2, etc.)
         routine_statement = (
             select(Routine)
             .where(Routine.routine_group_id == routine_group_id)
-            .order_by(Routine.id) # Ordena por ID (orden de creacion)
+            .order_by(Routine.id)
             .options(
                 selectinload(Routine.routine_group),
                 selectinload(Routine.exercise_links).selectinload(RoutineExercise.exercise)
@@ -1026,49 +1144,33 @@ def get_assignments_for_student_by_professor(
         )
         grouped_routines = session.exec(routine_statement).all()
         
-        # 6. Crear "pseudo-asignaciones" para TODAS las rutinas del grupo actual
         active_group_assignments = []
-        # Obtener los IDs de las rutinas en el grupo
         active_group_routine_ids = {r.id for r in grouped_routines}
         
         for routine in grouped_routines:
-            
-            # Buscamos la asignacion real para esta rutina especifica. 
-            # Si no la encontramos, usamos los datos del ancla (is_the_original_assigned_routine)
             real_assignment = next((a for a in all_assignments if a.routine_id == routine.id), None)
-
-            # Para garantizar que siempre tengamos un ID de asignacion real o pseudo-ID.
             assignment_id_to_use = real_assignment.id if real_assignment else active_anchor_assignment.id
             
-            # Construimos el objeto de respuesta, asegurando que todos los campos del Assignment Read Model esten presentes.
-            # CRITICO: Usamos el assigned_at del ancla si la asignacion real no existe, pero marcamos 'is_active' siempre como True 
-            # para que el frontend sepa que es la rutina que esta en curso.
             pseudo_assignment_data = RoutineAssignmentRead(
                 id=assignment_id_to_use, 
                 routine_id=routine.id,
                 student_id=active_anchor_assignment.student_id,
                 professor_id=active_anchor_assignment.professor_id,
                 assigned_at=active_anchor_assignment.assigned_at,
-                is_active=real_assignment.is_active if real_assignment else True, # Usa el estado real o True por defecto si es parte del grupo
-                routine=routine, # La rutina individual (Dia 1, Dia 2...)
-                student=active_anchor_assignment.student, # Cargado desde el ancla
-                professor=active_anchor_assignment.professor # Cargado desde el ancla
+                is_active=real_assignment.is_active if real_assignment else True,
+                routine=routine,
+                student=active_anchor_assignment.student,
+                professor=active_anchor_assignment.professor
             )
-            
             active_group_assignments.append(pseudo_assignment_data)
 
-
-        # 7. Filtrar las asignaciones historicas que NO pertenecen a este grupo activo
-        
         historical_assignments = [
             a for a in all_assignments 
             if a.routine_id not in active_group_routine_ids
         ]
         
-        # 8. Combinar: Primero el grupo activo (Dia 1, Dia 2...), luego el historial
         return active_group_assignments + historical_assignments
         
-    # 9. Si no hay grupo activo, o no hay asignaciones, retornar la lista original/vacia.
     return all_assignments
 
 # --- Rutas del Alumno (Continuacion) ---
@@ -1078,14 +1180,7 @@ def get_my_active_routine(
     session: Annotated[Session, Depends(get_session)],
     current_student: Annotated[User, Depends(get_current_student)]
 ):
-    """
-    (Alumno) Obtiene SOLAMENTE las rutinas asignadas que estan marcadas como activas.
-    Si la asignacion es parte de un grupo, devuelve TODAS las rutinas de ese grupo.
-    """
-    # 1. VERIFICAR VENCIMIENTOS ANTES DE CONSULTAR
-    check_and_inactivate_expired_assignments(session, current_student.id)
-
-    # 2. Buscar la asignacion activa (el "ancla")
+    # 1. Buscar la asignación activa (el "ancla")
     statement = (
         select(RoutineAssignment)
         .where(
@@ -1094,7 +1189,6 @@ def get_my_active_routine(
         )
         .order_by(desc(RoutineAssignment.assigned_at)) 
         .options(
-            # FIX LoGICO: Cargar la Rutina y su Grupo (CRiTICO) 
             selectinload(RoutineAssignment.routine)
                 .selectinload(Routine.routine_group),
             selectinload(RoutineAssignment.routine)
@@ -1104,17 +1198,34 @@ def get_my_active_routine(
             selectinload(RoutineAssignment.professor)
         )
     )
-    # Solo necesitamos la mas reciente
-    active_anchor_assignment = session.exec(statement).first()
     
+    # Solo necesitamos la más reciente
+    active_anchor_assignment = session.exec(statement).first()
+
+    # Si no hay ninguna asignación activa, devolvemos lista vacía de inmediato
     if not active_anchor_assignment:
         return []
-        
-    # 3. Verificar si pertenece a un grupo
+
+    # --- LÓGICA DE BLOQUEO POR VENCIMIENTO (CORREGIDA) ---
+    hoy = date.today()
+    
+    # Verificamos si la rutina tiene un grupo y si ese grupo tiene fecha de vencimiento
+    if active_anchor_assignment.routine and getattr(active_anchor_assignment.routine, 'routine_group', None):
+        group = active_anchor_assignment.routine.routine_group
+        if group and group.fecha_vencimiento:
+            # Convertimos a 'date' por si viene como 'datetime'
+            venc_limpio = group.fecha_vencimiento.date() if hasattr(group.fecha_vencimiento, 'date') else group.fecha_vencimiento
+            
+            # Si la fecha de vencimiento es menor a hoy (ya pasó), bloqueamos
+            if venc_limpio < hoy:
+                return []
+    # ----------------------------------------------------
+    
+    # 2. Verificar si la rutina pertenece a un grupo para expandirla
     if active_anchor_assignment.routine.routine_group_id:
         routine_group_id = active_anchor_assignment.routine.routine_group_id
         
-        # 4. Traer TODAS las rutinas de ese grupo (Dia 1, Dia 2, etc.)
+        # 3. Traer TODAS las rutinas de ese grupo (Día 1, Día 2, etc.)
         routine_statement = (
             select(Routine)
             .where(Routine.routine_group_id == routine_group_id)
@@ -1126,33 +1237,34 @@ def get_my_active_routine(
         )
         grouped_routines = session.exec(routine_statement).all()
         
-        # 5. Obtener las asignaciones reales para cada rutina del grupo
+        # 4. Obtener las asignaciones reales existentes para cada rutina del grupo
         routine_ids = [r.id for r in grouped_routines]
         real_assignments_statement = (
             select(RoutineAssignment)
-            .where(RoutineAssignment.routine_id.in_(routine_ids))
+            .where(
+                RoutineAssignment.routine_id.in_(routine_ids),
+                RoutineAssignment.student_id == current_student.id
+            )
         )
         real_assignments = session.exec(real_assignments_statement).all()
         real_assignments_map = {a.routine_id: a for a in real_assignments}
 
-        # 6. Crear "pseudo-asignaciones" para devolver todas las rutinas del grupo
+        # 5. Crear "pseudo-asignaciones" para que el alumno vea todos los días del grupo
         expanded_assignments = []
         for routine in grouped_routines:
-            
             real_assignment = real_assignments_map.get(routine.id)
             
-            # Usamos los datos de la asignacion real o del ancla como fallback
+            # Usamos el ID de la asignación real si existe, sino el del ancla
             assignment_id_to_use = real_assignment.id if real_assignment else active_anchor_assignment.id
-            is_active_status = real_assignment.is_active if real_assignment else True
 
-            # Creamos un objeto RoutineAssignmentRead para cada rutina en el grupo
+            # Creamos el objeto de respuesta para cada rutina en el grupo
             pseudo_assignment_data = RoutineAssignmentRead(
                 id=assignment_id_to_use,
                 routine_id=routine.id,
                 student_id=active_anchor_assignment.student_id,
                 professor_id=active_anchor_assignment.professor_id,
                 assigned_at=active_anchor_assignment.assigned_at,
-                is_active=True, # Usamos TRUE para que el cliente sepa que esta rutina pertenece al grupo activo.
+                is_active=True,
                 routine=routine,
                 student=active_anchor_assignment.student,
                 professor=active_anchor_assignment.professor
@@ -1161,5 +1273,65 @@ def get_my_active_routine(
             
         return expanded_assignments
         
-    # 7. Si no hay grupo (rutina simple antigua), devuelve la asignacion original
+    # 6. Si no hay grupo (rutina simple), devuelve la asignación original en una lista
     return [active_anchor_assignment]
+
+# <--- NUEVO ENDPOINT PARA AGREGAR RUTINA A GRUPO EXISTENTE --->
+@app.post("/routines-group/{group_id}/student/{student_id}/add-routine", response_model=RoutineRead, tags=["Rutinas"])
+def add_routine_to_existing_group(
+    group_id: int,
+    student_id: int,
+    routine_data: RoutineCreateForTransactional,
+    session: Annotated[Session, Depends(get_session)],
+    current_professor: Annotated[User, Depends(get_current_professor)]
+):
+    """(Profesor) Agrega una nueva rutina a un plan (grupo) ya existente y la asigna al alumno."""
+    group = session.get(RoutineGroup, group_id)
+    if not group:
+        raise HTTPException(status_code=404, detail="Grupo no encontrado")
+
+    # 1. Crear la Rutina
+    new_routine = Routine(
+        nombre=routine_data.nombre,
+        descripcion=routine_data.descripcion,
+        owner_id=current_professor.id,
+        routine_group_id=group_id
+    )
+    session.add(new_routine)
+    session.flush()
+
+    # 2. Crear Ejercicios
+    for index, ex_link in enumerate(routine_data.exercises):
+        link = RoutineExercise(
+            routine_id=new_routine.id,
+            exercise_id=ex_link.exercise_id,
+            sets=ex_link.sets,
+            repetitions=ex_link.repetitions,
+            peso=ex_link.peso,
+            notas=ex_link.notas,
+            order=index + 1
+        )
+        session.add(link)
+
+    # 3. Crear Asignacion
+    new_assignment = RoutineAssignment(
+        routine_id=new_routine.id,
+        student_id=student_id,
+        professor_id=current_professor.id,
+        is_active=False # Por defecto inactivas al agregarlas después
+    )
+    session.add(new_assignment)
+    
+    session.commit()
+    
+    # Recargar para devolver completo
+    statement = (
+        select(Routine)
+        .where(Routine.id == new_routine.id)
+        .options(
+            selectinload(Routine.routine_group),
+            selectinload(Routine.exercise_links).selectinload(RoutineExercise.exercise)
+        )
+    )
+
+    return session.exec(statement).first()
