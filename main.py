@@ -67,39 +67,6 @@ def create_access_token(data: dict, expires_delta: timedelta | None = None) -> s
     return encoded_jwt
 
 # ----------------------------------------------------------------------
-# FUNCION UTILITARIA: Inactivacion Automatica por Vencimiento
-# ----------------------------------------------------------------------
-
-def check_and_inactivate_expired_assignments(session: Session, student_id: int):
-    """
-    Busca todas las asignaciones activas del alumno que pertenezcan a un grupo 
-    cuya fecha de vencimiento sea menor a la fecha actual, y las marca como inactivas.
-    """
-    today = date.today()
-    
-    # Buscamos asignaciones activas vinculadas a rutinas que tienen un grupo vencido
-    statement = (
-        select(RoutineAssignment)
-        .join(Routine, RoutineAssignment.routine_id == Routine.id)
-        .join(RoutineGroup, Routine.routine_group_id == RoutineGroup.id)
-        .where(
-            RoutineAssignment.student_id == student_id,
-            RoutineAssignment.is_active == True,
-            RoutineGroup.fecha_vencimiento < today
-        )
-    )
-    
-    expired_assignments = session.exec(statement).all()
-    
-    if expired_assignments:
-        for assignment in expired_assignments:
-            assignment.is_active = False
-            session.add(assignment)
-        session.commit()
-        # Log para depuracion interna
-        print(f"INFO: Se han inactivado {len(expired_assignments)} asignaciones vencidas para el alumno ID {student_id}.")
-
-# ----------------------------------------------------------------------
 # Eventos de la Aplicacion (Startup/Shutdown)
 # ----------------------------------------------------------------------
 
@@ -180,42 +147,70 @@ def read_root():
     return {"message": "API del Gestor de Rutinas de Gimnasio activa."}
 
 # NUEVA RUTA: Registro solo de Alumnos
-@app.post("/register/student", response_model=UserRead, status_code=status.HTTP_201_CREATED, tags=["Autenticacion"])
+@app.post(
+    # ?? CAMBIO 1: response_model ahora es una LISTA de UserRead
+    "/register/student", 
+    response_model=List[UserRead], 
+    status_code=status.HTTP_201_CREATED, 
+    tags=["Autenticacion"]
+)
 def register_student(
-    user_data: UserCreate, # Se usa UserCreate, pero el rol se fuerza a Alumno
+    # ?? CAMBIO 2: user_data ahora espera una LISTA de objetos UserCreate
+    user_data: List[UserCreate], 
     session: Annotated[Session, Depends(get_session)]
 ):
-    """Permite el registro de nuevos usuarios con rol forzado a Alumno."""
+    """Permite el registro de uno o mas usuarios con rol forzado a Alumno."""
     
-    # 1. Verificar si DNI ya existe
-    existing_dni = session.exec(select(User).where(User.dni == user_data.dni)).first()
-    if existing_dni:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="El DNI ya esta registrado."
-        )
+    # ----------------------------------------------------------------------
+    # LISTA PARA ALMACENAR LOS USUARIOS CREADOS
+    # ----------------------------------------------------------------------
+    created_users = []
     
-    # 2. Verificar si Email ya existe
-    existing_email = session.exec(select(User).where(User.email == user_data.email)).first()
-    if existing_email:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="El email ya esta registrado."
-        )
+    # ?? BUCLE PARA PROCESAR CADA USUARIO DE LA LISTA
+    for single_user_data in user_data:
+        
+        # 1. Verificar si DNI ya existe
+        existing_dni = session.exec(select(User).where(User.dni == single_user_data.dni)).first()
+        if existing_dni:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="El DNI ya esta registrado."
+            )
+        
+        # 2. Verificar si Email ya existe
+        existing_email = session.exec(select(User).where(User.email == single_user_data.email)).first()
+        if existing_email:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="El email ya esta registrado."
+            )
 
-    # NOTA: Se asume que el backend maneja el limite de 72 bytes para el password hash
-    hashed_password = get_password_hash(user_data.password)
-    new_user = User(
-        email=user_data.email,
-        dni=user_data.dni, # Almacenar DNI
-        password_hash=hashed_password,
-        nombre=user_data.nombre,
-        rol=UserRole.STUDENT # Forzar rol a Alumno
-    )
-    session.add(new_user)
+        # NOTA: Se asume que el backend maneja el limite de 72 bytes para el password hash
+        hashed_password = get_password_hash(single_user_data.password)
+        new_user = User(
+            email=single_user_data.email,
+            dni=single_user_data.dni, # Almacenar DNI
+            password_hash=hashed_password,
+            nombre=single_user_data.nombre,
+            rol=UserRole.STUDENT # Forzar rol a Alumno
+        )
+        
+        session.add(new_user)
+        created_users.append(new_user) # Almacenamos el nuevo usuario para la respuesta de lista
+        
+    # ----------------------------------------------------------------------
+    # COMMIT Y REFRESH (Se realiza una única vez para toda la transacción)
+    # ----------------------------------------------------------------------
     session.commit()
-    session.refresh(new_user)
-    return new_user
+    
+    # Refrescar los usuarios creados y devolver la lista
+    for user in created_users:
+        session.refresh(user)
+        
+    # ?? AJUSTE OBLIGATORIO: Ya que el endpoint ahora acepta y procesa una lista,
+    # debe devolver una lista para satisfacer el contrato (response_model=List[UserRead]).
+    # De lo contrario, FastAPI fallará al intentar convertir un solo objeto a una lista.
+    return created_users
 
 @app.post("/register", response_model=UserRead, status_code=status.HTTP_201_CREATED, tags=["Autenticacion"])
 def register_user(
@@ -963,15 +958,12 @@ def get_assignments_for_student_by_professor(
     con TODAS las rutinas de ese grupo para su visualizacion.
     """
     
-    # 1. VERIFICAR VENCIMIENTOS ANTES DE CONSULTAR
-    check_and_inactivate_expired_assignments(session, student_id)
-
-    # 2. Verificar que el alumno exista
+    # 1. Verificar que el alumno exista
     student = session.get(User, student_id)
     if not student or student.rol != UserRole.STUDENT:
         raise HTTPException(status_code=404, detail="Alumno no encontrado.")
         
-    # 3. Fetch todas las asignaciones historicas (ordenadas por fecha de asignacion)
+    # 2. Fetch todas las asignaciones historicas (ordenadas por fecha de asignacion)
     statement = (
         select(RoutineAssignment)
         .where(
@@ -992,14 +984,14 @@ def get_assignments_for_student_by_professor(
     if not all_assignments:
         return []
     
-    # 4. Identificar la asignacion activa mas reciente (el 'ancla')
+    # 3. Identificar la asignacion activa mas reciente (el 'ancla')
     # NOTA: En el caso de grupos, solo una de las rutinas del grupo esta marcada como is_active=True.
     active_anchor_assignment = next((a for a in all_assignments if a.is_active), None)
 
     if active_anchor_assignment and active_anchor_assignment.routine.routine_group_id:
         routine_group_id = active_anchor_assignment.routine.routine_group_id
         
-        # 5. Fetch TODAS las rutinas que pertenecen a ese grupo (Dia 1, Dia 2, etc.)
+        # 4. Fetch TODAS las rutinas que pertenecen a ese grupo (Dia 1, Dia 2, etc.)
         routine_statement = (
             select(Routine)
             .where(Routine.routine_group_id == routine_group_id)
@@ -1011,7 +1003,7 @@ def get_assignments_for_student_by_professor(
         )
         grouped_routines = session.exec(routine_statement).all()
         
-        # 6. Crear "pseudo-asignaciones" para TODAS las rutinas del grupo actual
+        # 5. Crear "pseudo-asignaciones" para TODAS las rutinas del grupo actual
         active_group_assignments = []
         # Obtener los IDs de las rutinas en el grupo
         active_group_routine_ids = {r.id for r in grouped_routines}
@@ -1043,17 +1035,17 @@ def get_assignments_for_student_by_professor(
             active_group_assignments.append(pseudo_assignment_data)
 
 
-        # 7. Filtrar las asignaciones historicas que NO pertenecen a este grupo activo
+        # 6. Filtrar las asignaciones historicas que NO pertenecen a este grupo activo
         
         historical_assignments = [
             a for a in all_assignments 
             if a.routine_id not in active_group_routine_ids
         ]
         
-        # 8. Combinar: Primero el grupo activo (Dia 1, Dia 2...), luego el historial
+        # 7. Combinar: Primero el grupo activo (Dia 1, Dia 2...), luego el historial
         return active_group_assignments + historical_assignments
         
-    # 9. Si no hay grupo activo, o no hay asignaciones, retornar la lista original/vacia.
+    # 8. Si no hay grupo activo, o no hay asignaciones, retornar la lista original/vacia.
     return all_assignments
 
 # --- Rutas del Alumno (Continuacion) ---
@@ -1067,10 +1059,7 @@ def get_my_active_routine(
     (Alumno) Obtiene SOLAMENTE las rutinas asignadas que estan marcadas como activas.
     Si la asignacion es parte de un grupo, devuelve TODAS las rutinas de ese grupo.
     """
-    # 1. VERIFICAR VENCIMIENTOS ANTES DE CONSULTAR
-    check_and_inactivate_expired_assignments(session, current_student.id)
-
-    # 2. Buscar la asignacion activa (el "ancla")
+    # 1. Buscar la asignacion activa (el "ancla")
     statement = (
         select(RoutineAssignment)
         .where(
@@ -1095,11 +1084,11 @@ def get_my_active_routine(
     if not active_anchor_assignment:
         return []
         
-    # 3. Verificar si pertenece a un grupo
+    # 2. Verificar si pertenece a un grupo
     if active_anchor_assignment.routine.routine_group_id:
         routine_group_id = active_anchor_assignment.routine.routine_group_id
         
-        # 4. Traer TODAS las rutinas de ese grupo (Dia 1, Dia 2, etc.)
+        # 3. Traer TODAS las rutinas de ese grupo (Dia 1, Dia 2, etc.)
         routine_statement = (
             select(Routine)
             .where(Routine.routine_group_id == routine_group_id)
@@ -1111,7 +1100,7 @@ def get_my_active_routine(
         )
         grouped_routines = session.exec(routine_statement).all()
         
-        # 5. Obtener las asignaciones reales para cada rutina del grupo
+        # 4. Obtener las asignaciones reales para cada rutina del grupo
         routine_ids = [r.id for r in grouped_routines]
         real_assignments_statement = (
             select(RoutineAssignment)
@@ -1120,7 +1109,7 @@ def get_my_active_routine(
         real_assignments = session.exec(real_assignments_statement).all()
         real_assignments_map = {a.routine_id: a for a in real_assignments}
 
-        # 6. Crear "pseudo-asignaciones" para devolver todas las rutinas del grupo
+        # 5. Crear "pseudo-asignaciones" para devolver todas las rutinas del grupo
         expanded_assignments = []
         for routine in grouped_routines:
             
@@ -1146,5 +1135,5 @@ def get_my_active_routine(
             
         return expanded_assignments
         
-    # 7. Si no hay grupo (rutina simple antigua), devuelve la asignacion original
+    # 5. Si no hay grupo (rutina simple antigua), devuelve la asignacion original
     return [active_anchor_assignment]

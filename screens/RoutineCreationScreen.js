@@ -1,13 +1,13 @@
 import React, { useState, useEffect, useContext, useCallback } from 'react';
 import { 
     StyleSheet, Text, View, TextInput, Button, SafeAreaView, 
-    ScrollView, TouchableOpacity, Alert, KeyboardAvoidingView, Platform, ActivityIndicator, Modal
+    ScrollView, TouchableOpacity, Alert, KeyboardAvoidingView, Platform, ActivityIndicator
 } from 'react-native';
 import { useRoute } from '@react-navigation/native';
 import axios from 'axios';
 import { AuthContext } from '../App'; 
 import { useTheme } from '../ThemeContext'; 
-import { Save, XCircle, PlusCircle, Trash2, Search, Zap, Loader, RefreshCcw } from 'lucide-react-native';
+import { Save, XCircle, PlusCircle, Trash2, Search, Zap, Loader } from 'lucide-react-native';
 
 // ----------------------------------------------------------------------
 // API Configuration
@@ -94,26 +94,6 @@ const getExerciseStyles = (colors) => StyleSheet.create({
         textAlign: 'center',
         width: '100%',
     },
-    notesLabel: {
-        fontSize: 14,
-        color: '#A9A9A9',
-        marginBottom: 5,
-        marginTop: 15,
-        fontWeight: 'bold',
-    },
-    notesInput: {
-        minHeight: 80,
-        backgroundColor: 'black',
-        borderColor: colors.divider,
-        borderWidth: 1,
-        borderRadius: 8,
-        paddingHorizontal: 10,
-        paddingTop: 10,
-        fontSize: 14,
-        color: 'white',
-        textAlignVertical: 'top',
-        marginBottom: 5,
-    },
 });
 
 // ----------------------------------------------------------------------
@@ -132,7 +112,9 @@ const ExerciseItem = ({ index, exercise, updateExercise, removeExercise, toggleS
     // Determina el color del botón de selección (verde si está seleccionado, rojo si no)
     const buttonColor = exercise.exercise_id ? '#3ABFBC' : themeColors.danger;
     
+    // Fondo más oscuro para el botón si está seleccionado, o usa el color de la tarjeta
     const buttonBgColor = exercise.exercise_id ? '#1C1C1E' : '#1C1C1E'; 
+    // El indicador visual es el color del texto/icono, no el fondo.
 
 
     return (
@@ -155,10 +137,12 @@ const ExerciseItem = ({ index, exercise, updateExercise, removeExercise, toggleS
                 ]} 
                 onPress={() => toggleSelector(index)} 
             >
+                {/* Icono usa el color determinado (verde/rojo) */}
                 <Zap size={20} color={buttonColor} /> 
                 <Text 
                     style={[
                         exerciseStyles.selectButtonText, 
+                        // El texto es rojo si no está seleccionado
                         !exercise.exercise_id && {color: themeColors.danger} 
                     ]}
                     numberOfLines={1}
@@ -168,7 +152,7 @@ const ExerciseItem = ({ index, exercise, updateExercise, removeExercise, toggleS
                 </Text>
             </TouchableOpacity>
             
-            {/* Compact Input Row (Series, Repeticiones, Peso) */}
+            {/* Compact Input Row */}
             <View style={exerciseStyles.row}>
                 {/* 1. Series Input */}
                 <View style={exerciseStyles.inputGroup}>
@@ -178,7 +162,7 @@ const ExerciseItem = ({ index, exercise, updateExercise, removeExercise, toggleS
                         placeholder="3"
                         placeholderTextColor={placeholderColor}
                         keyboardType="numeric"
-                        value={exercise.series} 
+                        value={exercise.series}
                         onChangeText={(text) => handleChange('series', text)}
                     />
                 </View>
@@ -209,20 +193,6 @@ const ExerciseItem = ({ index, exercise, updateExercise, removeExercise, toggleS
                     />
                 </View>
             </View>
-
-            {/* <--- CAMPO DE NOTAS (Visible) ---> */}
-            <Text style={exerciseStyles.notesLabel}>Notas / Técnica (Opcional):</Text>
-            <TextInput
-                style={exerciseStyles.notesInput}
-                placeholder="Ej: 30 segundos de descanso, técnica estricta, etc."
-                placeholderTextColor={placeholderColor}
-                keyboardType="default" 
-                value={exercise.notas}
-                onChangeText={(text) => handleChange('notas', text)} // <-- Se guarda en el estado 'notas'
-                multiline
-                numberOfLines={3}
-            />
-            {/* <--- FIN CAMPO DE NOTAS ---> */}
         </View>
     );
 };
@@ -491,6 +461,7 @@ export default function RoutineCreationScreenV3({ navigation }) {
             }
             
             if (newRoutines[currentDay - 1]) {
+                // En modo edición (newRoutines.length es 1) o creación, esto siempre apunta al día correcto
                 newRoutines[currentDay - 1].exercises = currentExercises; 
             }
             return newRoutines;
@@ -519,16 +490,17 @@ export default function RoutineCreationScreenV3({ navigation }) {
                     .map(link => ({
                         exercise_id: link.exercise_id, 
                         name: link.exercise?.nombre || 'Ejercicio Desconocido',
+                        // CORRECCIÓN PARA CARGA: Aseguramos que los valores sean string o cadena vacía, NO "null" literal.
                         series: String(link.sets || ''), 
                         repetitions: String(link.repetitions || ''), 
-                        peso: String(link.peso || ''), 
-                        notas: String(link.notas || ''), // <-- CRÍTICO: CARGAR NOTAS DESDE 'notas' (el nombre correcto)
+                        peso: String(link.peso || ''), // Aseguramos que sea string
                     }));
                 
                 // Aseguramos que solo haya un elemento en modo edición
                 setAllRoutinesData([{
                     day: 1,
                     name: routineData.nombre,
+                    // CORRECCIÓN: Si la descripción viene nula, la establecemos como cadena vacía.
                     description: routineData.descripcion || '', 
                     exercises: loadedExercises,
                 }]);
@@ -587,7 +559,6 @@ export default function RoutineCreationScreenV3({ navigation }) {
             series: '', 
             repetitions: '', 
             peso: '', 
-            notas: '', // <-- CRÍTICO: INICIALIZAR NOTAS AL AÑADIR
         }];
         setRoutineData('exercises', newExercises);
     };
@@ -661,8 +632,6 @@ export default function RoutineCreationScreenV3({ navigation }) {
             const repetitionsTrimmed = ex.repetitions ? ex.repetitions.trim() : '';
             if (repetitionsTrimmed.length === 0) return true; 
 
-            // 4. Peso and Notas can be empty.
-
             // All checks passed
             return false;
         });
@@ -700,13 +669,13 @@ export default function RoutineCreationScreenV3({ navigation }) {
             days: totalDays, 
             routines: allRoutinesData.map((routine, index) => ({
                 nombre: routine.name, 
+                // Aseguramos que la descripción sea string vacío si está vacía, no null (por si el backend lo requiere)
                 descripcion: routine.description.trim() || '', 
                 exercises: routine.exercises.map((ex, exIndex) => ({
                     exercise_id: ex.exercise_id,
                     sets: parseInt(ex.series.trim()), // Aseguramos el parseo (debe ser un entero)
                     repetitions: ex.repetitions.trim(), // Aseguramos que sea string
                     peso: ex.peso.trim() || 'N/A', 
-                    notas: ex.notas.trim() || null, // <--- ¡CORRECCIÓN CLAVE: AHORA ES 'notas'!--->
                     order: exIndex + 1
                 }))
             }))
@@ -756,13 +725,13 @@ export default function RoutineCreationScreenV3({ navigation }) {
 
             const routineData = {
                 nombre: routineToSave.name.trim(),
+                // CORRECCIÓN CLAVE: Si la descripción está vacía, enviamos "" en lugar de null
                 descripcion: routineToSave.description.trim() || '', 
                 exercises: routineToSave.exercises.map((ex, index) => ({ 
                     exercise_id: ex.exercise_id, 
                     sets: parseInt(ex.series.trim()), // Aseguramos el parseo (debe ser un entero)
                     repetitions: ex.repetitions.trim(), // Aseguramos que sea string
                     peso: ex.peso.trim() || 'N/A', 
-                    notas: ex.notas.trim() || null, // <--- ¡CORRECCIÓN CLAVE: AHORA ES 'notas'!--->
                     order: index + 1 
                 }))
             };
@@ -778,13 +747,16 @@ export default function RoutineCreationScreenV3({ navigation }) {
             
             let errorMessage = "Fallo desconocido al guardar la rutina.";
              if (e.response && e.response.data && e.response.data.detail) {
-                 if (Array.isArray(e.response.data.detail) || typeof e.response.data.detail === 'string') {
-                     errorMessage = `Error de FastAPI: ${JSON.stringify(e.response.data.detail)}`;
-                 }
-             } else if (e.message === "Network Error") {
+                // Captura el mensaje de error detallado del backend
+                if (Array.isArray(e.response.data.detail) || typeof e.response.data.detail === 'string') {
+                    // Si el backend es el que lanza el error, mostramos su detalle
+                    errorMessage = `Error de FastAPI: ${JSON.stringify(e.response.data.detail)}`;
+                }
+            } else if (e.message === "Network Error") {
                  errorMessage = "Error de red: No se pudo conectar al servidor API.";
-             }
+            }
 
+            // Aquí alertamos el error. El error de Render es provocado por esta llamada fallida.
             Alert.alert("Error de Edición", errorMessage); 
         } finally {
             setIsSaving(false);

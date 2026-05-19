@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext, useMemo, useRef, useCallback } from 'react'; 
+import React, { useState, useEffect, useContext, useMemo, useRef } from 'react'; 
 import { 
     StyleSheet, Text, View, ScrollView, SafeAreaView, Button, 
     ActivityIndicator, FlatList, TouchableOpacity, Alert, Modal,
@@ -7,8 +7,8 @@ import {
 import axios from 'axios';
 import { AuthContext } from '../App'; 
 import { useTheme } from '../ThemeContext'; 
-// Importamos TODOS los iconos necesarios (Lucide), INCLUYENDO Zap y FileText
-import { Trash2, Edit, RefreshCcw, Menu, User, Key, LogOut, Minus, Plus, ChevronDown, ChevronUp, UserPlus, CheckCircle, Weight, Calendar, XCircle, FileText, Zap } from 'lucide-react-native'; 
+// Importamos TODOS los iconos necesarios (Lucide)
+import { Trash2, Edit, RefreshCcw, Menu, User, Key, LogOut, Minus, Plus, ChevronDown, ChevronUp, UserPlus, CheckCircle, Weight, Calendar, XCircle } from 'lucide-react-native'; 
 
 // ----------------------------------------------------------------------
 // URL de la API (DEBE COINCIDIR con la de App.js)
@@ -186,21 +186,6 @@ const getAssignmentStyles = (colors) => StyleSheet.create({
     },
     detailLabel: { fontSize: 12, color: '#A9A9A9', marginRight: 4, fontWeight: '500', }, // Gris claro
     detailValue: { fontSize: 14, fontWeight: 'bold', color: '#3ABFBC', }, // Verde para el valor
-    // NUEVO ESTILO PARA NOTAS
-    notesContainer: { 
-        backgroundColor: '#1F2937', 
-        borderRadius: 5, 
-        padding: 8, 
-        marginTop: 8, 
-        borderLeftWidth: 3, 
-        borderLeftColor: colors.warning, // Color de acento para notas
-    },
-    notesText: {
-        fontSize: 13,
-        color: colors.textPrimary,
-        fontStyle: 'italic',
-    },
-    // FIN NUEVO ESTILO PARA NOTAS
     
     // Botones (Estilo Unificado de la Pantalla Principal)
     customButton: {
@@ -281,23 +266,6 @@ const CollapsibleAssignmentCard = ({
                                     <Text style={assignmentStyles.detailValue}>{link.peso || '-'}</Text>
                                 </View>
                             </View>
-
-                                {/* INICIO: MODIFICACION PARA MOSTRAR NOTAS */}
-                                {!!link.notas && (
-                                    <View style={assignmentStyles.notesContainer}>
-                                        <View style={{flexDirection: 'row', alignItems: 'center', marginBottom: 4}}>
-                                            <FileText size={14} color={themeColors.warning} style={{marginRight: 5}} />
-                                            <Text style={[assignmentStyles.detailLabel, {color: themeColors.warning, marginRight: 0}]}>
-                                                Notas del Profesor:
-                                            </Text>
-                                        </View>
-                                        <Text style={assignmentStyles.notesText}>
-                                            {link.notas}
-                                        </Text>
-                                    </View>
-                                )}
-                                {/* FIN: MODIFICACION PARA MOSTRAR NOTAS */}
-
                         </View>
                     ) : (
                         <Text key={link.id || exIndex} style={{color: themeColors.danger}}>
@@ -600,7 +568,7 @@ function AssignmentView({ student, routines, onAssignmentComplete, onCancel, nav
     // ----------------------------------------------------------------
     // FUNCION 1: CARGAR ASIGNACIONES ACTUALES DEL ALUMNO (TODAS)
     // ----------------------------------------------------------------
-    const fetchCurrentAssignments = useCallback(async () => {
+    const fetchCurrentAssignments = async () => {
         setIsAssignmentsLoading(true);
         try {
             const token = await getToken();
@@ -624,18 +592,16 @@ function AssignmentView({ student, routines, onAssignmentComplete, onCancel, nav
         } finally {
             setIsAssignmentsLoading(false);
         }
-    }, [student.id, getToken]);
+    };
     
     // ----------------------------------------------------------------
     // FUNCION: NAVEGAR A EDICION DE RUTINA ASIGNADA
     // ----------------------------------------------------------------
     const handleEditAssignment = (routineId) => {
         if (navigation) {
-            // CRÍTICO: Navegamos a la pantalla de edición, pasando el ID de la rutina maestra.
-            navigation.navigate('RoutineCreation', { // Asumimos que esta es la pantalla de Edición de Rutinas
-                routineId: routineId,
-                mode: 'edit',
-                title: 'Editar Rutina'
+            // Aseguramos que la navegación apunte a 'RoutineEditScreen'
+            navigation.navigate('RoutineEditScreen', { 
+                routineId: routineId
             });
         } else {
             Alert.alert("Error de Navegacion", "No se pudo acceder a la pantalla de edicion.");
@@ -721,7 +687,7 @@ function AssignmentView({ student, routines, onAssignmentComplete, onCancel, nav
 
         return unsubscribeFocus;
 
-    }, [student.id, isDark, fetchCurrentAssignments, navigation]); 
+    }, [student.id, isDark]); 
     
     
     // ----------------------------------------------------------------
@@ -732,13 +698,12 @@ function AssignmentView({ student, routines, onAssignmentComplete, onCancel, nav
         
         for (const assignment of currentAssignments) {
             
-            // Si la asignación tiene un grupo, la agrupamos.
             if (!assignment.routine || !assignment.routine.routine_group) continue;
             
             let groupName = assignment.routine.routine_group.nombre;
             let groupExpiryDate = assignment.routine.routine_group.fecha_vencimiento;
             let groupCreationDate = assignment.routine.routine_group.created_at; 
-            let professorCreatorName = assignment.professor?.nombre; // Usamos la relacion 'professor' del assignment
+            let professorCreatorName = assignment.routine.professor?.nombre; 
             let routineGroupId = assignment.routine.routine_group.id;
             
             const groupIdKey = `G-${routineGroupId}`;
@@ -817,7 +782,6 @@ function AssignmentView({ student, routines, onAssignmentComplete, onCancel, nav
                                         {/* ENCABEZADO Y ACCIONES DEL GRUPO */}
                                         <View style={assignmentStyles.groupHeaderContainer}>
                                             <Text style={assignmentStyles.groupHeader}>
-                                                <Zap size={18} color={'white'} style={{marginRight: 5}} /> 
                                                 {groupData.groupName} ({groupAssignments.length} Rutinas)
                                             </Text>
                                             
@@ -842,22 +806,11 @@ function AssignmentView({ student, routines, onAssignmentComplete, onCancel, nav
                                             {finalGroupIdForActions && (
                                                 <View style={assignmentStyles.groupActions}>
 
-                                                    {/* Botón de Editar Grupo */}
-                                                    <TouchableOpacity 
-                                                        style={[assignmentStyles.toggleGroupButton, { backgroundColor: themeColors.warning }]} 
-                                                        onPress={() => handleEditGroup(groupData)}
-                                                    >
-                                                        <Edit size={16} color={'black'} />
-                                                        <Text style={[assignmentStyles.groupActionButtonText, {color: 'black'}]}>
-                                                            EDITAR GRUPO
-                                                        </Text>
-                                                    </TouchableOpacity>
-
                                                     {/* Botón de Activar/Inactivar Grupo */}
                                                     <TouchableOpacity 
                                                         style={[
                                                             assignmentStyles.toggleGroupButton, 
-                                                            { backgroundColor: isGroupActive ? themeColors.danger : '#3ABFBC' } 
+                                                            { backgroundColor: isGroupActive ? themeColors.warning : '#3ABFBC' } 
                                                         ]}
                                                         onPress={() => handleToggleGroupActive(groupAssignments, isGroupActive)}
                                                     >
@@ -869,16 +822,24 @@ function AssignmentView({ student, routines, onAssignmentComplete, onCancel, nav
                                                             {isGroupActive ? 'INACTIVAR GRUPO' : 'ACTIVAR GRUPO'}
                                                         </Text>
                                                     </TouchableOpacity>
+
+                                                    {/* Botón de Eliminar Asignaciones de Grupo/Rutina */}
+                                                    <TouchableOpacity 
+                                                        style={assignmentStyles.deleteButton} 
+                                                        onPress={() => handleDeleteRoutineGroup(finalGroupIdForActions, groupData.groupName)}
+                                                    >
+                                                        <Trash2 size={20} color={themeColors.card} />
+                                                        <Text style={assignmentStyles.groupActionButtonText}>ELIMINAR</Text>
+                                                    </TouchableOpacity>
                                                    </View>
-                                            )}
-                                            {/* Fin Acciones de Grupo */}
+                                             )}
+                                             {/* Fin Acciones de Grupo */}
 
                                             </View>
 
                                             {/* Listado de rutinas dentro del grupo */}
                                             {groupAssignments
                                                 .sort((a, b) => {
-                                                    // Intenta ordenar por el número de Día X en el nombre
                                                     const aMatch = a.routine.nombre.match(/ - Dia (\d+)$/i) || a.routine.nombre.match(/ - Día (\d+)$/i);
                                                     const bMatch = b.routine.nombre.match(/ - Dia (\d+)$/i) || b.routine.nombre.match(/ - Día (\d+)$/i);
                                                     const aDay = aMatch ? parseInt(aMatch[1]) : 999;
@@ -895,14 +856,14 @@ function AssignmentView({ student, routines, onAssignmentComplete, onCancel, nav
                                                         handleEditAssignment={handleEditAssignment} 
                                                     />
                                                 ))}
-                                    </View>
-                                );
-                            })
-                        ) : (
-                            <Text style={assignmentStyles.warning}>Este alumno no tiene rutinas asignadas.</Text>
-                        )}
-                    </View>
-                )}
+                                        </View>
+                                    );
+                                })
+                            ) : (
+                                <Text style={assignmentStyles.warning}>Este alumno no tiene rutinas asignadas.</Text>
+                            )}
+                        </View>
+                    )}
 
                </View>
              </ScrollView>
@@ -985,10 +946,7 @@ const getMainScreenStyles = (colors) => StyleSheet.create({
     
     // Tarjeta de Alumno
     studentCard: {
-        // MODIFICACIÓN CLAVE: Cambiamos a columna para que el nombre ocupe todo el ancho
-        flexDirection: 'column', 
-        justifyContent: 'space-between', 
-        alignItems: 'flex-start', // Alineamos contenido a la izquierda
+        flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
         backgroundColor: '#1F2937', // Fondo de tarjeta oscuro
         borderRadius: 10, 
         padding: 15, 
@@ -1002,14 +960,7 @@ const getMainScreenStyles = (colors) => StyleSheet.create({
     },
     studentName: { fontSize: 18, fontWeight: '600', color: 'white', },
     studentEmail: { fontSize: 14, color: '#A9A9A9', }, // Gris claro
-    // MODIFICACIÓN CLAVE: Los botones van en una fila debajo del nombre/email
-    studentCardActions: { 
-        flexDirection: 'row', 
-        gap: 10, 
-        marginTop: 15, // Espacio superior
-        width: '100%',
-        justifyContent: 'flex-end', // Alineamos los botones a la derecha
-    },
+    studentCardActions: { flexDirection: 'row', gap: 10, },
     
     // Botones de acción en la tarjeta (Rutina, Editar)
     actionButton: { 
@@ -1414,7 +1365,7 @@ function CreationWizardSimplified({ students, onCancel, navigation }) {
     const [showDatePicker, setShowDatePicker] = useState(false); // Visibilidad del picker (Ahora Modal)
     // ***************************************************************
 
-    const [searchTerm, setSearchTerm] = useState('');
+    const [searchTerm, setSearchTerm] = useState(''); 
 
     const wizardLabelStyle = {
         ...styles.label, 
@@ -1629,11 +1580,11 @@ function CreationWizardSimplified({ students, onCancel, navigation }) {
                                         style={styles.studentCard}
                                         onPress={() => handleSelectStudent(item)}
                                     >
-                                        <View style={{flex: 1}}> {/* Aseguramos que ocupe espacio */}
+                                        <View>
                                             <Text style={styles.studentName}>{item.nombre}</Text>
                                             <Text style={styles.studentEmail}>{item.email}</Text>
                                         </View>
-                                        <Text style={{...styles.actionButtonText, color: '#3ABFBC', paddingHorizontal: 15, paddingVertical: 8, borderRadius: 8, backgroundColor: themeColors.inputBackground}}>CREAR >> </Text>
+                                        <Text style={{...styles.actionButtonText, color: '#3ABFBC'}}>CREAR >> </Text>
                                     </TouchableOpacity>
                                 ))
                             ) : (
@@ -1641,7 +1592,7 @@ function CreationWizardSimplified({ students, onCancel, navigation }) {
                             )}
                         </ScrollView>
                         <Text style={styles.studentEmail}>
-                              Agrupación: {routineName.trim()} | Vence: {expirationDateObject ? formatDateDisplay(expirationDateObject) : 'N/A'}
+                             Agrupación: {routineName.trim()} | Vence: {expirationDateObject ? formatDateDisplay(expirationDateObject) : 'N/A'}
                         </Text>
                     </>
                 );
@@ -1789,7 +1740,7 @@ export default function ProfessorScreen({ navigation }) {
     // ----------------------------------------------------------------
     // FUNCION PRINCIPAL: CARGA DATOS
     // ----------------------------------------------------------------
-    const fetchData = useCallback(async () => {
+    const fetchData = async () => {
         setIsLoading(true);
         setDataError(null); 
         try {
@@ -1819,7 +1770,7 @@ export default function ProfessorScreen({ navigation }) {
         } finally {
             setIsLoading(false);
         }
-    }, [getToken, signOut]);
+    };
     
     // ----------------------------------------------------------------
     // FUNCIÓN: NAVEGAR A EDICIÓN DE DETALLES DEL ALUMNO
@@ -1860,7 +1811,7 @@ export default function ProfessorScreen({ navigation }) {
         const unsubscribe = navigation.addListener('focus', fetchData);
         fetchData();
         return unsubscribe;
-    }, [navigation, isDark, fetchData]);
+    }, [navigation, isDark]);
     
     const handleAssignmentComplete = () => {
         setSelectedStudent(null);
@@ -1884,17 +1835,17 @@ export default function ProfessorScreen({ navigation }) {
         return (
              <SafeAreaView style={styles.container}>
                  <View style={styles.errorView}>
-                    <Text style={styles.errorTitle}>!Error de Conexión!</Text>
-                    <Text style={styles.errorDetail}>{dataError}</Text>
-                    <View style={{marginTop: 20}}>
-                        <Button title="Intentar de Nuevo" onPress={fetchData} color={themeColors.primary} />
-                    </View>
-                    {dataError !== "Sesión inválida o expirada. Saliendo..." && (
-                        <View style={{marginTop: 10}}>
-                            <Button title="Salir" onPress={signOut} color={themeColors.danger} />
-                        </View>
-                    )}
-                </View>
+                     <Text style={styles.errorTitle}>!Error de Conexión!</Text>
+                     <Text style={styles.errorDetail}>{dataError}</Text>
+                     <View style={{marginTop: 20}}>
+                         <Button title="Intentar de Nuevo" onPress={fetchData} color={themeColors.primary} />
+                     </View>
+                     {dataError !== "Sesión inválida o expirada. Saliendo..." && (
+                         <View style={{marginTop: 10}}>
+                             <Button title="Salir" onPress={signOut} color={themeColors.danger} />
+                         </View>
+                     )}
+                 </View>
              </SafeAreaView>
            );
          }
@@ -1992,16 +1943,15 @@ export default function ProfessorScreen({ navigation }) {
                                 style={styles.studentCard}
                             >
                                 <View>
-                                    {/* Nombre y Email ahora ocupan todo el ancho */}
                                     <Text style={styles.studentName}>{item.nombre}</Text>
                                     <Text style={styles.studentEmail}>{item.email}</Text>
                                 </View>
                                 
-                                {/* BOTONES DE ACCIÓN (Reubicados) */}
+                                {/* BOTONES DE ACCIÓN */}
                                 <View style={styles.studentCardActions}>
                                     {/* Botón 1: Gestionar Rutina */}
                                     <TouchableOpacity 
-                                        style={[styles.actionButton, {backgroundColor: themeColors.warning, flex: 1}]} // Añadimos flex: 1
+                                        style={[styles.actionButton, {backgroundColor: themeColors.warning}]}
                                         onPress={() => setSelectedStudent(item)} // Va a AssignmentView
                                     >
                                         <Text style={styles.actionButtonText}>Rutina</Text>
@@ -2009,7 +1959,7 @@ export default function ProfessorScreen({ navigation }) {
 
                                     {/* Botón 2: Editar Datos */}
                                     <TouchableOpacity 
-                                        style={[styles.actionButton, {backgroundColor: '#3ABFBC', flex: 1}]} // Añadimos flex: 1
+                                        style={[styles.actionButton, {backgroundColor: '#3ABFBC'}]}
                                         onPress={() => handleEditStudent(item)} // Va a la nueva pantalla de edición
                                     >
                                         <Text style={styles.actionButtonText}>Editar</Text>
@@ -2095,8 +2045,8 @@ export default function ProfessorScreen({ navigation }) {
                             </ScrollView>
                         </SafeAreaView>
                         
-                          {/* Botón de cierre visible dentro del menú */}
-                          <TouchableOpacity 
+                         {/* Botón de cierre visible dentro del menú */}
+                         <TouchableOpacity 
                             style={styles.menuItemClose}
                             onPress={() => animateOut()}
                         >
