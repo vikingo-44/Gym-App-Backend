@@ -1,383 +1,292 @@
+from sqlalchemy import Column, Integer, String, Float, Date, DateTime, ForeignKey, Text, Boolean, JSON
+from sqlalchemy.orm import relationship
+from pydantic import BaseModel
+from database import Base
+from datetime import datetime
 from typing import Optional, List
-from sqlmodel import Field, SQLModel, Relationship
-# AGREGADO: Importamos date para la fecha de vencimiento
-from datetime import datetime, timezone, date 
-from enum import Enum
-from pydantic import BaseModel # Necesario para los Schemas de lectura
+from sqlalchemy import func
+import datetime
 
-# ----------------------------------------------------------------------
-# Enums
-# ----------------------------------------------------------------------
+# =========================================
+# GESTIÓN DE USUARIOS Y PLANES DE MEMBRESÍA
+# =========================================
 
-class UserRole(str, Enum):
-    """Define los roles posibles para un usuario."""
-    PROFESSOR = "Profesor"
-    STUDENT = "Alumno"
+class Perfil(Base):
+    __tablename__ = "perfiles"
+    id = Column(Integer, primary_key=True)
+    nombre = Column(String, unique=True)
+    usuarios = relationship("Usuario", back_populates="perfil")
 
-class MuscleGroup(str, Enum):
-    """Define los grupos musculares principales para los ejercicios."""
-    PECTORAL = "Pectoral"
-    ESPALDA = "Espalda"
-    PIERNAS = "Piernas"
-    HOMBRO = "Hombro"
-    BRAZOS = "Brazos"
-    ABDOMEN = "Abdomen" 
-    GLUTEOS = "Gluteos" 
-    CARDIO = "Cardio"
+class TipoPlan(Base):
+    __tablename__ = "tipos_planes"
+    id = Column(Integer, primary_key=True)
+    nombre = Column(String, unique=True)
+    duracion_dias = Column(Integer)
+    planes = relationship("Plan", back_populates="tipo")
 
-# ----------------------------------------------------------------------
-# Modelos de Base de Datos (Tablas)
-# ----------------------------------------------------------------------
+class Plan(Base):
+    __tablename__ = "planes"
+    id = Column(Integer, primary_key=True)
+    nombre = Column(String)
+    efectivo = Column(Float, default=0.0)
+    transferencia = Column(Float, default=0.0)
+    debito_credito = Column("Debito/Credito", Float, default=0.0) 
+    tipo_plan_id = Column(Integer, ForeignKey("tipos_planes.id"))
+    clases_mensuales = Column(Integer, default=12) 
+    tipo = relationship("TipoPlan", back_populates="planes")
+    usuarios = relationship("Usuario", back_populates="plan")
 
-# --- TABLA DE ENLACE (Rutina <-> Ejercicio) ---
-class RoutineExercise(SQLModel, table=True):
-    """Tabla de enlace Muchos-a-Muchos entre Rutinas y Ejercicios."""
-    __tablename__ = "ROUTINE_EXERCISES"
-    
-    # CRITICO: ID autoincremental para evitar NotNullViolation
-    id: Optional[int] = Field(default=None, primary_key=True)
-    routine_id: int = Field(foreign_key="ROUTINES.id", index=True)
-    exercise_id: int = Field(foreign_key="EXERCISES.id", index=True)
-    
-    sets: int
-    repetitions: str
-    # NUEVO CAMPO: Almacena el peso o tipo de resistencia 
-    peso: str = Field(default="N/A", max_length=50)
-    # <--- MODIFICACIÓN CRÍTICA: NUEVO CAMPO 'NOTAS' --->
-    notas: Optional[str] = Field(default=None, max_length=500)
-    # <--- FIN MODIFICACIÓN --->
-    order: int
-    
-    routine: "Routine" = Relationship(back_populates="exercise_links")
-    exercise: "Exercise" = Relationship(back_populates="routine_links")
-
-# --- TABLA DE ASIGNACION (Alumno <-> Rutina) ---
-class RoutineAssignment(SQLModel, table=True):
-    """Tabla de asignacion. Conecta a un Alumno (User) con una Rutina (Routine) y almacena quien la asigno (Profesor) y cuando."""
-    __tablename__ = "ROUTINE_ASSIGNMENTS"
-    
-    id: Optional[int] = Field(default=None, primary_key=True)
-    
-    # --- Relaciones (Claves Foraneas) ---
-    student_id: int = Field(foreign_key="USERS.id", index=True)
-    routine_id: int = Field(foreign_key="ROUTINES.id", index=True)
-    professor_id: int = Field(foreign_key="USERS.id", index=True) # El profesor que la asigno
-    
-    # --- Datos de la Asignacion ---
-    assigned_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), nullable=False)
-    is_active: bool = Field(default=True) # Para activar/desactivar rutinas
-
-    # --- Objetos de Relacion ---
-    student: "User" = Relationship(
-        back_populates="assignments_as_student",
-        sa_relationship_kwargs={"foreign_keys": "[RoutineAssignment.student_id]"}
-    )
-    routine: "Routine" = Relationship(back_populates="assignments")
-    professor: "User" = Relationship(
-        back_populates="assignments_as_professor",
-        sa_relationship_kwargs={"foreign_keys": "[RoutineAssignment.professor_id]"}
-    )
-
-
-# --- TABLA DE AGRUPACION DE RUTINAS (ROUTINES_GROUP) ---
-class RoutineGroup(SQLModel, table=True):
-    __tablename__ = "ROUTINES_GROUP"
-    
-    id: Optional[int] = Field(default=None, primary_key=True)
-    nombre: str = Field(index=True, max_length=100)
-    fecha_creacion: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), nullable=False)
-    fecha_vencimiento: Optional[date] 
-    professor_id: int = Field(foreign_key="USERS.id")
-    
-    routines: List["Routine"] = Relationship(back_populates="routine_group")
-    professor: "User" = Relationship(back_populates="routine_groups")
-
-
-# --- TABLA DE USUARIOS ---
-class User(SQLModel, table=True):
-    """Representa la tabla 'USERS'."""
-    __tablename__ = "USERS" 
-
-    id: Optional[int] = Field(default=None, primary_key=True)
-    email: str = Field(index=True, unique=True, max_length=100)
-    
-    dni: str = Field(index=True, unique=True, max_length=50) # DNI para Login
-    
-    password_hash: str = Field(max_length=255)
-    nombre: str = Field(max_length=100)
-    rol: UserRole
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), nullable=False)
-    
-    # --- Relaciones del Usuario ---
-    created_routines: List["Routine"] = Relationship(back_populates="owner")
-    
-    assignments_as_student: List[RoutineAssignment] = Relationship(
-        back_populates="student",
-        sa_relationship_kwargs={"foreign_keys": "[RoutineAssignment.student_id]"}
-    )
-    
-    assignments_as_professor: List[RoutineAssignment] = Relationship(
-        back_populates="professor",
-        sa_relationship_kwargs={"foreign_keys": "[RoutineAssignment.professor_id]"}
-    )
-    # NUEVA RELACION: Grupos de Rutinas creados por el profesor
-    routine_groups: List[RoutineGroup] = Relationship(back_populates="professor")
-
-
-# --- TABLA DE EJERCICIOS ---
-class Exercise(SQLModel, table=True):
-    """Representa la tabla 'EXERCISES' (Catalogo)."""
-    __tablename__ = "EXERCISES"
-
-    id: Optional[int] = Field(default=None, primary_key=True)
-    nombre: str = Field(index=True, unique=True, max_length=100)
-    descripcion: str = Field(default="", max_length=500)
-    grupo_muscular: MuscleGroup = Field(index=True)
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), nullable=False)
-
-    routine_links: List[RoutineExercise] = Relationship(back_populates="exercise")
-
-
-# --- TABLA DE RUTINAS ---
-class Routine(SQLModel, table=True):
-    """Representa la tabla 'ROUTINES' (Rutina Maestra)."""
-    __tablename__ = "ROUTINES"
-    
-    id: Optional[int] = Field(default=None, primary_key=True)
-    nombre: str = Field(index=True, max_length=100)
-    descripcion: str = Field(default="", max_length=500)
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), nullable=False)
-
-    owner_id: int = Field(foreign_key="USERS.id")
-    owner: User = Relationship(back_populates="created_routines")
-    
-    # NUEVO CAMPO: Foreign Key a RoutineGroup (opcional para rutinas antiguas)
-    routine_group_id: Optional[int] = Field(default=None, foreign_key="ROUTINES_GROUP.id", index=True) 
-
-    # Relaciones con cascada para limpieza automatica
-    exercise_links: List[RoutineExercise] = Relationship(
-        back_populates="routine",
-        sa_relationship_kwargs={"cascade": "all, delete-orphan"}
-    )
-    
-    assignments: List[RoutineAssignment] = Relationship(
-        back_populates="routine",
-        sa_relationship_kwargs={"cascade": "all, delete-orphan"}
-    )
-    # NUEVA RELACION: Relacion inversa con RoutineGroup
-    routine_group: Optional[RoutineGroup] = Relationship(back_populates="routines")
-
-
-# ----------------------------------------------------------------------
-# Esquemas Pydantic (Para la API)
-# ----------------------------------------------------------------------
-
-# --- Esquemas de RoutineGroup ---
-class RoutineGroupCreate(BaseModel):
+# --- SCHEMAS (Pydantic) ---
+class PlanUpdate(BaseModel):
     nombre: str
-    fecha_vencimiento: date 
+    efectivo: float
+    transferencia: float
+    debito_credito: float
+    tipo_plan_id: int
+    clases_mensuales: int
 
-# <--- AÑADIDO: Esquema para actualizar el grupo (Metadatos del Plan) --->
-class RoutineGroupUpdate(BaseModel):
-    nombre: Optional[str] = None
-    fecha_vencimiento: Optional[date] = None
-
-class RoutineGroupRead(BaseModel):
-    id: int
-    nombre: str
-    fecha_creacion: datetime
-    # CRITICO: Debe ser Optional en la lectura para manejar el valor NULL de la DB
-    fecha_vencimiento: Optional[date] 
-    professor_id: int
+class Usuario(Base):
+    __tablename__ = "usuarios"
+    id = Column(Integer, primary_key=True)
+    dni = Column(String, unique=True, index=True)
+    password_hash = Column(String)
+    nombre_completo = Column(String)
+    email = Column(String, nullable=True)
+    perfil_id = Column(Integer, ForeignKey("perfiles.id"))
+    plan_id = Column(Integer, ForeignKey("planes.id"), nullable=True)
+    sucursal_id = Column(Integer, ForeignKey("sucursales.id"), nullable=True)
+    telefono = Column(String, nullable=True)
+    genero = Column(String, nullable=True)
+    fecha_nacimiento = Column(Date, nullable=True)
+    edad = Column(Integer, nullable=True)
+    peso = Column(Float, nullable=True)
+    altura = Column(Float, nullable=True)
+    imc = Column(Float, nullable=True)
+    certificado_entregado = Column(Boolean, default=False)
+    fecha_certificado = Column(Date, nullable=True)
+    especialidad = Column(String, nullable=True)
     
-    class Config:
-        from_attributes = True
-
-# --- Esquema Transaccional ---
-class RoutineCreateForTransactional(BaseModel):
-    """Esquema para una rutina individual dentro de la transaccion grupal."""
-    nombre: str
-    descripcion: Optional[str] = None
-    exercises: List["RoutineExerciseCreate"] # Reusa el esquema de creacion de enlaces
-
-class RoutineGroupCreateAndRoutines(RoutineGroupCreate): 
-    """Esquema para crear el grupo y todas sus rutinas asociadas."""
-    student_id: int # A quien se le asignara
-    days: int # Cantidad de dias/rutinas a crear (del frontend, solo para validacion de esquema)
-    routines: List[RoutineCreateForTransactional] # Lista de rutinas con ejercicios (del frontend)
-
-
-# --- Esquemas de Usuario (Se mantienen) ---
-class UserCreate(BaseModel):
-    dni: str 
-    email: str
-    password: str
-    nombre: str
-    rol: UserRole
-
-class UserRead(BaseModel):
-    id: int
-    nombre: str
-    email: str
-    dni: str
-    rol: UserRole
-    created_at: datetime
+    fecha_ultima_renovacion = Column(Date, nullable=True)
+    fecha_vencimiento = Column(Date, nullable=True)
+    estado_cuenta = Column(String, default="Activo")
     
-    class Config:
-        from_attributes = True
+    perfil = relationship("Perfil", back_populates="usuarios")
+    plan = relationship("Plan", back_populates="usuarios")
+    sucursal = relationship("Sucursal", back_populates="sucursal_usuarios")
+    reservas = relationship("Reserva", back_populates="usuario", cascade="all, delete-orphan")
+    planes_rutina = relationship("PlanRutina", back_populates="usuario", cascade="all, delete-orphan")
+    accesos = relationship("Acceso", back_populates="usuario")
+    # Nueva relación para historial de pagos en la ficha del alumno
+    movimientos = relationship("MovimientoCaja", back_populates="alumno_rel")
 
-class UserReadSimple(BaseModel):
-    id: int
-    nombre: str
-    email: str
+class Sucursal(Base):
+    __tablename__ = "sucursales"
+    id = Column(Integer, primary_key=True)
+    sucursal = Column(String, nullable=False)
+    direccion = Column(String, nullable=True)
+    fecha_creacion = Column(DateTime, default=datetime.datetime.now)
+    sucursal_usuarios = relationship("Usuario", back_populates="sucursal")
+
+# =========================================
+# GESTIÓN DE CLASES Y RESERVAS
+# =========================================
+
+class TipoBox(Base):
+    __tablename__ = "tipo_box"
+    id = Column(Integer, primary_key=True)
+    nombre = Column(String, unique=True, nullable=False)
+    clases = relationship("Clase", back_populates="box_rel")
+    sucursal_id = Column(Integer, ForeignKey("sucursales.id"), nullable=True)
+    sucursal = relationship("Sucursal")
+
+class Clase(Base):
+    __tablename__ = "clases"
+    id = Column(Integer, primary_key=True)
+    nombre = Column(String)
+    coach = Column(String) 
+    capacidad_max = Column(Integer, default=20)
+    horarios_detalle = Column(JSON, nullable=True) 
+    color = Column(String, default="#FF0000")
+    # Nueva columna para el Box
+    box_id = Column(Integer, ForeignKey("tipo_box.id"), nullable=True)
+    box_rel = relationship("TipoBox", back_populates="clases")
+    reservas = relationship("Reserva", back_populates="clase", cascade="all, delete-orphan")
+    sucursal_id = Column(Integer, ForeignKey("sucursales.id"), nullable=True)
+    sucursal = relationship("Sucursal")
+
+class Reserva(Base):
+    __tablename__ = "reservas"
+    id = Column(Integer, primary_key=True)
+    usuario_id = Column(Integer, ForeignKey("usuarios.id"))
+    clase_id = Column(Integer, ForeignKey("clases.id"))
+    fecha_reserva = Column(Date, default=datetime.date.today) # Se mantiene como Date
+    horario = Column(Float)      
+    dia_semana = Column(Integer) 
+    usuario = relationship("Usuario", back_populates="reservas")
+    clase = relationship("Clase", back_populates="reservas")
+    sucursal_id = Column(Integer, ForeignKey("sucursales.id"), nullable=True)
+    sucursal = relationship("Sucursal")
+
+class ReservaCreate(BaseModel):
+    usuario_id: int
+    clase_id: int
+    horario: float
+    dia_semana: int
+    fecha_clase: str # Este es el campo que manda el JS
+
+class Stock(Base):
+    __tablename__ = "stock"
+    id = Column(Integer, primary_key=True)
+    nombre_producto = Column(String)
+    precio_venta = Column(Float)
+    stock_actual = Column(Integer)
+    stock_inicial = Column(Integer)
+    url_imagen = Column(String, nullable=True)
+    sucursal_id = Column(Integer, ForeignKey("sucursales.id"), nullable=True)
+    sucursal = relationship("Sucursal") 
+
+class MovimientoCaja(Base):
+    __tablename__ = "caja"
+    id = Column(Integer, primary_key=True)
+    tipo = Column(String) 
+    monto = Column(Float)
+    descripcion = Column(String)
+    descripcion2 = Column(String, nullable=True) 
+    metodo_pago = Column(String, default="Efectivo") 
+    fecha = Column(DateTime, default=datetime.datetime.now)
+    cuotas = Column(Integer, default=1)
+    alumno_id = Column(Integer, ForeignKey("usuarios.id"), nullable=True)
+    producto_id = Column(Integer, nullable=True)
+    cantidad = Column(Integer, default=1) # FIX: Necesario para procesar ventas de mercadería
+    sucursal_id = Column(Integer, ForeignKey("sucursales.id"), nullable=True)
+    sucursal = relationship("Sucursal")
+    alumno_rel = relationship("Usuario", back_populates="movimientos")
+
+class Acceso(Base):
+    __tablename__ = "historial_accesos"
+    id = Column(Integer, primary_key=True)
+    usuario_id = Column(Integer, ForeignKey("usuarios.id"), nullable=False)
+    fecha = Column(DateTime, default=datetime.datetime.now)
+    accion = Column(String(50), nullable=False) 
+    ip_address = Column(String(45), nullable=True)
+    user_agent = Column(Text, nullable=True)
+    exitoso = Column(Boolean, default=True)
+    nombre = Column(String, nullable=True)
+    dni = Column(String, nullable=True)
+    rol = Column(String, nullable=True)
+    metodo = Column(String, default="QR")
+    usuario = relationship("Usuario", back_populates="accesos")
+    sucursal_id = Column(Integer, ForeignKey("sucursales.id"), nullable=True)
+    sucursal = relationship("Sucursal")
+
+class ClaseFeriado(Base):
+    __tablename__ = "clases_feriado"
+    id = Column(Integer, primary_key=True)
+    fecha = Column(Date, index=True) # La fecha exacta (ej: 2026-05-25)
+    nombre = Column(String)           # Ej: "Open Box" o "CrossFit Feriado"
+    horario = Column(Float)          # Ej: 10.5 (para las 10:30)
+    capacidad_max = Column(Integer, default=40)
+    color = Column(String, default="#FF0000") # Estética Dark Premium
+    sucursal_id = Column(Integer, ForeignKey("sucursales.id"), nullable=True)
+    sucursal = relationship("Sucursal")
+
+class DiaEspecial(Base):
+    __tablename__ = "dias_especiales"
+    id = Column(Integer, primary_key=True)
+    fecha = Column(Date, unique=True, nullable=False) # La fecha del feriado (ej: 2026-05-25)
+    motivo = Column(String)                           # Nombre del feriado
+    abierto = Column(Boolean, default=True)           # Por si querés marcarlo pero que el gym abra igual
+    sucursal_id = Column(Integer, ForeignKey("sucursales.id"), nullable=True)
+    sucursal = relationship("Sucursal")
+
+# =========================================
+# MÓDULO DE MUSCULACIÓN VIKINGA (PRO)
+# =========================================
+
+class TipoRutina(Base):
+    __tablename__ = "tipos_rutina"
+    id = Column(Integer, primary_key=True)
+    nombre = Column(String, unique=True)
+
+class GrupoMuscular(Base):
+    __tablename__ = "grupos_musculares"
+    id = Column(Integer, primary_key=True)
+    nombre = Column(String, unique=True)
+    ejercicios = relationship("Ejercicio", back_populates="grupo_muscular")
+
+class Ejercicio(Base):
+    __tablename__ = "ejercicios_libreria"
+    id = Column(Integer, primary_key=True)
+    nombre = Column(String)
+    grupo_muscular_id = Column(Integer, ForeignKey("grupos_musculares.id"))
+    grupo_muscular = relationship("GrupoMuscular", back_populates="ejercicios")
+    ejercicios_en_rutina = relationship("EjercicioEnRutina", back_populates="ejercicio_obj")
+
+class PlanRutina(Base):
+    __tablename__ = "planes_rutina"
+    id = Column(Integer, primary_key=True)
+    usuario_id = Column(Integer, ForeignKey("usuarios.id"))
+    nombre_grupo = Column(String, nullable=True) 
+    descripcion = Column(Text, nullable=True) 
+    objetivo = Column(String)
+    tipo = Column(String, nullable=True)
+    tipo_id = Column(Integer, ForeignKey("tipos_rutina.id"), default=1)
+    profesor_nombre = Column(String, nullable=True) 
+    fecha_creacion = Column(Date, default=datetime.date.today)
+    fecha_vencimiento = Column(Date)
+    activo = Column(Boolean, default=True)
     
-    class Config: 
-        from_attributes = True # Asegura que SQLModel pueda leerlo
+    usuario = relationship("Usuario", back_populates="planes_rutina")
+    tipo_rel = relationship("TipoRutina")
+    dias = relationship("DiaRutina", back_populates="plan_rutina", cascade="all, delete-orphan")
 
-class UserLogin(BaseModel):
-    dni: str
-    password: str
+class DiaRutina(Base):
+    __tablename__ = "rutina_dias"
+    id = Column(Integer, primary_key=True)
+    rutina_id = Column(Integer, ForeignKey("planes_rutina.id"))
+    nombre_dia = Column(String)
+    plan_rutina = relationship("PlanRutina", back_populates="dias")
+    ejercicios = relationship("EjercicioEnRutina", back_populates="dia", cascade="all, delete-orphan")
 
-class Token(BaseModel):
-    access_token: str
-    token_type: str = "bearer"
+class EjercicioEnRutina(Base):
+    __tablename__ = "ejercicios_en_rutina"
+    id = Column(Integer, primary_key=True)
+    dia_id = Column(Integer, ForeignKey("rutina_dias.id"))
+    ejercicio_id = Column(Integer, ForeignKey("ejercicios_libreria.id"))
+    rutina_id = Column(Integer, ForeignKey("planes_rutina.id"), nullable=True)
+    semana_id = Column(Integer, nullable=True) 
+    progreso_json = Column(JSON, nullable=True) 
+    comentario = Column(Text, nullable=True)
+    comentarios = Column(Text, nullable=True) 
 
-# NUEVO: Esquema para el cambio de contrasena
-class ChangePassword(BaseModel):
-    old_password: str
-    new_password: str
+    dia = relationship("DiaRutina", back_populates="ejercicios")
+    ejercicio_obj = relationship("Ejercicio", back_populates="ejercicios_en_rutina")
+    series_detalle = relationship("SerieEjercicio", back_populates="ejercicio_en_rutina", cascade="all, delete-orphan")
 
-# --- Esquemas de Actualizacion de Usuario (Profesor) ---
-class UserUpdateByProfessor(BaseModel):
-    nombre: Optional[str] = None
-    email: Optional[str] = None
-    dni: Optional[str] = None
-    # AGREGADO: Campo password opcional para permitir el reset directo
-    password: Optional[str] = None
+class SerieEjercicio(Base):
+    __tablename__ = "series_ejercicios" # CORRECCIÓN CRÍTICA: PLURAL PARA COINCIDIR CON LA DB
+    id = Column(Integer, primary_key=True)
+    ejercicio_en_rutina_id = Column(Integer, ForeignKey("ejercicios_en_rutina.id"))
+    numero_serie = Column(Integer) 
+    repeticiones = Column(String)
+    peso = Column(String)
+    descanso = Column(String)
+    ejercicio_en_rutina = relationship("EjercicioEnRutina", back_populates="series_detalle")
 
-# <--- AÑADIDO: Esquema para recuperación pública (Alumno) --->
-class UserPasswordResetPublic(BaseModel):
-    password: str
+# --- NUEVA TABLA PARA FACTURACIÓN (AGREGAR AL FINAL DE MODELS.PY) ---
+class Comprobante(Base):
+    __tablename__ = "comprobantes"
+    id = Column(Integer, primary_key=True, index=True)
+    movimiento_id = Column(Integer, ForeignKey("caja.id"), nullable=True) # Vincula con el ID del cobro
+    usuario_id = Column(Integer, ForeignKey("usuarios.id"), nullable=True)
+    nro_factura = Column(String(20), unique=True, index=True) # Ej: 0001-00000001
+    fecha_emision = Column(DateTime, default=func.now())
+    monto_total = Column(Float)
+    metodo_pago = Column(String(50))
+    nro_ticket_postnet = Column(String(100))
+    plan_nombre_snapshot = Column(String(100)) # El nombre del plan en ese momento
+    sucursal_id = Column(Integer, ForeignKey("sucursales.id"), nullable=True)
 
-
-# --- Esquemas de Ejercicio (Se mantienen) ---
-class ExerciseCreate(BaseModel):
-    nombre: str
-    descripcion: Optional[str] = None
-    grupo_muscular: MuscleGroup
-
-class ExerciseRead(BaseModel):
-    id: int
-    nombre: str
-    descripcion: Optional[str] = None
-    grupo_muscular: MuscleGroup
-    created_at: datetime
-    
-    class Config:
-        from_attributes = True
-
-class ExerciseUpdate(BaseModel):
-    nombre: Optional[str] = None
-    descripcion: Optional[str] = None
-    grupo_muscular: Optional[MuscleGroup] = None
-
-# --- Esquemas de Rutina ---
-
-# Schema para la relacion N:M (usado dentro de RoutineRead)
-class RoutineExerciseRead(BaseModel):
-    # Campos del enlace (series, repeticiones, orden)
-    sets: int
-    repetitions: str
-    # NUEVO: Campo para el peso
-    peso: str
-    # <--- MODIFICACIÓN CRÍTICA: NUEVO CAMPO 'NOTAS' EN LECTURA --->
-    notas: Optional[str]
-    # <--- FIN MODIFICACIÓN --->
-    order: int
-    
-    # El ejercicio real al que enlaza (anidado)
-    exercise: ExerciseRead # Debe usar el schema ExerciseRead
-    
-    # CRITICO: Pydantic necesita la configuracion del ORM para este objeto anidado
-    class Config:
-        from_attributes = True
-
-
-class RoutineExerciseCreate(BaseModel):
-    exercise_id: int
-    sets: int
-    repetitions: str
-    # NUEVO: Campo para el peso (Input)
-    peso: str
-    # <--- MODIFICACIÓN CRÍTICA: NUEVO CAMPO 'NOTAS' EN CREACIÓN --->
-    notas: Optional[str] = None
-    # <--- FIN MODIFICACIÓN --->
-    order: int
-
-class RoutineCreate(BaseModel):
-    nombre: str
-    descripcion: Optional[str] = None
-    exercises: List[RoutineExerciseCreate]
-
-# NUEVO: Esquema para la creacion/actualizacion COMPLETA de una rutina
-class RoutineCreateOrUpdate(BaseModel):
-    nombre: str
-    descripcion: Optional[str] = None
-    exercises: List[RoutineExerciseCreate] # Se envia la lista completa para reemplazar la anterior
-
-class RoutineUpdate(BaseModel):
-    nombre: Optional[str] = None
-    descripcion: Optional[str] = None
-
-# CRITICO: La lectura de la rutina ahora incluye los enlaces y la configuracion del ORM
-class RoutineRead(BaseModel):
-    id: int
-    nombre: str
-    descripcion: Optional[str] = None
-    created_at: datetime
-    owner_id: int
-    
-    # AGREGADO: Incluir el grupo de rutina (CRITICO para la visualizacion en el profesor)
-    routine_group: Optional[RoutineGroupRead] = None
-    
-    # CRITICO: Incluir los links de ejercicio para la serializacion de la asignacion
-    exercise_links: List[RoutineExerciseRead]
-    
-    # Configuracion de Pydantic para manejar objetos ORM
-    class Config: 
-        from_attributes = True
-
-# --- Esquemas de Asignacion (Se mantienen) ---
-class RoutineAssignmentCreate(BaseModel):
-    """Esquema para ASIGNAR una rutina a un alumno."""
-    routine_id: int
-    student_id: int
-    is_active: bool = True
-
-# SOLUCION: Esquema de ACTUALIZACION de Asignacion 
-class RoutineAssignmentUpdate(BaseModel):
-    """Esquema para ACTUALIZAR el estado activo/inactivo de una asignacion."""
-    is_active: Optional[bool] = None
-
-# CRITICO: Esquema para LEER las asignaciones (Alumno)
-class RoutineAssignmentRead(BaseModel):
-    """Esquema para LEER las asignaciones (Alumno)."""
-    id: int
-    routine_id: int
-    student_id: int
-    professor_id: int
-    assigned_at: datetime
-    is_active: bool
-    
-    # CRITICO: Incluir la rutina completa, serializada con el esquema RoutineRead (con ejercicios y grupo)
-    routine: RoutineRead 
-    
-    # El alumno que la recibe y el profesor que la asigno
-    student: UserReadSimple 
-    professor: UserReadSimple 
-    
-    class Config: 
-        from_attributes = True
-
-# Necesario para que la relacion recursiva funcione en RoutineGroupCreateAndRoutines
-RoutineGroupCreateAndRoutines.model_rebuild()
+    # Relaciones para poder traer datos del alumno en el PDF
+    usuario = relationship("Usuario")
+    sucursal = relationship("Sucursal")
